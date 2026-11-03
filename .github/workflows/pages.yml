@@ -1,0 +1,51 @@
+name: Pages
+
+# main のビルド済み kotono-cms.html を GitHub Pages へ公開する（確認用デモ）。
+# 事前に Settings > Pages > Build and deployment > Source を「GitHub Actions」にしておくこと。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Prepare site
+        # 生成された CSP をそのまま保つため、加工せずコピーだけ行う
+        run: |
+          mkdir -p _site
+          cp dist/kotono-cms.html _site/kotono-cms.html
+          cp dist/kotono-cms.html _site/index.html
+          touch _site/.nojekyll
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
