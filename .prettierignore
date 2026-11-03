@@ -1,0 +1,8 @@
+dist/
+coverage/
+playwright-report/
+test-results/
+pnpm-lock.yaml
+# 仕様書の原本と、原本から転記したナレッジは整形しない（原文保持）
+docs/spec/
+docs/knowledge/
