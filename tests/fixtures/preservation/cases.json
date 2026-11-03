@@ -1,0 +1,154 @@
+{
+  "description": "YAML 往復保持フィクスチャ（仕様 9.3・9.4・26.2 D02/D03、TG07）。各ケースの input に edits を順に適用した結果が expected と完全一致すること（expect=exact）、または変更が拒否されること（expect=reject）。",
+  "cases": [
+    {
+      "name": "01-unknown-fields",
+      "description": "未知の入れ子値・巨大整数・指数・特殊数値・フロー配列・引用符・キー順・コメントを持つ文書で title だけを変える。title の値以外はバイト単位で一致する。",
+      "edits": [
+        {
+          "field": "title",
+          "value": "新しいタイトル"
+        }
+      ],
+      "expect": "exact"
+    },
+    {
+      "name": "02-comments-keep-attachment",
+      "description": "前置・行末コメントのあるキーの値だけを変える。コメントは同じキーに帰属したまま残る。null から日時文字列へ変える値は二重引用符にする（YAML 1.1 系の読み手で日付型にならないように）。",
+      "edits": [
+        {
+          "field": "slug",
+          "value": "new-slug"
+        },
+        {
+          "field": "status",
+          "value": "published"
+        },
+        {
+          "field": "publishedAt",
+          "value": "2026-11-04T09:00:00+09:00"
+        }
+      ],
+      "expect": "exact"
+    },
+    {
+      "name": "03-plain-style",
+      "description": "引用符なし（plain）の文字列は、安全に表せる限り plain のまま置き換える。plain で表せない値（コロンを含む等）は二重引用符にする。",
+      "edits": [
+        {
+          "field": "slug",
+          "value": "another-plain"
+        },
+        {
+          "field": "title",
+          "value": "タイトル: コロン付き"
+        }
+      ],
+      "expect": "exact"
+    },
+    {
+      "name": "04-single-quoted",
+      "description": "単一引用符の値は単一引用符のまま置き換える（内部の ' は '' にする）。",
+      "edits": [
+        {
+          "field": "title",
+          "value": "It's 新しい"
+        }
+      ],
+      "expect": "exact"
+    },
+    {
+      "name": "05-tags-block",
+      "description": "ブロック形式のタグ配列は、元のインデントを保ってブロック形式で書き直す。",
+      "edits": [
+        {
+          "field": "tags",
+          "value": ["news", "日本語", "Tech"]
+        }
+      ],
+      "expect": "exact"
+    },
+    {
+      "name": "06-tags-block-with-comment",
+      "description": "保持不能の例：要素にコメントがあるブロック配列の要素数をフォームで変えるとコメントの位置を保てないため、変更を拒否して原文モードへ案内する。",
+      "edits": [
+        {
+          "field": "tags",
+          "value": ["news"]
+        }
+      ],
+      "expect": "reject"
+    },
+    {
+      "name": "07-tags-flow",
+      "description": "フロー形式のタグ配列はフロー形式で書き直す。前後空白・大文字小文字は自動で変えない。",
+      "edits": [
+        {
+          "field": "tags",
+          "value": ["a", "B", " c "]
+        }
+      ],
+      "expect": "exact"
+    },
+    {
+      "name": "08-cover-unknown-subfield",
+      "description": "cover 内の未知フィールドとコメントを保持したまま alt だけを変える。",
+      "edits": [
+        {
+          "field": "cover",
+          "value": {
+            "src": "./media/q7m2k9w4ac.jpg",
+            "alt": "新しい説明"
+          }
+        }
+      ],
+      "expect": "exact"
+    },
+    {
+      "name": "09-cover-null-to-map",
+      "description": "cover を null から設定すると、その値だけをフローマッピングで置き換える。",
+      "edits": [
+        {
+          "field": "cover",
+          "value": {
+            "src": "./media/n6p3x8r5tz.webp",
+            "alt": ""
+          }
+        }
+      ],
+      "expect": "exact"
+    },
+    {
+      "name": "10-empty-value",
+      "description": "値が空（`publishedAt:`）の項目に値を入れるときは区切りの空白を補う。元が null なので文字列は二重引用符にする。",
+      "edits": [
+        {
+          "field": "publishedAt",
+          "value": "2026-11-04T09:00:00+09:00"
+        }
+      ],
+      "expect": "exact"
+    },
+    {
+      "name": "11-block-scalar-title",
+      "description": "許可する再配置の例：ブロックスカラーのタイトルを単一行の値へ変えると、ブロック表現は二重引用符の1行になる。後続のキーと本文は変わらない。",
+      "edits": [
+        {
+          "field": "title",
+          "value": "1行のタイトル"
+        }
+      ],
+      "expect": "exact"
+    },
+    {
+      "name": "12-body-only",
+      "description": "本文だけの変更では frontmatter をバイト単位で保持する（D02）。",
+      "edits": [
+        {
+          "body": "書き換えた本文\n"
+        }
+      ],
+      "expect": "exact"
+    }
+  ]
+}
