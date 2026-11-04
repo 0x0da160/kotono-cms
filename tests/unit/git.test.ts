@@ -59,6 +59,7 @@ beforeEach(() => {
 
 afterEach(() => {
   nodeFaults.beforeClose = undefined;
+  nodeFaults.chromeBlocklist = undefined;
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -347,7 +348,7 @@ describe("git init と作者設定（20.1・21.2）", () => {
     rmSync(join(dir, ".git"), { recursive: true });
     const root = new NodeDirHandle(dir);
     const repo = new GitRepo(root);
-    expect(await repo.init()).toEqual({ ok: true });
+    expect(await repo.init()).toEqual({ ok: true, configSkipped: false });
     expect(await repo.init()).toMatchObject({ ok: false });
     const info = (await repo.inspect()) as RepoInfo;
     expect(info.blockers).toEqual([]);
@@ -359,6 +360,57 @@ describe("git init と作者設定（20.1・21.2）", () => {
     git("fsck", "--strict", "--no-dangling");
     expect(git("log", "--format=%s")).toBe("最初の記事\n");
     expect(git("status", "--porcelain")).toBe("?? README.md\n?? content/articles/bbbbbbb/\n");
+  });
+
+  it("ブラウザが .git/config の作成を禁止しても初期化でき、コミットとネイティブ Git が動く", async () => {
+    rmSync(join(dir, ".git"), { recursive: true });
+    nodeFaults.chromeBlocklist = true;
+    const root = new NodeDirHandle(dir);
+    const repo = new GitRepo(root);
+    expect(await repo.init()).toEqual({ ok: true, configSkipped: true });
+    expect(existsSync(join(dir, ".git/config"))).toBe(false);
+    const info = (await repo.inspect()) as RepoInfo;
+    expect(info.blockers).toEqual([]);
+    expect(info.identity).toBeNull();
+    const articles = await (await root.getDirectoryHandle("content")).getDirectoryHandle("articles");
+    const r = await repo.plan(info, articles, "aaaaaaa");
+    if (!r.ok) throw new Error(r.message);
+    expect((await repo.commit(r.plan, "最初の記事", who, false)).kind).toBe("committed");
+    // 作者の保存は禁止を説明して止める（コミットには影響しない）
+    await expect(repo.saveIdentity(who)).rejects.toThrow(/\.git\/config.*git config user\.name/);
+    git("fsck", "--strict", "--no-dangling");
+    expect(git("log", "--format=%s")).toBe("最初の記事\n");
+    expect(git("status", "--porcelain")).toBe("?? README.md\n?? content/articles/bbbbbbb/\n");
+    // 外部の Git で init をやり直すと設定ファイルが作られ、履歴はそのまま
+    git("init", "-q");
+    expect(existsSync(join(dir, ".git/config"))).toBe(true);
+    expect(git("log", "--format=%s")).toBe("最初の記事\n");
+  });
+
+  it("初期化が途中で失敗したら、作りかけの .git を片付ける", async () => {
+    rmSync(join(dir, ".git"), { recursive: true });
+    nodeFaults.beforeClose = (p) => {
+      if (p.endsWith("description")) throw new Error("disk full");
+    };
+    const repo = new GitRepo(new NodeDirHandle(dir));
+    const r = await repo.init();
+    expect(r).toMatchObject({ ok: false, left: [] });
+    expect(existsSync(join(dir, ".git"))).toBe(false);
+    expect(await repo.inspect()).toEqual({ kind: "none" });
+  });
+
+  it("片付けで中身のあるフォルダは消さず、残りを報告する", async () => {
+    rmSync(join(dir, ".git"), { recursive: true });
+    nodeFaults.beforeClose = (p) => {
+      if (p.endsWith("description")) {
+        // 外部の処理が途中で .git にファイルを置いた
+        writeFileSync(join(dir, ".git/info/exclude"), "x\n");
+        throw new Error("disk full");
+      }
+    };
+    const r = await new GitRepo(new NodeDirHandle(dir)).init();
+    expect(r).toMatchObject({ ok: false, left: [".git", ".git/info"] });
+    expect(readFileSync(join(dir, ".git/info/exclude"), "utf8")).toBe("x\n");
   });
 
   it("user.name・user.email を保存し、他の設定は変えない", async () => {

@@ -73,6 +73,9 @@ test("Git を初期化し、記事を追加・更新コミットして、ネイ�
   // 危険・不可逆な操作は既定にしない（14.1）
   await expect(page.getByRole("button", { name: "キャンセル" })).toBeFocused();
   await page.getByRole("button", { name: "初期化する", exact: true }).click();
+  // 疑似フォルダは Chromium と同じく .git/config の作成を禁止する。作らずに初期化を終える
+  await expect(page.getByTestId("git-notice")).toContainText("初期化しました");
+  await expect(page.getByTestId("git-notice")).toContainText(".git/config は作っていません");
   await expect(page.getByTestId("git-branch")).toHaveText("main");
   await expect(page.getByTestId("git-writable")).toHaveText("可能");
   await expect(page.getByTestId("git-badge")).toHaveText("未追跡");

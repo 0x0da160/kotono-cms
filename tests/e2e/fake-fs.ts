@@ -11,6 +11,15 @@ export function installFakeFs(seed: Record<string, string>, binary: Record<strin
   type Node = FakeDir | FakeFile;
   const enc = new TextEncoder();
   const err = (name: string) => Object.assign(new Error(name), { name });
+  /**
+   * Chromium の書き込み禁止（kBlockWrite）を真似る：.git/config・.git/hooks・.git/modules
+   * （とその配下）の作成・書き込みは SecurityError。実ブラウザと同じく、読み取りは止めない。
+   */
+  const blocked = (dir: FakeDir | null, name: string) => {
+    const seg = [name];
+    for (let d = dir; d; d = d.parent) seg.unshift(d.name);
+    return seg.some((s, i) => s === ".git" && ["config", "hooks", "modules"].includes(seg[i + 1] ?? ""));
+  };
 
   class FakeFile {
     readonly kind = "file";
@@ -36,6 +45,7 @@ export function installFakeFs(seed: Record<string, string>, binary: Record<strin
       return mk(bytes);
     }
     async createWritable() {
+      if (blocked(this.parent, this.name)) throw err("SecurityError");
       const chunks: Uint8Array[] = [];
       return {
         write: async (d: Uint8Array) => {
@@ -88,6 +98,7 @@ export function installFakeFs(seed: Record<string, string>, binary: Record<strin
       if (c instanceof FakeDir) return c;
       if (c) throw err("TypeMismatchError");
       if (!o?.create) throw err("NotFoundError");
+      if (blocked(this, name)) throw err("SecurityError");
       const d = new FakeDir(name, this);
       this.children.set(name, d);
       return d;
@@ -97,6 +108,7 @@ export function installFakeFs(seed: Record<string, string>, binary: Record<strin
       if (c instanceof FakeFile) return c;
       if (c) throw err("TypeMismatchError");
       if (!o?.create) throw err("NotFoundError");
+      if (blocked(this, name)) throw err("SecurityError");
       const f = new FakeFile(name, this);
       this.children.set(name, f);
       return f;

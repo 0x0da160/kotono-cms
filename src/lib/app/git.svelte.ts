@@ -246,12 +246,25 @@ export class GitController {
     this.busy = true;
     try {
       const r = await repo.init();
-      if (r.ok) this.notice = { kind: "ok", text: "Git リポジトリを初期化しました（ブランチ main）。" };
+      if (r.ok)
+        this.notice = {
+          kind: "ok",
+          text: "Git リポジトリを初期化しました（ブランチ main）。",
+          details: r.configSkipped
+            ? [
+                "ブラウザの制限により .git/config は作っていません。Git は設定ファイルがなくても既定の設定で動きます。",
+                "設定ファイルが必要なら、外部の Git でこのフォルダに git init をもう一度実行してください（既存の内容は消えません）。",
+              ]
+            : [],
+        };
       else
         this.notice = {
           kind: "error",
           text: r.message,
-          details: r.created.length > 0 ? ["作成済みのもの（自動では消しません）：", ...r.created] : [],
+          details:
+            r.left.length > 0
+              ? ["作りかけのものを片付けようとしましたが、次は消せませんでした：", ...r.left]
+              : ["作りかけのものは片付けました。フォルダは初期化前の状態です。"],
         };
     } finally {
       this.busy = false;

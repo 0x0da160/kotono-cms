@@ -34,8 +34,8 @@ sources:
 | 状態 | 記事フォルダごとに HEAD・index・作業ファイルを突き合わせ、ステージ済み・未ステージ・未追跡・削除・競合・無視を区別する。index とサイズ・更新時刻が一致するファイルは読まない（同一秒内の更新は内容で確かめる）。開始前の既存ステージは、index から作った tree の ID と HEAD の tree の ID の比較でリポジトリ全体について判定する | 同上（`articleStatuses`・`stagedPaths`） |
 | コミット | 記事フォルダ 1 つ。未保存の編集・既存ステージ・競合・実行属性やシンボリックリンクとして記録されたファイルがあれば止める。無視対象は強制追加しない。確認画面に対象ファイル・無視対象・メッセージ・作者・ブランチを示す。実行直前に HEAD・index（パス・mode・object・stage の要約）・対象ファイルの内容を再確認し、違えば何も書かない。object → index（ここから「ステージ済み」）→ tree・commit → ref の順に書き、ref を読み直して親と tree を確かめる | 同上（`plan`・`commit`） |
 | 失敗・再試行 | index を書いた後に失敗したら「ステージ済み・未コミット」とし、ステージを解除しない。同一セッションで HEAD と index が今回書いた内容と一致する場合に限り、確認後に commit から再試行する。ref 更新の結果が分からなければ、既知のコミット ID と ref を照合する。照合できなければ結果不明として止める | 同上、`src/lib/app/git.svelte.ts` |
-| 作者 | `.git/config` の user.name・user.email だけを読む。OS のグローバル設定は読まない。未設定なら入力を求め、今回だけ使うか、別の確認を経て `.git/config` の該当 2 行だけを書く（他の行は原文のまま。書き換え後に他の項目が変わっていないことを確かめる） | `src/lib/git/config.ts` |
-| git init | `.git` がないことを確かめ、objects・refs・info・logs と config・description を作り、HEAD（`ref: refs/heads/main`）を最後に作る。途中で止まったら作成済みのものを表示し、自動では消さない | `src/lib/git/repo.ts`（`init`） |
+| 作者 | `.git/config` の user.name・user.email だけを読む。OS のグローバル設定は読まない。未設定なら入力を求め、今回だけ使うか、別の確認を経て `.git/config` の該当 2 行だけを書く（他の行は原文のまま。書き換え後に他の項目が変わっていないことを確かめる）。ブラウザが書き込みを禁止した場合は、外部の Git で設定するよう案内し、今回だけ使う | `src/lib/git/config.ts` |
+| git init | `.git` がないことを確かめ、objects・refs・info・logs と config・description を作り、HEAD（`ref: refs/heads/main`）を最後に作る。ブラウザが `.git/config` の作成を禁止したら作らずに進める（緊張点 11）。途中で止まったら、この操作で作ったものだけを深い順に 1 件ずつ消し（中身のあるフォルダは消えない）、消せなかったものを表示する | `src/lib/git/repo.ts`（`init`） |
 | 履歴 | コミット日時の新しい順に辿る。1 回の取得は 50 件、内部走査は 1,000 コミット・10,000 tree・5 秒の先到達で止め、継続カーソルと「未調査あり」を返す。記事別は現在の ID のパスに限る。親が見つからない（shallow 等）場合は終端不確かと表示する | 同上（`history`） |
 | 削除確認の Git 状態 | [第19章](/spec/deletion/19-article-deletion-and-backup.md) の区別（Git 管理・コミット済み、未コミットの変更あり、未追跡、無視対象）をファイルごとに示す。Git 未使用・対応外の構成ではそう表示する | `GitController.hooks.describe` |
 | 競合中の記事 | 未解決の競合がある記事は読み取り専用で開く（[第24章](/spec/browse/24-existing-article-validation.md)） | 同上 |
@@ -75,6 +75,11 @@ sources:
 8. **git init の config は `filemode = false` とし、`ignorecase` を設定しない。** File System Access API で実行属性と大文字小文字の扱いを観測できないため。
 9. **YAML の解析は今回も主スレッドで行う。** [ADR-0002](0002-p1-editing-and-save.md) の緊張点 3（[第16.1.1節](/spec/security/16-trust-boundary-preview-network.md) の Worker 隔離）は未解消。Markdown とハイライトは Worker で行う。
 10. **配布物のハッシュは配布元の真正性を証明しない。** [第29.4節](/spec/foundation/29-technology-candidates-and-records.md) の署名・別経路での公開方法は未決定。
+11. **Chromium 系ブラウザは `.git/config` への書き込みを禁止する。** Chrome・Edge の File System Access API は、パスの末尾が `.git/config`・`.git/hooks`・`.git/modules` の場所への作成・書き込みを SecurityError で止める（`chrome_file_system_access_permission_context.cc` の kBlockWrite。2026-11-04 の main で確認）。そのため次のようにした。
+    - `.git/config` がないリポジトリを止めずに Git の既定値（形式 0・bare でない）で扱う。ネイティブ Git も設定ファイルなしで動く（相互運用試験で確認）。
+    - git init は `.git/config` を作れなければ作らずに完了し、外部の Git で `git init` を再実行すれば設定ファイルが作られる（既存の内容は消えない）ことを案内する。この場合、緊張点 8 の `filemode = false` は書かれない。
+    - 作者の保存（[第21.2節](/spec/git/21-commit-contract.md)）は Chromium 系では常に失敗するため、外部の Git での設定を案内し、今回だけ使う。仕様の「リポジトリローカル設定への保存」は実質的に外部 Git の手順になる。
+    - CMS が書くそれ以外の場所（objects・index・refs/heads・logs・HEAD・description）は禁止の対象外。単体試験と E2E の疑似フォルダはこの禁止を再現する。
 
 ADR-0002 の緊張点（壊れた記事による slug の「重複検査不能」、YAML のキー重複検査の置き換え）は変更していない。
 

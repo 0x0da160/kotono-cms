@@ -8,7 +8,21 @@ import { join } from "node:path";
 import type { BlobLike, DirHandleLike, FileHandleLike, FileLike, WritableLike } from "../../../src/lib/fs/types";
 
 /** 失敗注入：close の直前に呼ばれ、例外を投げれば書き込みは反映されない */
-export const nodeFaults: { beforeClose?: ((path: string) => void) | undefined } = {};
+export const nodeFaults: {
+  beforeClose?: ((path: string) => void) | undefined;
+  /** Chromium の書き込み禁止（.git/config・.git/hooks・.git/modules への作成・書き込みは SecurityError）を真似る */
+  chromeBlocklist?: boolean | undefined;
+} = {};
+
+/** Chromium の kBlockWrite（chrome_file_system_access_permission_context.cc）の .git 関係の規則 */
+export function chromeBlocksWrite(path: string): boolean {
+  const seg = path.split(/[\\/]/);
+  return seg.some((s, i) => s === ".git" && ["config", "hooks", "modules"].includes(seg[i + 1] ?? ""));
+}
+
+function assertWritable(path: string) {
+  if (nodeFaults.chromeBlocklist && chromeBlocksWrite(path)) throw domError("SecurityError");
+}
 
 function domError(name: string): Error {
   return Object.assign(new Error(name), { name });
@@ -63,6 +77,7 @@ export class NodeFileHandle implements FileHandleLike {
     }
   }
   async createWritable(): Promise<WritableLike> {
+    assertWritable(this.path);
     const chunks: Uint8Array[] = [];
     return {
       write: async (d: Uint8Array) => {
@@ -94,6 +109,7 @@ export class NodeDirHandle implements DirHandleLike {
     } catch (e) {
       if ((e as Error).name === "TypeMismatchError") throw e;
       if (!o?.create) throw mapErr(e);
+      assertWritable(p);
       await fsp.mkdir(p);
     }
     return new NodeDirHandle(p, name);
@@ -106,6 +122,7 @@ export class NodeDirHandle implements DirHandleLike {
     } catch (e) {
       if ((e as Error).name === "TypeMismatchError") throw e;
       if (!o?.create) throw mapErr(e);
+      assertWritable(p);
       await fsp.writeFile(p, new Uint8Array());
     }
     return new NodeFileHandle(p, name);
