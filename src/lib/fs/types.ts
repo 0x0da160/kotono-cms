@@ -26,6 +26,7 @@ export type PermissionStateLike = "granted" | "denied" | "prompt";
 export interface FileHandleLike {
   readonly kind: "file";
   readonly name: string;
+  isSameEntry?(other: FileHandleLike | DirHandleLike): Promise<boolean>;
   getFile(): Promise<FileLike>;
   createWritable(options?: { keepExistingData?: boolean; mode?: "exclusive" | "siloed" }): Promise<WritableLike>;
 }
@@ -36,6 +37,11 @@ export interface DirHandleLike {
   getDirectoryHandle(name: string, options?: { create?: boolean }): Promise<DirHandleLike>;
   getFileHandle(name: string, options?: { create?: boolean }): Promise<FileHandleLike>;
   values(): AsyncIterable<FileHandleLike | DirHandleLike>;
+  /** 再帰なしの個別削除だけを使う（19：再帰一括削除に依存しない） */
+  removeEntry?(name: string, options?: { recursive?: boolean }): Promise<void>;
+  /** 退避先と選択フォルダの重なりの判定に使う（19.1 手順2） */
+  isSameEntry?(other: FileHandleLike | DirHandleLike): Promise<boolean>;
+  resolve?(possibleDescendant: FileHandleLike | DirHandleLike): Promise<string[] | null>;
   queryPermission?(descriptor: PermissionMode): Promise<PermissionStateLike>;
   requestPermission?(descriptor: PermissionMode): Promise<PermissionStateLike>;
 }

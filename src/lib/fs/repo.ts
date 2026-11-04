@@ -86,6 +86,8 @@ export interface RepoConfig {
   readonly idLength: number;
   readonly idLengthValid: boolean;
   readonly mediaValid: boolean;
+  /** 4.1 の取り込み上限（ユーザー設定値。固定安全上限との小さい方を使う：4.3） */
+  readonly media: { readonly maxFileSizeMiB: number; readonly maxPixelCount: number; readonly maxBatchFiles: number };
   readonly errors: string[];
   readonly warnings: string[];
 }
@@ -95,6 +97,7 @@ const DEFAULT_CONFIG: RepoConfig = {
   idLength: ID_DEFAULT_LENGTH,
   idLengthValid: true,
   mediaValid: true,
+  media: { maxFileSizeMiB: 20, maxPixelCount: 40_000_000, maxBatchFiles: 50 },
   errors: [],
   warnings: [],
 };
@@ -159,6 +162,7 @@ export function parseConfig(text: string): RepoConfig {
     }
   }
   let mediaValid = true;
+  const media = { ...DEFAULT_CONFIG.media };
   if ("media" in obj) {
     const m = obj["media"];
     if (m === null || typeof m !== "object" || Array.isArray(m)) mediaValid = false;
@@ -173,11 +177,12 @@ export function parseConfig(text: string): RepoConfig {
         const r = ranges[k];
         if (!r) warnings.push(`未知の設定キー「media.${k}」は無視します。`);
         else if (!isInt(v, r[0], r[1])) mediaValid = false;
+        else media[k as keyof typeof media] = v as number;
       }
     }
     if (!mediaValid) errors.push("media の設定が不正です。メディア取り込みを停止します。");
   }
-  return { state: "ok", idLength, idLengthValid, mediaValid, errors, warnings };
+  return { state: "ok", idLength, idLengthValid, mediaValid, media, errors, warnings };
 }
 
 export async function readConfig(root: DirHandleLike): Promise<RepoConfig> {
@@ -231,6 +236,13 @@ export async function readConfig(root: DirHandleLike): Promise<RepoConfig> {
 export function canCreateArticles(c: RepoConfig): string | null {
   if (c.state === "invalid") return "設定ファイルが不正なため、新規作成を停止しています。";
   if (!c.idLengthValid) return "記事IDの長さの設定が不正なため、新規作成を停止しています。";
+  return null;
+}
+
+/** 4.2：全体不正またはメディア設定の不正では取り込みだけを止める */
+export function canImportMedia(c: RepoConfig): string | null {
+  if (c.state === "invalid") return "設定ファイルが不正なため、画像の取り込みを停止しています。";
+  if (!c.mediaValid) return "media の設定が不正なため、画像の取り込みを停止しています。";
   return null;
 }
 

@@ -8,7 +8,7 @@ import { ARTICLE_MAX_BYTES } from "./budgets";
 import { decodeUtf8Strict, toLf, utf8ByteLength } from "./bytes";
 import { isValidArticleId } from "./article-id";
 import { sameInstant } from "./datetime";
-import { validateStandard, type FieldError, type SchemaResult, type StandardKey } from "./schema";
+import { STANDARD_KEYS, validateStandard, type FieldError, type SchemaResult, type StandardKey } from "./schema";
 import { splitDocument, splitErrorMessage, type SplitResult } from "./split";
 import {
   getValueNode,
@@ -277,3 +277,36 @@ export function textByteLength(text: string): number {
 }
 
 export { isValidArticleId };
+
+// ---------------------------------------------------------------------------
+// 複製の index.md（10.2）
+
+/**
+ * 複製元の文書から、新しい記事の index.md を作る。title・本文・タグ・cover・未知フィールドは保持し、
+ * id を新しい値、status を draft、slug を空文字、publishedAt を null、createdAt・updatedAt を同じ時刻にする。
+ * 未知フィールド内の ID・外部参照は変換しない。
+ */
+export function duplicateText(source: string, newId: string, at: string): TextEdit {
+  let text = source;
+  const steps: [StandardKey, FieldValue][] = [
+    ["id", newId],
+    ["status", "draft"],
+    ["slug", ""],
+    ["publishedAt", null],
+    ["createdAt", at],
+    ["updatedAt", at],
+  ];
+  for (const [k, v] of steps) {
+    const r = editField(text, k, v);
+    if (!r.ok) return r;
+    text = r.text;
+  }
+  return { ok: true, text };
+}
+
+/** 標準項目以外のトップレベルキー（複製前の注意表示に使う） */
+export function unknownKeys(a: Analysis): string[] {
+  if (!a.parse?.ok) return [];
+  const std = new Set<string>(STANDARD_KEYS);
+  return topLevelKeys(a.parse.root).filter((k) => !std.has(k));
+}
