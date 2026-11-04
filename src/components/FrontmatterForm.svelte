@@ -14,7 +14,8 @@
   let tagDraft = $state("");
   let composing = false;
 
-  const readOnly = $derived(session.readOnlyReason !== null);
+  // 読み取り専用・削除手続き中の編集停止（11.3）ではフォーム全体を無効にする
+  const readOnly = $derived(!session.editable);
   const timing = $derived(publishTiming(values.publishedAt ?? null, Date.now()));
 
   function errorsFor(k: StandardKey): string[] {

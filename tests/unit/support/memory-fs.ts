@@ -28,6 +28,8 @@ export interface Faults {
   beforeGet?: (path: string, create: boolean) => void;
   permission?: PermissionStateLike;
   requestResult?: PermissionStateLike;
+  /** removeEntry の直前に呼ばれ、例外を投げれば削除失敗 */
+  beforeRemove?: (path: string) => void;
 }
 
 class MemBlob implements BlobLike {
@@ -102,6 +104,14 @@ export class MemFile implements FileHandleLike {
   text(): string {
     return new TextDecoder().decode(this.data);
   }
+
+  get owner(): MemFs {
+    return this.fs;
+  }
+
+  async isSameEntry(other: unknown): Promise<boolean> {
+    return other === this;
+  }
 }
 
 export class MemDir implements DirHandleLike {
@@ -145,6 +155,29 @@ export class MemDir implements DirHandleLike {
 
   async requestPermission(): Promise<PermissionStateLike> {
     return this.fs.faults.requestResult ?? this.fs.faults.permission ?? "granted";
+  }
+
+  async removeEntry(name: string, options?: { recursive?: boolean }): Promise<void> {
+    const c = this.children.get(name);
+    if (!c) throw domError("NotFoundError");
+    this.fs.faults.beforeRemove?.(`${this.path}${name}`);
+    if (c instanceof MemDir && c.children.size > 0 && !options?.recursive) throw domError("InvalidModificationError");
+    this.children.delete(name);
+  }
+
+  async isSameEntry(other: unknown): Promise<boolean> {
+    return other === this;
+  }
+
+  async resolve(d: FileHandleLike | DirHandleLike): Promise<string[] | null> {
+    if (!(d instanceof MemDir || d instanceof MemFile) || d.owner !== this.fs) return null;
+    if (d.path === this.path) return [];
+    if (!d.path.startsWith(this.path)) return null;
+    return d.path.slice(this.path.length).replace(/\/$/, "").split("/");
+  }
+
+  get owner(): MemFs {
+    return this.fs;
   }
 }
 

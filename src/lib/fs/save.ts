@@ -22,10 +22,10 @@ export type DiskState =
   | { kind: "too-large"; size: number }
   | { kind: "error"; errorKind: FsErrorKind; message: string };
 
-export async function readDiskFile(handle: FileHandleLike): Promise<DiskState> {
+export async function readDiskFile(handle: FileHandleLike, maxBytes = ARTICLE_MAX_BYTES): Promise<DiskState> {
   try {
     const file = await handle.getFile();
-    if (file.size > ARTICLE_MAX_BYTES) return { kind: "too-large", size: file.size };
+    if (file.size > maxBytes) return { kind: "too-large", size: file.size };
     return { kind: "bytes", bytes: new Uint8Array(await file.arrayBuffer()) };
   } catch (e) {
     const k = classifyFsError(e);
@@ -89,6 +89,7 @@ export async function writeAndVerify(
   handle: FileHandleLike,
   candidate: Uint8Array,
   base: Uint8Array | null,
+  maxBytes = ARTICLE_MAX_BYTES,
 ): Promise<WriteOutcome> {
   let phase: "open" | "write" | "close" = "open";
   try {
@@ -109,11 +110,11 @@ export async function writeAndVerify(
     }
   } catch (e) {
     const k = classifyFsError(e);
-    const disk = classify(await readDiskFile(handle), base, candidate);
+    const disk = classify(await readDiskFile(handle, maxBytes), base, candidate);
     if (disk === "candidate") return { kind: "saved" };
     return { kind: "write-failed", phase, errorKind: k, message: fsErrorMessage(k), disk };
   }
-  const after = await readDiskFile(handle);
+  const after = await readDiskFile(handle, maxBytes);
   const disk = classify(after, base, candidate);
   if (disk === "candidate") return { kind: "saved" };
   return {

@@ -72,6 +72,24 @@ export class EditorSession {
   /** 新規記事の作成開始時刻（再試行・復旧でも取り直さない：8.2・36） */
   readonly newCreatedAt: string | null;
   historyTruncated = $state(false);
+  /**
+   * 対象記事の編集停止理由（11.3：記事削除の確認開始から結果判定まで、画像の個別削除の確定工程）。
+   * 停止中は本文・フォーム・原文・Undo/Redo・画像挿入の全経路を拒否する。コピー・退避は可能。
+   */
+  locked = $state<string | null>(null);
+  /** IME 変換中（14.1・33.3：未確定入力を退避・保存しない） */
+  composing = $state(false);
+  /** 本文エディタのカーソル位置（画像の挿入位置） */
+  bodyCaret = $state<number | null>(null);
+  /** 復旧ドラフトから開いた記事で、ドラフトの基準版とディスクが一致しなかった（33.4） */
+  recoveryMismatch = $state(false);
+  /** 復旧ドラフトの退避状態（33.1・33.3） */
+  draft = $state<DraftStatus>({ kind: "none" });
+  /** 復旧ドラフトの識別（33.2）：セッションごとの乱数と、未保存新規記事の一時ID */
+  readonly draftNonce: string = randomToken();
+  readonly draftTempKey: string = randomToken();
+  /** 内容が変わったとき（ドラフト退避の予約に使う） */
+  onChange: (() => void) | null = null;
 
   private history: DocHistory;
 
@@ -111,12 +129,17 @@ export class EditorSession {
   // -------------------------------------------------------------------------
   // 編集（フォーム・原文・本文は同じ正本文書を変える）
 
+  get editable(): boolean {
+    return this.readOnlyReason === null && this.locked === null;
+  }
+
   setText(text: string, group: string | null): void {
-    if (this.readOnlyReason !== null || text === this.text) return;
+    if (!this.editable || text === this.text) return;
     this.history.push(text, group);
     this.historyTruncated = this.history.truncated;
     this.text = text;
     this.revision++;
+    this.onChange?.();
   }
 
   setBody(body: string): void {
@@ -125,6 +148,7 @@ export class EditorSession {
   }
 
   setField(key: StandardKey, value: FieldValue): TextEdit {
+    if (!this.editable) return { ok: false, message: this.locked ?? this.readOnlyReason ?? "編集できません。" };
     const r = editField(this.text, key, value);
     if (r.ok) this.setText(r.text, `field:${key}`);
     return r;
@@ -132,6 +156,7 @@ export class EditorSession {
 
   /** 原稿状態の変更（7.2）：初めて published にするとき publishedAt が null なら現在時刻を入れる */
   setStatus(status: "draft" | "published", publishedAt: string | null): TextEdit {
+    if (!this.editable) return { ok: false, message: this.locked ?? this.readOnlyReason ?? "編集できません。" };
     let r = editField(this.text, "status", status);
     if (!r.ok) return r;
     if (status === "published" && publishedAt === null) {
@@ -147,19 +172,41 @@ export class EditorSession {
   }
 
   undo(): void {
+    if (!this.editable) return;
     const t = this.history.undo();
     if (t !== null) {
       this.text = t;
       this.revision++;
+      this.onChange?.();
     }
   }
 
   redo(): void {
+    if (!this.editable) return;
     const t = this.history.redo();
     if (t !== null) {
       this.text = t;
       this.revision++;
+      this.onChange?.();
     }
+  }
+
+  /** 本文の指定位置（既定は末尾）へ文字列を挿入する（17.1：成功した画像だけを挿入） */
+  insertIntoBody(snippet: string): TextEdit {
+    if (!this.editable) return { ok: false, message: this.locked ?? this.readOnlyReason ?? "編集できません。" };
+    const a = this.analysis;
+    if (!a.split.ok) return { ok: false, message: "frontmatter の区切りが不正なため挿入できません。" };
+    const body = a.split.body;
+    const at = this.bodyCaret !== null && this.bodyCaret <= body.length ? this.bodyCaret : body.length;
+    const before = body.slice(0, at);
+    const pre = before === "" || before.endsWith("\n") ? "" : "\n";
+    const next = `${before}${pre}${snippet}\n${body.slice(at)}`;
+    const r = replaceBody(this.text, next);
+    if (r.ok) {
+      this.setText(r.text, null);
+      this.bodyCaret = at + pre.length + snippet.length + 1;
+    }
+    return r;
   }
 
   // -------------------------------------------------------------------------
@@ -297,6 +344,17 @@ export class EditorSession {
   candidateMatches(bytes: Uint8Array): boolean {
     return this.pendingCandidate !== null && bytesEqual(this.pendingCandidate, bytes);
   }
+}
+
+export type DraftStatus =
+  | { kind: "none" }
+  | { kind: "pending" }
+  | { kind: "saved"; revision: number; at: number }
+  | { kind: "failed"; message: string; lastRevision: number | null; lastAt: number | null };
+
+function randomToken(): string {
+  const b = crypto.getRandomValues(new Uint8Array(9));
+  return [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
 }
 
 export function problemsNotice(text: string, problems: readonly Problem[]): Notice {

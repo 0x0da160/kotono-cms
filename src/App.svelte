@@ -2,8 +2,13 @@
   import { onMount } from "svelte";
   import ArticleList from "./components/ArticleList.svelte";
   import ConfirmDialog from "./components/ConfirmDialog.svelte";
+  import DraftSettings from "./components/DraftSettings.svelte";
   import Editor from "./components/Editor.svelte";
+  import RecoveryPanel from "./components/RecoveryPanel.svelte";
+  import { DraftController } from "./lib/app/drafts.svelte";
   import { Workspace } from "./lib/app/workspace.svelte";
+  import { IdbDraftStore } from "./lib/drafts/store";
+  import { WorkerMdService } from "./lib/parse/md-worker-service";
   import { detectCapabilities, isSupported } from "./lib/capabilities";
   import { ARTICLES_PATH } from "./lib/fs/repo";
   import { probeWorker } from "./lib/worker-probe";
@@ -13,13 +18,23 @@
   const results = detectCapabilities(globalThis as unknown as Record<string, unknown>);
   const supported = isSupported(results);
 
-  const ws = new Workspace();
+  const drafts = new DraftController(
+    typeof indexedDB === "undefined" ? null : new IdbDraftStore(indexedDB),
+    appVersion,
+  );
+  const ws = new Workspace(globalThis as unknown as ConstructorParameters<typeof Workspace>[0], {
+    drafts,
+    appVersion,
+    specVersion,
+    md: new WorkerMdService(),
+  });
   /** 狭い画面での単一ペイン切替（14.1） */
   let pane = $state<"list" | "editor">("list");
 
   let workerProbe: "pending" | "ok" | "failed" = $state("pending");
   onMount(() => {
     void probeWorker().then((ok) => (workerProbe = ok ? "ok" : "failed"));
+    if (supported) void drafts.init();
   });
 
   function onKeydown(e: KeyboardEvent) {
@@ -39,12 +54,17 @@
 
   function onBeforeUnload(e: BeforeUnloadEvent) {
     // 離脱警告は試みるが、表示は保証されない（13.1）
-    if (ws.session?.dirty && ws.session.readOnlyReason === null) e.preventDefault();
+    if (ws.session?.dirty && ws.session.readOnlyReason === null) {
+      e.preventDefault();
+      // 退避を試みる（完了は保証されない：33.4）
+      void drafts.flush(ws.session);
+    }
   }
 </script>
 
 <svelte:window onkeydown={onKeydown} onbeforeunload={onBeforeUnload} />
 
+<a class="skip" href="#main">本文へ移動</a>
 <header class="app-header">
   <div class="brand">
     <h1>Kotono CMS</h1>
@@ -68,7 +88,10 @@
   {/if}
 </header>
 
-<main class:wide={ws.root !== null}>
+<main id="main" tabindex="-1" class:wide={ws.root !== null}>
+  {#if supported}
+    {#if drafts.mode === "undecided"}<DraftSettings {ws} dc={drafts} />{/if}
+  {/if}
   {#if !supported || ws.root === null}
     <section aria-labelledby="start-heading" class="card">
       <h2 id="start-heading">はじめに</h2>
@@ -76,9 +99,7 @@
         <p>
           記事を保存しているリポジトリのフォルダ（<code>content/articles/</code> を含むフォルダ）を選んでください。フォルダへのアクセスはこのタブを閉じるまで有効です。
         </p>
-        <p class="muted small">
-          記事は手動で保存します。ブラウザ内復旧ドラフト・Markdownプレビュー・Git機能は本版では未実装です。
-        </p>
+        <p class="muted small">記事は手動で保存します。Git 機能は本版では未実装です。</p>
       {:else}
         <p>このブラウザでは編集を開始できません。デスクトップ版の Chrome または Edge で開いてください。</p>
       {/if}
@@ -140,6 +161,7 @@
         >
       </section>
     {:else if ws.articles}
+      <RecoveryPanel {ws} />
       <div class="pane-switch" role="group" aria-label="表示する領域">
         <button type="button" aria-pressed={pane === "list"} onclick={() => (pane = "list")}>一覧</button>
         <button type="button" aria-pressed={pane === "editor"} onclick={() => (pane = "editor")} disabled={!ws.session}
@@ -165,6 +187,10 @@
 </main>
 
 <footer class="app-footer" class:wide={ws.root !== null}>
+  {#if supported && drafts.mode !== "undecided"}<DraftSettings {ws} dc={drafts} />{/if}
+  <p class="keys small">
+    キーボード：Ctrl/⌘+S 保存、Ctrl/⌘+Z 元に戻す、Ctrl/⌘+Shift+Z または Ctrl+Y やり直す。IME 変換中は保存しません。
+  </p>
   <dl>
     <dt>アプリ版</dt>
     <dd data-testid="app-version">{appVersion}</dd>
@@ -177,6 +203,25 @@
 <div class="sr-only" aria-live="polite" data-testid="announcer">{ws.announcement}</div>
 
 <style>
+  .skip {
+    position: absolute;
+    left: 0.5rem;
+    top: -3rem;
+    background: var(--surface);
+    padding: 0.5rem 0.75rem;
+    border: 2px solid var(--focus);
+    border-radius: 6px;
+    z-index: 10;
+  }
+  .skip:focus {
+    top: 0.5rem;
+  }
+  main:focus {
+    outline: none;
+  }
+  .keys {
+    margin: 0.5rem 0;
+  }
   .app-header,
   main,
   .app-footer {

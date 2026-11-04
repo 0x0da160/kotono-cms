@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Plugin } from "vite";
+import { PREVIEW_CSS } from "../src/lib/preview/frame";
 
 /**
  * 単一HTMLへインライン化された <script> / <style> の SHA-256 ハッシュを計算し、
@@ -22,17 +23,20 @@ function collectInline(html: string, tag: "script" | "style"): string[] {
 
 export function buildCsp(html: string): string {
   const scripts = collectInline(html, "script").map(sha256);
-  const styles = collectInline(html, "style").map(sha256);
+  // プレビューの srcdoc は親の CSP を継承するため、プレビュー用 CSS のハッシュも許可する（16.1.1）
+  const styles = [...collectInline(html, "style").map(sha256), sha256(PREVIEW_CSS)];
   const directives: Record<string, string[]> = {
     "default-src": ["'none'"],
     "script-src": scripts.length > 0 ? scripts : ["'none'"],
-    "style-src": styles.length > 0 ? styles : ["'none'"],
-    // プレビュー・画像はCMSが読み込んだ許可ファイルから生成した blob: のみ（仕様 16.2）
-    "img-src": ["blob:"],
+    "style-src": styles,
+    // 画像はCMSが読み込んだ許可ファイルから生成した blob:（親UI）と data:（プレビュー）のみ（仕様 16.2）。
+    // sandbox iframe は opaque origin のため親の blob: を読めず、data: で渡す（ADR-0003）。
+    "img-src": ["blob:", "data:"],
     // 解析層の Worker は file:// 起動のため blob: URL から生成する（仕様 16.1.1, TG08）
     "worker-src": ["blob:"],
     "connect-src": ["'none'"],
     "font-src": ["'none'"],
+    // プレビューは srcdoc の iframe（about:srcdoc）。外部の文書は読み込まない。
     "frame-src": ["'none'"],
     "object-src": ["'none'"],
     "base-uri": ["'none'"],

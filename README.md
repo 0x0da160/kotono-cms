@@ -4,8 +4,8 @@
 
 Kotono CMS（コトノ シーエムエス）は、Webメディアの記事を作成・編集するためのローカルCMSです。単一のHTMLファイル `kotono-cms.html` をデスクトップ版の Chrome・Edge で `file://` から開き、ユーザーが選んだローカルフォルダに Markdown＋YAML frontmatter の記事を保存します。サーバーも外部CDNも使いません。
 
-> **現在の状態：P1 MVP の一部（読み込み・編集・手動保存）**
-> フォルダ選択、記事一覧（検索・絞り込み・ソート）、新規作成、frontmatter フォームと Markdown 原文の編集、外部変更を検出する手動保存、記事IDと slug の検証、YAML の往復保持を実装しています。Git、プレビュー、ブラウザ内復旧ドラフト、画像、複製、削除は未実装です。仕様の数値と方式は技術成立性ゲート（仕様 第2.2節）で確認する前の受け入れ要件であり、実機での検証はまだ行っていません。実装方式と未検証の項目は [ADR-0002](docs/knowledge/decisions/0002-p1-editing-and-save.md) を参照してください。
+> **現在の状態：P1 MVP（Git を除く）**
+> フォルダ選択、記事一覧（検索・絞り込み・ソート）、新規作成、frontmatter フォームと Markdown 原文の編集、外部変更を検出する手動保存、記事IDと slug の検証、YAML の往復保持、Markdown プレビュー、画像の取り込み・挿入・カバー選択・削除、記事の複製・削除（リポジトリ外への検証済み退避が必須）、ブラウザ内復旧ドラフトを実装しています。Git は未実装です。仕様の数値と方式は技術成立性ゲート（仕様 第2.2節）で確認する前の受け入れ要件であり、実機での検証はまだ行っていません。実装方式と未検証の項目は [ADR-0002](docs/knowledge/decisions/0002-p1-editing-and-save.md) と [ADR-0003](docs/knowledge/decisions/0003-p1-preview-media-drafts.md) を参照してください。
 
 ## 特徴（仕様より）
 
@@ -65,11 +65,11 @@ E2E の初回は `pnpm exec playwright install chromium` でブラウザを入�
 選定理由：
 
 - **単一HTMLと外部CDN非依存を素直に満たせる。** Vite の成果物を vite-plugin-singlefile で `kotono-cms.html` 1ファイルに畳み込みます。フォントは同梱せず OS 標準の日本語フォントを使います。
-- **速くて小さい。** Svelte 5 はコンパイル時に最適化され、ランタイムが小さく、仮想DOMの差分コストがありません。現在のビルドは約250 kB（yaml ライブラリを含む）です。
+- **速くて小さい。** Svelte 5 はコンパイル時に最適化され、ランタイムが小さく、仮想DOMの差分コストがありません。現在のビルドは約470 kB（yaml・Markdown 解析ライブラリを含む）です。
 - **安全側の既定値。** ビルド時にインラインの script・style の SHA-256 ハッシュから CSP を生成し、`default-src 'none'`・`connect-src 'none'` で通信を禁止します。`{@html}` と `eval` 系は ESLint でエラーにします。
 - **安定版を選ぶ。** TypeScript 7（ネイティブ版）は svelte-check・typescript-eslint が未対応のため、6.0 系を使います。
 
-YAML は `yaml`（Document API）、記事IDは `nanoid` を固定版で採用しました（[ADR-0002](docs/knowledge/decisions/0002-p1-editing-and-save.md)）。Markdown・Git・エディタのライブラリは、仕様 第29.1節に従い技術ゲートで採用を決めるため、まだ依存に入れていません。代替案と要検証点は [ADR-0001 技術スタックの選定](docs/knowledge/decisions/0001-tech-stack.md) にまとめています。
+YAML は `yaml`（Document API）、記事IDは `nanoid` を固定版で採用しました（[ADR-0002](docs/knowledge/decisions/0002-p1-editing-and-save.md)）。Markdown は micromark / mdast 系を固定版で採用し、終了可能な Worker の中で解析します（[ADR-0003](docs/knowledge/decisions/0003-p1-preview-media-drafts.md)）。Git・エディタのライブラリは、仕様 第29.1節に従い技術ゲートで採用を決めるため、まだ依存に入れていません。代替案と要検証点は [ADR-0001 技術スタックの選定](docs/knowledge/decisions/0001-tech-stack.md) にまとめています。
 
 ## ディレクトリ構成
 

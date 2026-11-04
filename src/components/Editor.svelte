@@ -5,10 +5,12 @@
   import { publishTiming } from "../lib/core/datetime";
   import ConflictPanel from "./ConflictPanel.svelte";
   import FrontmatterForm from "./FrontmatterForm.svelte";
+  import MediaPanel from "./MediaPanel.svelte";
+  import Preview from "./Preview.svelte";
 
   let { ws, session }: { ws: Workspace; session: EditorSession } = $props();
 
-  let mode = $state<"form" | "source">("form");
+  let mode = $state<"form" | "source" | "preview">("form");
   let modeError = $state<string | null>(null);
   let composing = $state(false);
   let clock = $state(Date.now());
@@ -23,6 +25,7 @@
   const body = $derived(a.split.ok ? a.split.body : "");
   const formAvailable = $derived(a.split.ok && a.parse?.ok === true);
   const readOnly = $derived(session.readOnlyReason !== null);
+  const locked = $derived(session.locked !== null);
   const timing = $derived(publishTiming(values.publishedAt ?? null, clock));
 
   // 構文エラーのある文書はフォームで編集できない（14）
@@ -36,7 +39,7 @@
       : { unsaved: "未保存", saving: "保存中", saved: "保存済み", unknown: "結果不明" }[session.status],
   );
 
-  function switchMode(next: "form" | "source") {
+  function switchMode(next: "form" | "source" | "preview") {
     if (next === mode) return;
     if (next === "form" && !formAvailable) {
       const first = a.problems[0];
@@ -56,12 +59,18 @@
       // フォームと原文で共通の文書履歴を使う（14）
       if (e.isComposing || composing) return;
       e.preventDefault();
+      if (!session.editable) return;
       if (k === "y" || e.shiftKey) session.redo();
       else session.undo();
     }
   }
 
   function onBeforeInput(e: InputEvent) {
+    if (!session.editable) {
+      // 削除手続き中など、対象記事の内容を変える全経路を止める（11.3）
+      e.preventDefault();
+      return;
+    }
     if (e.inputType === "historyUndo" || e.inputType === "historyRedo") {
       e.preventDefault();
       if (e.inputType === "historyUndo") session.undo();
@@ -93,6 +102,21 @@
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
   }
 
+  const draftLabel = $derived.by(() => {
+    const m = ws.drafts?.mode ?? "unavailable";
+    if (m === "unavailable") return "復旧退避なし（この環境ではブラウザ内に退避できません）";
+    if (m === "undecided") return "復旧退避なし（ブラウザ内復旧ドラフトは未設定）";
+    if (m !== "enabled") return "復旧退避なし（ブラウザ内復旧ドラフトは無効）";
+    if (readOnly) return "復旧退避：対象外（読み取り専用）";
+    if (!session.dirty) return "復旧退避：未保存の編集なし";
+    const d = session.draft;
+    const t = (at: number) => new Date(at).toLocaleTimeString("ja-JP");
+    if (d.kind === "saved")
+      return d.revision === session.revision ? `復旧退避済み（${t(d.at)}）` : `復旧退避待ち（前回 ${t(d.at)}）`;
+    if (d.kind === "failed") return `復旧退避に失敗：${d.message}${d.lastAt ? `（前回の退避 ${t(d.lastAt)}）` : ""}`;
+    return "復旧退避待ち";
+  });
+
   function savedAgo(t: number | null): string {
     if (t === null) return "このセッションでは未保存";
     const min = Math.floor((clock - t) / 60_000);
@@ -106,8 +130,8 @@
   aria-labelledby="editor-heading"
   onkeydown={onKeydown}
   onbeforeinput={onBeforeInput}
-  oncompositionstart={() => (composing = true)}
-  oncompositionend={() => (composing = false)}
+  oncompositionstart={() => (composing = session.composing = true)}
+  oncompositionend={() => (composing = session.composing = false)}
 >
   <header class="ed-head">
     <div class="ed-title">
@@ -151,7 +175,7 @@
       type="button"
       class="primary"
       onclick={() => ws.save()}
-      disabled={readOnly || session.saving}
+      disabled={readOnly || locked || session.saving}
       aria-keyshortcuts="Control+S Meta+S"
       data-testid="save-button"
     >
@@ -160,13 +184,13 @@
     <button
       type="button"
       onclick={() => session.undo()}
-      disabled={!session.canUndo || readOnly}
+      disabled={!session.canUndo || readOnly || locked}
       aria-keyshortcuts="Control+Z">元に戻す</button
     >
     <button
       type="button"
       onclick={() => session.redo()}
-      disabled={!session.canRedo || readOnly}
+      disabled={!session.canRedo || readOnly || locked}
       aria-keyshortcuts="Control+Shift+Z Control+Y">やり直す</button
     >
     <button type="button" onclick={() => copy(session.text)} disabled={session.text === ""}>原文をコピー</button>
@@ -174,10 +198,32 @@
       >原文をダウンロード</button
     >
     {#if !session.isNew}
-      <button type="button" onclick={() => ws.reloadCurrent()} disabled={ws.busy}>ディスクから再読み込み</button>
+      <button type="button" onclick={() => ws.reloadCurrent()} disabled={ws.busy || locked}
+        >ディスクから再読み込み</button
+      >
+      <button
+        type="button"
+        onclick={() => ws.duplicateCurrent()}
+        disabled={ws.busy || readOnly || locked}
+        data-testid="duplicate-button">複製…</button
+      >
+      <button
+        type="button"
+        class="danger"
+        onclick={() => ws.deleteCurrent()}
+        disabled={ws.busy || locked}
+        data-testid="delete-button">削除…</button
+      >
     {/if}
     <button type="button" onclick={() => ws.closeArticle()} disabled={ws.busy}>閉じる</button>
   </div>
+
+  {#if ws.operation}
+    <p class="op" role="status" data-testid="operation">処理中：{ws.operation}</p>
+  {/if}
+  {#if session.locked}
+    <p class="readonly" role="status" data-testid="locked">{session.locked}</p>
+  {/if}
 
   {#if session.notice}
     <div
@@ -245,17 +291,35 @@
         aria-controls="panel-edit"
         onclick={() => switchMode("source")}>原文</button
       >
+      <button
+        type="button"
+        role="tab"
+        id="tab-preview"
+        aria-selected={mode === "preview"}
+        aria-controls="panel-edit"
+        onclick={() => switchMode("preview")}
+        data-testid="tab-preview">プレビュー</button
+      >
     </div>
     {#if modeError}<p class="err" role="alert">{modeError}</p>{/if}
 
-    <div id="panel-edit" role="tabpanel" aria-labelledby={mode === "form" ? "tab-form" : "tab-source"} class="panel">
-      {#if mode === "form" && formAvailable}
+    <div id="panel-edit" role="tabpanel" aria-labelledby={`tab-${mode}`} class="panel">
+      {#if mode === "preview"}
+        <Preview {ws} {session} />
+      {:else if mode === "form" && formAvailable}
         <FrontmatterForm {session} />
         <label class="src">
           <span>本文（Markdown）</span>
           <textarea
             value={body}
-            oninput={(e) => session.setBody(e.currentTarget.value)}
+            oninput={(e) => {
+              session.setBody(e.currentTarget.value);
+              session.bodyCaret = e.currentTarget.selectionStart;
+            }}
+            onselect={(e) => (session.bodyCaret = e.currentTarget.selectionStart)}
+            onclick={(e) => (session.bodyCaret = e.currentTarget.selectionStart)}
+            onkeyup={(e) => (session.bodyCaret = e.currentTarget.selectionStart)}
+            readonly={locked}
             rows="18"
             spellcheck="false"
             data-testid="body-editor"></textarea>
@@ -266,18 +330,23 @@
           <textarea
             value={session.text}
             oninput={(e) => session.setText(e.currentTarget.value, "source")}
+            readonly={locked}
             rows="24"
             spellcheck="false"
             data-testid="source-editor"></textarea>
         </label>
       {/if}
     </div>
+    {#if !session.isNew}
+      <MediaPanel {ws} {session} />
+    {:else}
+      <p class="muted small">画像の取り込みは、記事を一度保存した後にできます。</p>
+    {/if}
   {/if}
 
   <footer class="ed-foot">
     <span>最後のリポジトリ保存：{savedAgo(session.lastSavedAt)}</span>
-    <span>復旧退避なし（ブラウザ内復旧ドラフトは本版では未実装）</span>
-    <span>プレビュー：本版では未実装</span>
+    <span data-testid="draft-status">{draftLabel}</span>
   </footer>
 </section>
 
@@ -412,6 +481,11 @@
   .err {
     margin: 0;
     color: var(--ng);
+  }
+  .op {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--muted);
   }
   .ed-foot {
     display: flex;

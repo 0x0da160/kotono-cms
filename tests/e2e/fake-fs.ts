@@ -7,7 +7,7 @@
  *
  * この関数は Playwright の addInitScript でページへ文字列化して渡すため、外部の識別子を参照しない。
  */
-export function installFakeFs(seed: Record<string, string>): void {
+export function installFakeFs(seed: Record<string, string>, binary: Record<string, string> = {}): void {
   type Node = FakeDir | FakeFile;
   const enc = new TextEncoder();
   const err = (name: string) => Object.assign(new Error(name), { name });
@@ -17,7 +17,13 @@ export function installFakeFs(seed: Record<string, string>): void {
     data: Uint8Array = new Uint8Array();
     lastModified = Date.now();
     writes = 0;
-    constructor(readonly name: string) {}
+    constructor(
+      readonly name: string,
+      public parent: FakeDir | null = null,
+    ) {}
+    async isSameEntry(o: unknown) {
+      return o === this;
+    }
     async getFile() {
       const bytes = this.data.slice();
       const lm = this.lastModified;
@@ -55,13 +61,34 @@ export function installFakeFs(seed: Record<string, string>): void {
   class FakeDir {
     readonly kind = "directory";
     children = new Map<string, Node>();
-    constructor(readonly name: string) {}
+    constructor(
+      readonly name: string,
+      public parent: FakeDir | null = null,
+    ) {}
+    async isSameEntry(o: unknown) {
+      return o === this;
+    }
+    async resolve(d: Node) {
+      const path: string[] = [];
+      let cur: Node | null = d;
+      while (cur && cur !== this) {
+        path.unshift(cur.name);
+        cur = cur.parent;
+      }
+      return cur === this ? path : null;
+    }
+    async removeEntry(name: string) {
+      const c = this.children.get(name);
+      if (!c) throw err("NotFoundError");
+      if (c instanceof FakeDir && c.children.size > 0) throw err("InvalidModificationError");
+      this.children.delete(name);
+    }
     async getDirectoryHandle(name: string, o?: { create?: boolean }) {
       const c = this.children.get(name);
       if (c instanceof FakeDir) return c;
       if (c) throw err("TypeMismatchError");
       if (!o?.create) throw err("NotFoundError");
-      const d = new FakeDir(name);
+      const d = new FakeDir(name, this);
       this.children.set(name, d);
       return d;
     }
@@ -70,7 +97,7 @@ export function installFakeFs(seed: Record<string, string>): void {
       if (c instanceof FakeFile) return c;
       if (c) throw err("TypeMismatchError");
       if (!o?.create) throw err("NotFoundError");
-      const f = new FakeFile(name);
+      const f = new FakeFile(name, this);
       this.children.set(name, f);
       return f;
     }
@@ -86,13 +113,16 @@ export function installFakeFs(seed: Record<string, string>): void {
   }
 
   const root = new FakeDir("sample-media");
-  const walk = (path: string, create: boolean): { dir: FakeDir; name: string } => {
+  // 退避先：リポジトリと重ならない別のフォルダ（19.1）
+  const backupRoot = new FakeDir("backup-drive");
+  const pickQueue: string[] = [];
+  const walk = (path: string, create: boolean, base: FakeDir = root): { dir: FakeDir; name: string } => {
     const parts = path.split("/");
-    let d = root;
+    let d = base;
     for (const p of parts.slice(0, -1)) {
       let c = d.children.get(p);
       if (!c && create) {
-        c = new FakeDir(p);
+        c = new FakeDir(p, d);
         d.children.set(p, c);
       }
       if (!(c instanceof FakeDir)) throw new Error(`no dir ${p}`);
@@ -103,9 +133,36 @@ export function installFakeFs(seed: Record<string, string>): void {
   const api = {
     write(path: string, text: string) {
       const { dir, name } = walk(path, true);
-      const f = new FakeFile(name);
+      const f = new FakeFile(name, dir);
       f.data = enc.encode(text);
       dir.children.set(name, f);
+    },
+    writeBase64(path: string, b64: string) {
+      const { dir, name } = walk(path, true);
+      const f = new FakeFile(name, dir);
+      f.data = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      dir.children.set(name, f);
+    },
+    /** 次の showDirectoryPicker が返すフォルダ */
+    pickNext(which: "repo" | "backup") {
+      pickQueue.push(which);
+    },
+    backupList(path = ""): string[] {
+      try {
+        const { dir } = walk(`${path}${path ? "/" : ""}x`, false, backupRoot);
+        return [...dir.children.keys()];
+      } catch {
+        return [];
+      }
+    },
+    backupRead(path: string): string | null {
+      try {
+        const { dir, name } = walk(path, false, backupRoot);
+        const f = dir.children.get(name);
+        return f instanceof FakeFile ? new TextDecoder().decode(f.data) : null;
+      } catch {
+        return null;
+      }
     },
     mkdir(path: string) {
       walk(`${path}/x`, true);
@@ -138,11 +195,19 @@ export function installFakeFs(seed: Record<string, string>): void {
     if (p.endsWith("/")) api.mkdir(p.slice(0, -1));
     else api.write(p, t);
   }
-  Object.assign(window, { __fakeFs: api, showDirectoryPicker: async () => root });
+  for (const [p, b] of Object.entries(binary)) api.writeBase64(p, b);
+  Object.assign(window, {
+    __fakeFs: api,
+    showDirectoryPicker: async () => (pickQueue.shift() === "backup" ? backupRoot : root),
+  });
 }
 
 export interface FakeFsApi {
   write(path: string, text: string): void;
+  writeBase64(path: string, b64: string): void;
+  pickNext(which: "repo" | "backup"): void;
+  backupList(path?: string): string[];
+  backupRead(path: string): string | null;
   read(path: string): string | null;
   writes(path: string): number;
   list(path: string): string[];

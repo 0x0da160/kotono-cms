@@ -2,12 +2,40 @@
  * 作業フォルダ全体の状態と操作（仕様 3・10.1・11・12・13・23）。
  */
 import { allocateArticleId, generateArticleId } from "../core/article-id";
-import { newArticleText, textFromBytes, type Problem } from "../core/article-doc";
-import { sha256Hex } from "../core/bytes";
+import {
+  analyzeText,
+  duplicateText,
+  newArticleText,
+  textFromBytes,
+  unknownKeys,
+  verifyCandidateBytes,
+  type Problem,
+} from "../core/article-doc";
+import { IMAGE_TASK_MAX_MS } from "../core/budgets";
+import { bytesEqual, encodeUtf8, sha256Hex } from "../core/bytes";
 import { nowDateTime } from "../core/datetime";
+import { imageMarkdown } from "../core/image";
+import { refsFromTree, type MediaRefs } from "../core/markdown";
+import { unavailableMdService, type MdService } from "../parse/md-service";
 import { checkSlugUniqueness } from "../core/slug";
+import type { DraftRecord } from "../drafts/store";
+import { deleteEntries, duplicateArticle } from "../fs/article-ops";
+import { createBackup, itemsFromTree, type BackupItem } from "../fs/backup";
+import {
+  browserDecoder,
+  effectiveLimits,
+  listMedia,
+  MEDIA_DIR,
+  saveMedia,
+  validateImport,
+  type Decoder,
+  type MediaFile,
+} from "../fs/media";
+import { enumerateTree, fingerprint, readAllBytes, sameFingerprints, type Fingerprint } from "../fs/tree";
+import { DraftController } from "./drafts.svelte";
 import {
   canCreateArticles,
+  canImportMedia,
   createArticlesDir,
   openArticlesDir,
   readArticle,
@@ -20,7 +48,14 @@ import {
   type RepoConfig,
   type ScanResult,
 } from "../fs/repo";
-import { createArticle, readDiskArticle, saveExisting, SerialQueue, type DiskClass } from "../fs/save";
+import {
+  createArticle,
+  ensureWritePermission,
+  readDiskArticle,
+  saveExisting,
+  SerialQueue,
+  type DiskClass,
+} from "../fs/save";
 import { classifyFsError, fsErrorMessage, type DirHandleLike } from "../fs/types";
 import { EditorSession, problemsNotice, type Notice } from "./session.svelte";
 
@@ -42,7 +77,45 @@ export interface DialogRequest {
 
 type BuildCandidate = () => { ok: true; bytes: Uint8Array } | { ok: false; problems: Problem[] };
 
-type PickerHost = { showDirectoryPicker?: (o?: { mode?: "read" | "readwrite" }) => Promise<unknown> };
+type PickerHost = {
+  showDirectoryPicker?: (o?: { mode?: "read" | "readwrite"; id?: string; startIn?: string }) => Promise<unknown>;
+};
+
+export interface WorkspaceOptions {
+  readonly drafts?: DraftController | null;
+  readonly decoder?: Decoder;
+  /** Markdown 解析（ブラウザでは Worker）。未指定なら解析不能として扱う */
+  readonly md?: MdService;
+  readonly appVersion?: string;
+  readonly specVersion?: string;
+}
+
+export interface MediaState {
+  readonly articleId: string;
+  readonly files: MediaFile[];
+  readonly exists: boolean;
+  readonly error: string | null;
+  /** 保存済み本文と cover からの参照（18.1） */
+  readonly refs: MediaRefs | null;
+}
+
+export type ImportStatus = "pending" | "validating" | "saving" | "done" | "failed" | "cancelled";
+
+export interface ImportJob {
+  readonly fileName: string;
+  status: ImportStatus;
+  message: string;
+  name: string | null;
+  alt: string;
+  inserted: boolean;
+}
+
+export interface ImportFile {
+  readonly name: string;
+  readonly type: string;
+  readonly size: number;
+  arrayBuffer(): Promise<ArrayBuffer>;
+}
 
 export class Workspace {
   root = $state<DirHandleLike | null>(null);
@@ -55,7 +128,22 @@ export class Workspace {
   scan = $state<ScanResult | null>(null);
   scanning = $state(false);
   scanProgress = $state<{ done: number; total: number } | null>(null);
-  session = $state<EditorSession | null>(null);
+  #session = $state<EditorSession | null>(null);
+  get session(): EditorSession | null {
+    return this.#session;
+  }
+  set session(s: EditorSession | null) {
+    if (this.#session && this.#session !== s) this.drafts?.cancel(this.#session);
+    if (s) s.onChange = () => this.drafts?.onEdit(s);
+    this.#session = s;
+    this.media = null;
+    this.importJobs = [];
+  }
+  media = $state<MediaState | null>(null);
+  importJobs = $state<ImportJob[]>([]);
+  /** 複製・削除・取り込み等の長い操作の工程表示（11.2） */
+  operation = $state<string | null>(null);
+  private importCancelled = false;
   dialog = $state<DialogRequest | null>(null);
   /** 支援技術へ通知する短い状態文（14.1） */
   announcement = $state("");
@@ -66,10 +154,25 @@ export class Workspace {
   // eslint-disable-next-line svelte/prefer-svelte-reactivity -- 画面に表示しない内部状態
   private readonly ownedDirs = new Set<string>();
 
-  constructor(private readonly host: PickerHost = globalThis as unknown as PickerHost) {}
+  readonly drafts: DraftController | null;
+  private readonly decoder: Decoder;
+  readonly md: MdService;
+  private readonly appVersion: string;
+  private readonly specVersion: string;
+
+  constructor(
+    private readonly host: PickerHost = globalThis as unknown as PickerHost,
+    opts: WorkspaceOptions = {},
+  ) {
+    this.drafts = opts.drafts ?? null;
+    this.decoder = opts.decoder ?? browserDecoder;
+    this.md = opts.md ?? unavailableMdService;
+    this.appVersion = opts.appVersion ?? "dev";
+    this.specVersion = opts.specVersion ?? "dev";
+  }
 
   get busy(): boolean {
-    return this.scanning || this.opening || (this.session?.saving ?? false);
+    return this.scanning || this.opening || (this.session?.saving ?? false) || this.operation !== null;
   }
 
   ask(req: Omit<DialogRequest, "resolve">): Promise<string> {
@@ -116,6 +219,7 @@ export class Workspace {
     this.missingArticles = false;
     this.scan = null;
     this.config = await readConfig(root);
+    await this.drafts?.attach(root);
     const st = await openArticlesDir(root);
     if (st.kind === "ok") {
       this.articles = st.dir;
@@ -174,7 +278,7 @@ export class Workspace {
       message,
       details: [
         "破棄すると、この記事の未保存の編集はメモリから消えます。保存済みのファイルは変わりません。",
-        "ブラウザ内の復旧ドラフトは未実装のため、破棄した編集は復旧できません。",
+        "破棄した編集は、ブラウザ内の復旧ドラフトからも削除します。",
       ],
       buttons: [
         { label: "保存する", value: "save", variant: "primary" },
@@ -187,6 +291,7 @@ export class Workspace {
       await this.save();
       return !this.session?.dirty;
     }
+    if (v === "discard") await this.drafts?.discard(s);
     return v === "discard";
   }
 
@@ -255,6 +360,7 @@ export class Workspace {
         initial: "cancel",
       });
       if (v !== "reload") return;
+      await this.drafts?.discard(s);
     }
     await this.loadArticle(s.id);
   }
@@ -303,8 +409,32 @@ export class Workspace {
       s.notice = { kind: "error", text: s.readOnlyReason };
       return;
     }
+    if (s.locked !== null) {
+      s.notice = { kind: "error", text: s.locked };
+      return;
+    }
+    if (s.recoveryMismatch) {
+      const v = await this.ask({
+        title: "復旧ドラフトを保存します",
+        message:
+          "このドラフトは、作成時の基準版と現在のディスクの内容が異なります。保存すると、ディスク上の内容をこの編集内容で置き換えます。",
+        details: [
+          "基準版の本文は保存していないため、3版の比較はできません。先に原文を退避し、ディスク版と見比べてください。",
+        ],
+        buttons: [
+          { label: "置き換えて保存", value: "ok", variant: "danger" },
+          { label: "キャンセル", value: "cancel" },
+        ],
+        initial: "cancel",
+      });
+      if (v !== "ok") return;
+      s.recoveryMismatch = false;
+    }
     // 1. スナップショットとリビジョンを固定する
     let snapshot = s.text;
+    const snapRevision = s.revision;
+    const draftKey = DraftController.keyOf(s);
+    const savedBefore = s.lastSavedAt;
     // 保存したリビジョンと後続の編集を別の Undo 単位にする
     s.sealHistory();
     const pre = s.precheck(snapshot);
@@ -395,6 +525,7 @@ export class Workspace {
         if (s.isNew) await this.saveNew(s, root, articles, build);
         else await this.saveCurrent(s, root, articles, build);
       });
+      if (s.lastSavedAt !== savedBefore) await this.drafts?.saved(s, snapRevision, draftKey).catch(() => undefined);
     } catch (e) {
       s.resultUnknown = true;
       s.notice = { kind: "error", text: `保存の結果が不明です：${e instanceof Error ? e.message : String(e)}` };
@@ -556,7 +687,10 @@ export class Workspace {
       ],
       initial: "cancel",
     });
-    if (v === "ok") await this.loadArticle(s.id);
+    if (v === "ok") {
+      await this.drafts?.discard(s);
+      await this.loadArticle(s.id);
+    }
   }
 
   /** 外部変更の比較を最新のディスク状態で取り直す */
@@ -573,6 +707,640 @@ export class Workspace {
     if (this.busy) return;
     if (!(await this.confirmLeave())) return;
     this.session = null;
+  }
+
+  // -------------------------------------------------------------------------
+  // 未保存の編集があるときの前処理（10.2・18.2・19：保存または破棄を先に選ばせる）
+
+  private async requireSaved(s: EditorSession, what: string): Promise<EditorSession | null> {
+    if (!s.dirty) return s;
+    const v = await this.ask({
+      title: "未保存の編集があります",
+      message: `${what}の前に、未保存の編集を保存するか破棄してください。`,
+      buttons: [
+        { label: "保存する", value: "save", variant: "primary" },
+        { label: "破棄する", value: "discard", variant: "danger" },
+        { label: "キャンセル", value: "cancel" },
+      ],
+      initial: "cancel",
+    });
+    if (v === "save") {
+      await this.save();
+      return this.session === s && !s.dirty ? s : null;
+    }
+    if (v === "discard") {
+      await this.drafts?.discard(s);
+      await this.loadArticle(s.id);
+      const n = this.session;
+      return n && !n.dirty && n.readOnlyReason === null ? n : null;
+    }
+    return null;
+  }
+
+  private fail(s: EditorSession, text: string, details?: readonly string[]): void {
+    s.notice = details ? { kind: "error", text, details } : { kind: "error", text };
+    this.announce(text);
+  }
+
+  private async pickBackupRoot(): Promise<DirHandleLike | null> {
+    try {
+      const h = await this.host.showDirectoryPicker?.({ mode: "readwrite", id: "kotono-backup" });
+      return (h as DirHandleLike | undefined) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // 画像（17・18）
+
+  async refreshMedia(): Promise<void> {
+    const s = this.session;
+    const articles = this.articles;
+    if (!s || s.isNew || !articles) {
+      this.media = null;
+      return;
+    }
+    const id = s.id;
+    let refs: MediaRefs | null = null;
+    if (s.base) {
+      refs = await this.refsOf(s.base.text, id);
+    }
+    try {
+      const dir = await articles.getDirectoryHandle(id);
+      const r = await listMedia(dir);
+      if (this.session?.id !== id) return;
+      this.media = r.ok
+        ? { articleId: id, files: r.files, exists: r.exists, error: null, refs }
+        : { articleId: id, files: [], exists: false, error: r.message, refs };
+    } catch (e) {
+      this.media = { articleId: id, files: [], exists: false, error: fsErrorMessage(classifyFsError(e)), refs };
+    }
+  }
+
+  /** 保存済み文書の本文と cover からの参照（18.1） */
+  private async refsOf(text: string, id: string): Promise<MediaRefs> {
+    const a = analyzeText(text, id);
+    const cover = a.schema?.values.cover?.src ?? null;
+    if (!a.split.ok) return refsFromTree(null, cover, "文書を解析できません。");
+    return this.md.refs(a.split.body, cover);
+  }
+
+  cancelImport(): void {
+    this.importCancelled = true;
+  }
+
+  /** 画像の取り込み（17・17.1・17.2）：1ファイルずつ検証・保存し、成功分だけを挿入候補にする */
+  async importImages(files: readonly ImportFile[]): Promise<void> {
+    const s = this.session;
+    const root = this.root;
+    const articles = this.articles;
+    if (!s || !root || !articles || this.operation !== null) return;
+    if (s.isNew) return this.fail(s, "画像を取り込む前に、記事を一度保存してください（10.1）。");
+    if (!s.editable) return this.fail(s, s.locked ?? s.readOnlyReason ?? "編集できません。");
+    this.config = await readConfig(root);
+    const blocked = canImportMedia(this.config);
+    if (blocked) return this.fail(s, blocked);
+    const limits = effectiveLimits(this.config.media);
+    if (files.length > limits.maxBatch)
+      return this.fail(
+        s,
+        `一度に取り込めるのは ${limits.maxBatch} ファイルまでです（${files.length} ファイルを選択）。`,
+      );
+    const id = s.id;
+    const jobs: ImportJob[] = files.map((f) => ({
+      fileName: f.name,
+      status: "pending",
+      message: "未処理",
+      name: null,
+      alt: "",
+      inserted: false,
+    }));
+    this.importJobs = jobs;
+    const live = () => this.importJobs;
+    const update = (i: number, patch: Partial<ImportJob>) => {
+      const cur = live()[i];
+      if (cur) Object.assign(cur, patch);
+    };
+    this.importCancelled = false;
+    this.operation = "画像の取り込み";
+    try {
+      for (let i = 0; i < files.length; i++) {
+        if (this.importCancelled) {
+          for (let j = i; j < files.length; j++) update(j, { status: "cancelled", message: "キャンセルしました" });
+          break;
+        }
+        const f = files[i] as ImportFile;
+        update(i, { status: "validating", message: "検証中" });
+        const v = await validateImport(f, limits, this.decoder, IMAGE_TASK_MAX_MS);
+        if (!v.ok) {
+          update(i, { status: "failed", message: v.message });
+          continue;
+        }
+        update(i, { status: "saving", message: "保存中" });
+        const r = await this.queue.run(async () => {
+          if (!(await ensureWritePermission(root)))
+            return { ok: false as const, message: "書き込みが許可されていません。", leftover: null };
+          const dir = await articles.getDirectoryHandle(id);
+          return saveMedia(dir, v.info, v.bytes);
+        });
+        if (r.ok) update(i, { status: "done", message: `保存しました（media/${r.name}）`, name: r.name });
+        else
+          update(i, {
+            status: "failed",
+            message: r.leftover ? `${r.message}（残存の可能性：${r.leftover}）` : r.message,
+          });
+      }
+    } catch (e) {
+      s.notice = { kind: "error", text: `画像の取り込みを中断しました：${e instanceof Error ? e.message : String(e)}` };
+    } finally {
+      this.operation = null;
+    }
+    const ok = live().filter((j) => j.status === "done").length;
+    const ng = live().filter((j) => j.status === "failed").length;
+    s.notice = {
+      kind: ng > 0 ? "warn" : "ok",
+      text: `画像を ${ok} 件取り込みました${ng > 0 ? `（失敗 ${ng} 件）` : ""}。alt を確認してから本文へ挿入してください。`,
+    };
+    this.announce(s.notice.text);
+    await this.refreshMedia();
+  }
+
+  /** 成功した画像だけを本文へ挿入する（17.1） */
+  insertImage(name: string, alt: string): void {
+    const s = this.session;
+    if (!s) return;
+    const r = s.insertIntoBody(imageMarkdown(alt, name));
+    if (!r.ok) return this.fail(s, r.message);
+    const job = this.importJobs.find((j) => j.name === name);
+    if (job) job.inserted = true;
+    this.announce(`画像 ${name} を本文へ挿入しました。`);
+  }
+
+  setCover(name: string, alt: string): void {
+    const s = this.session;
+    if (!s) return;
+    const r = s.setField("cover", { src: `./${MEDIA_DIR}/${name}`, alt });
+    if (!r.ok) return this.fail(s, r.message);
+    this.announce(`カバー画像を ${name} にしました（未保存）。`);
+  }
+
+  /** 画像の削除（18.2・19.1・11.3） */
+  async deleteMedia(name: string): Promise<void> {
+    const first = this.session;
+    const root = this.root;
+    const articles = this.articles;
+    if (!first || first.isNew || !root || !articles || this.busy) return;
+    if (!first.editable) return this.fail(first, first.locked ?? first.readOnlyReason ?? "編集できません。");
+    const s = await this.requireSaved(first, "画像の削除");
+    if (!s || !s.base) return;
+    const id = s.id;
+    const path = `${ARTICLES_PATH}${id}/${MEDIA_DIR}/${name}`;
+    const refsOf = (text: string) => this.refsOf(text, id);
+    const refs = await refsOf(s.base.text);
+    if (refs.status === "unknown")
+      return this.fail(
+        s,
+        "参照状況不明：この画像が使われていないと判定できないため、CMS からは削除できません。外部ツールで確認してください。",
+        refs.reasons,
+      );
+    if (refs.names.has(name))
+      return this.fail(
+        s,
+        `この画像は保存済みの本文または cover から参照されています。先に参照を外して保存してください（${name}）。`,
+      );
+
+    this.operation = "画像の削除";
+    try {
+      const articleDir = await articles.getDirectoryHandle(id);
+      const mediaDir = await articleDir.getDirectoryHandle(MEDIA_DIR);
+      const handle = await mediaDir.getFileHandle(name);
+      const bytes = await readAllBytes(handle, Number.MAX_SAFE_INTEGER);
+      if (!bytes.ok) return this.fail(s, `画像を読み取れません：${bytes.message}`);
+      const confirmedRevision = s.revision;
+      const v = await this.ask({
+        title: "画像を削除します",
+        message: `${path}（${bytes.bytes.length.toLocaleString()} バイト）を削除します。削除の前に、リポジトリ外の退避先フォルダへコピーし、検証します。`,
+        details: [
+          "参照の確認範囲：この記事の保存済み本文と cover だけです。別の記事や独自の frontmatter 項目からの参照は確認していません。",
+          "Git 状態：未確認（Git 機能は未実装）。Git だけで未コミットの内容を復元できるとは限りません。",
+          "復元は CMS では行いません。退避先から外部ツールで戻してください。",
+        ],
+        buttons: [
+          { label: "退避先を選んで退避する", value: "backup", variant: "primary" },
+          { label: "キャンセル", value: "cancel" },
+        ],
+        initial: "cancel",
+      });
+      if (v !== "backup") return;
+      const backupRoot = await this.pickBackupRoot();
+      if (!backupRoot) return this.fail(s, "退避先が選ばれなかったため、削除しませんでした。");
+      const item: BackupItem = { path: `${MEDIA_DIR}/${name}`, kind: "file", handle };
+      this.operation = "画像の削除：退避中";
+      const b = await this.queue.run(() =>
+        createBackup({
+          backupRoot,
+          repoRoot: root,
+          operation: "delete-media",
+          articleId: id,
+          items: [item],
+          appVersion: this.appVersion,
+          specVersion: this.specVersion,
+        }),
+      );
+      if (!b.ok)
+        return this.fail(
+          s,
+          `退避できなかったため、削除しませんでした：${b.message}`,
+          b.folderName
+            ? [`途中まで作成した退避フォルダ：${backupRoot.name}/${b.folderName}（自動では削除しません）`]
+            : undefined,
+        );
+      const where = `${backupRoot.name}/${b.folderName}`;
+      if (s.revision !== confirmedRevision || s.dirty)
+        return this.fail(
+          s,
+          "確認の後に記事が編集されたため、削除を中止しました。保存または破棄してから、もう一度確認してください。",
+          [`退避は保持しています：${where}`],
+        );
+      const v2 = await this.ask({
+        title: "退避を検証しました",
+        message: `退避先：${where}（${b.totalBytes.toLocaleString()} バイト、検証 ${b.verifiedAt}）。${name} を削除しますか。`,
+        details: ["削除したファイルは CMS からは戻せません。"],
+        buttons: [
+          { label: "画像を削除する", value: "delete", variant: "danger" },
+          { label: "キャンセル", value: "cancel" },
+        ],
+        initial: "cancel",
+      });
+      if (v2 !== "delete") {
+        s.notice = { kind: "info", text: `削除を取り消しました。退避は保持しています：${where}` };
+        return;
+      }
+      // 個別削除の確定工程：対象記事の編集を止めてから最終照合し、削除 API の結果照合まで再開しない（11.3）
+      this.operation = "画像の削除：削除中（取り消せません）";
+      s.locked = "画像の削除中のため、この記事は一時的に編集できません。";
+      try {
+        const res = await this.queue.run(async () => {
+          if (s.dirty || s.revision !== confirmedRevision || !s.base) return "確認の後に記事が編集されました。";
+          const disk = await readDiskArticle(articles, id);
+          if (disk.state.kind !== "bytes" || !bytesEqual(disk.state.bytes, s.base.bytes))
+            return "保存済みの記事ファイルがディスク上で変わっています。";
+          const now = await refsOf(s.base.text);
+          if (now.status !== "ok" || now.names.has(name)) return "最新の保存済み本文で参照を確認できません。";
+          const cur = await readAllBytes(handle, Number.MAX_SAFE_INTEGER);
+          const want = b.manifest.entries[0]?.sha256;
+          if (!cur.ok || (await sha256Hex(cur.bytes)) !== want) return "確認の後に画像の内容が変わりました。";
+          const rep = await deleteEntries(
+            articleDir,
+            [{ path: item.path, kind: "file", size: cur.bytes.length, sha256: want ?? null }],
+            null,
+          );
+          return rep.error;
+        });
+        if (res)
+          return this.fail(s, `画像を削除しませんでした（または完了を確認できません）：${res}`, [
+            `退避は保持しています：${where}`,
+          ]);
+      } finally {
+        s.locked = null;
+      }
+      s.notice = { kind: "ok", text: `画像を削除しました（${path}）。退避先：${where}` };
+      this.announce(s.notice.text);
+    } catch (e) {
+      this.fail(s, `画像を削除できません：${fsErrorMessage(classifyFsError(e))}`);
+    } finally {
+      this.operation = null;
+      await this.refreshMedia();
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // 複製（10.2）
+
+  async duplicateCurrent(): Promise<void> {
+    const first = this.session;
+    const root = this.root;
+    const articles = this.articles;
+    if (!first || first.isNew || !root || !articles || this.busy) return;
+    if (first.readOnlyReason !== null) return this.fail(first, "読み取り専用の記事は複製できません。");
+    const s = await this.requireSaved(first, "複製");
+    if (!s || !s.base) return;
+    if (s.analysis.problems.length > 0) return this.fail(s, "検証エラーのある記事は複製できません。");
+    this.config = await readConfig(root);
+    const blocked = canCreateArticles(this.config);
+    if (blocked) return this.fail(s, blocked.replace("新規作成", "複製"));
+    const id = s.id;
+    this.operation = "記事の複製：確認中";
+    try {
+      const disk = await readDiskArticle(articles, id);
+      if (disk.state.kind !== "bytes" || !bytesEqual(disk.state.bytes, s.base.bytes))
+        return this.fail(s, "複製元が読み込み後に変わっています。再読み込みしてから複製してください。");
+      const dir = await articles.getDirectoryHandle(id);
+      const tree = await enumerateTree(dir);
+      if (!tree.ok) return this.fail(s, `複製できません：${tree.message}`);
+      const fp = await fingerprint(tree.entries);
+      if (!fp.ok) return this.fail(s, `複製できません：${fp.message}`);
+      const unknown = unknownKeys(s.analysis);
+      const v = await this.ask({
+        title: "記事を複製します",
+        message: `${tree.files} ファイル・${tree.dirs} フォルダ（合計 ${tree.totalBytes.toLocaleString()} バイト）を新しい記事フォルダへコピーします。`,
+        details: [
+          "新しい記事は下書き（draft）、slug は空、publishedAt は null、作成・更新日時は複製の確定時刻になります。",
+          unknown.length > 0
+            ? `未知の項目（${unknown.join("、")}）は値を変えずにコピーします。中の ID・外部参照・固有値は自動では変換しません。`
+            : "未知の項目はありません。",
+          ...tree.entries.map(
+            (e) =>
+              `${e.kind === "dir" ? "フォルダ" : "ファイル"}：${e.path}${e.kind === "file" ? `（${e.size.toLocaleString()} バイト）` : ""}`,
+          ),
+        ],
+        buttons: [
+          { label: "複製する", value: "ok", variant: "primary" },
+          { label: "キャンセル", value: "cancel" },
+        ],
+        initial: "ok",
+      });
+      if (v !== "ok") return;
+      const alloc = await allocateArticleId(this.config.idLength, (x) => entryExists(articles, x));
+      if (!alloc.ok) return this.fail(s, "新しい記事IDを確保できません。");
+      const newId = alloc.id;
+      const sourceText = s.base.text;
+      this.operation = "記事の複製：コピー中";
+      const r = await this.queue.run(async () => {
+        if (!(await ensureWritePermission(root))) return { kind: "permission" as const };
+        return duplicateArticle({
+          articles,
+          sourceId: id,
+          newId,
+          planned: fp.items,
+          sourceEntries: tree.entries,
+          ownedDirs: this.ownedDirs,
+          buildIndex: () => {
+            const t = duplicateText(sourceText, newId, nowDateTime());
+            if (!t.ok) return { ok: false, problems: [{ message: t.message }] };
+            const bytes = encodeUtf8(t.text);
+            const c = verifyCandidateBytes(bytes, newId);
+            return c.ok ? { ok: true, bytes } : { ok: false, problems: c.problems };
+          },
+        });
+      });
+      switch (r.kind) {
+        case "permission":
+          return this.fail(s, "権限不足：フォルダへの書き込みが許可されていません。");
+        case "exists":
+          return this.fail(s, "作成先に同名のエントリーが現れたため、複製を止めました。もう一度試してください。");
+        case "source-changed":
+          await this.refreshEntry(newId);
+          return this.fail(s, `複製元が変わったため、複製を止めました：${r.message}`, [
+            `作成途中のフォルダ：${ARTICLES_PATH}${newId}/（完成記事ではありません。自動では削除しません）`,
+          ]);
+        case "candidate-invalid":
+          await this.refreshEntry(newId);
+          return this.fail(
+            s,
+            "複製後の index.md が検証を通らないため、作成を止めました。",
+            r.problems.map((p) => p.message),
+          );
+        case "incomplete":
+          await this.refreshEntry(newId);
+          return this.fail(
+            s,
+            `複製は完了していません（不完全）：${r.message}`,
+            r.path ? [`残存しているパス：${r.path}（自動では再利用・削除しません）`] : undefined,
+          );
+        case "done":
+          break;
+      }
+      await this.refreshEntry(newId);
+      this.operation = null;
+      await this.loadArticle(newId);
+      const n = this.session;
+      if (n)
+        n.notice = { kind: "ok", text: `記事 ${id} を複製し、${newId} を作成しました（${r.files + 1} ファイル）。` };
+      this.announce(`記事 ${id} を複製し、${newId} を作成しました。`);
+    } catch (e) {
+      this.fail(s, `複製できません：${fsErrorMessage(classifyFsError(e))}`);
+    } finally {
+      this.operation = null;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // 記事の削除（19・19.1・11.3）
+
+  async deleteCurrent(): Promise<void> {
+    const first = this.session;
+    const root = this.root;
+    const articles = this.articles;
+    if (!first || first.isNew || !root || !articles || this.busy) return;
+    const s = first.readOnlyReason !== null ? first : await this.requireSaved(first, "記事の削除");
+    if (!s) return;
+    const id = s.id;
+    const title = s.analysis.schema?.values.title ?? "";
+    // 最初の確認画面を開く時点から、結果判定まで対象記事の編集を止める（11.3）
+    s.locked = "記事の削除手続き中のため、この記事は編集できません（コピー・退避は可能です）。";
+    this.operation = "記事の削除：対象の確認中";
+    let finished = false;
+    try {
+      const dir = await articles.getDirectoryHandle(id);
+      const tree = await enumerateTree(dir);
+      if (!tree.ok) return this.fail(s, `対象をすべて列挙できないため、削除できません：${tree.message}`);
+      const v = await this.ask({
+        title: "記事を削除します",
+        message: `「${title || "無題"}」（${id}）の記事フォルダ全体（${tree.files} ファイル・${tree.dirs} フォルダ、合計 ${tree.totalBytes.toLocaleString()} バイト）を削除します。削除の前に、リポジトリ外の退避先フォルダへコピーし、検証します。`,
+        details: [
+          "未知のファイル・隠しファイル・サブフォルダを含め、次のすべてが対象です。",
+          ...tree.entries.map(
+            (e) =>
+              `${e.kind === "dir" ? "フォルダ" : "ファイル"}：${ARTICLES_PATH}${id}/${e.path}${e.kind === "file" ? `（${e.size.toLocaleString()} バイト）` : ""}`,
+          ),
+          "Git 状態：未確認（Git 機能は未実装）。Git だけで未コミットの内容を復元できるとは限りません。",
+          "CMS 独自のゴミ箱はありません。復元は退避先から外部ツールで行います。",
+        ],
+        buttons: [
+          { label: "退避先を選んで退避する", value: "backup", variant: "primary" },
+          { label: "キャンセル", value: "cancel" },
+        ],
+        initial: "cancel",
+      });
+      if (v !== "backup") return;
+      const backupRoot = await this.pickBackupRoot();
+      if (!backupRoot) return this.fail(s, "退避先が選ばれなかったため、削除しませんでした。");
+      this.operation = "記事の削除：退避中";
+      const b = await this.queue.run(() =>
+        createBackup({
+          backupRoot,
+          repoRoot: root,
+          operation: "delete-article",
+          articleId: id,
+          items: itemsFromTree(tree.entries),
+          appVersion: this.appVersion,
+          specVersion: this.specVersion,
+        }),
+      );
+      if (!b.ok)
+        return this.fail(
+          s,
+          `退避できなかったため、削除しませんでした：${b.message}`,
+          b.folderName
+            ? [`途中まで作成した退避フォルダ：${backupRoot.name}/${b.folderName}（自動では削除しません）`]
+            : undefined,
+        );
+      const where = `${backupRoot.name}/${b.folderName}`;
+      // 元側の再照合（19.1 手順6）
+      const check = async (): Promise<{ ok: true; items: Fingerprint[] } | { ok: false; message: string }> => {
+        const t = await enumerateTree(dir);
+        if (!t.ok) return t;
+        const f = await fingerprint(t.entries);
+        if (!f.ok) return f;
+        const d = sameFingerprints(b.manifest.entries, f.items);
+        return d ? { ok: false, message: d } : { ok: true, items: f.items };
+      };
+      const c1 = await check();
+      if (!c1.ok)
+        return this.fail(s, `退避の後に記事フォルダが変わったため、削除しませんでした：${c1.message}`, [
+          `退避は保持しています：${where}`,
+        ]);
+      const v2 = await this.ask({
+        title: "退避を検証しました",
+        message: `退避先：${where}（${b.totalBytes.toLocaleString()} バイト、検証 ${b.verifiedAt}）。記事「${title || "無題"}」（${id}）を削除しますか。`,
+        details: ["削除したファイルは CMS からは戻せません。退避フォルダは自動では削除しません。"],
+        buttons: [
+          { label: "記事を削除する", value: "delete", variant: "danger" },
+          { label: "キャンセル", value: "cancel" },
+        ],
+        initial: "cancel",
+      });
+      if (v2 !== "delete") {
+        s.notice = { kind: "info", text: `削除を取り消しました。退避は保持しています：${where}` };
+        return;
+      }
+      this.operation = "記事の削除：削除中（削除済みのファイルは戻りません）";
+      const rep = await this.queue.run(async () => {
+        // 実行直前の照合（19：確認時・退避検証時・実行直前）
+        const c2 = await check();
+        if (!c2.ok) return { stopped: c2.message };
+        return deleteEntries(dir, c2.items, { parent: articles, name: id });
+      });
+      if ("stopped" in rep)
+        return this.fail(s, `実行直前の確認で記事フォルダの変化を検出したため、削除しませんでした：${rep.stopped}`, [
+          `退避は保持しています：${where}`,
+        ]);
+      finished = true;
+      const text = s.text;
+      if (rep.error === null) {
+        if (this.scan) this.scan = { ...this.scan, entries: this.scan.entries.filter((e) => e.dirName !== id) };
+        // 存在しない文書を通常保存できる記事として残さない（11.3）
+        const ro = readOnlySession(
+          id,
+          text,
+          `この記事は削除しました。退避先：${where}。原文のコピー・ダウンロードはできます。`,
+        );
+        ro.notice = { kind: "ok", text: `記事 ${id} を削除しました。退避先：${where}` };
+        this.session = ro;
+        this.announce(ro.notice.text);
+      } else {
+        const ro = readOnlySession(id, text, "削除の途中で失敗したため、記事は不完全な状態の可能性があります。");
+        ro.notice = {
+          kind: "error",
+          text: `削除は完了していません：${rep.error}`,
+          details: [
+            ...rep.deleted.map((p) => `削除済み：${p}`),
+            ...rep.remaining.map((p) => `残存：${p}`),
+            ...rep.unknown.map((p) => `不明：${p}`),
+            `退避は保持しています：${where}`,
+            "一覧を再読み込みし、残存しているファイルを確認してから、もう一度削除を確認してください。",
+          ],
+        };
+        this.session = ro;
+        await this.refreshList();
+      }
+    } catch (e) {
+      this.fail(s, `記事を削除できません：${fsErrorMessage(classifyFsError(e))}`);
+    } finally {
+      if (!finished || this.session === s) s.locked = null;
+      this.operation = null;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // 復旧ドラフト（33.4）
+
+  /** ドラフトを編集として開く。ディスクへは自動で書かない。 */
+  async openDraft(rec: DraftRecord): Promise<void> {
+    const articles = this.articles;
+    if (!articles || this.busy) return;
+    if (!this.drafts || rec.ws !== this.drafts.wsId) return;
+    if ((await sha256Hex(encodeUtf8(rec.text))) !== rec.checksum) {
+      this.folderError = "このドラフトはチェックサムが一致しません（破損）。原文の退避だけができます。";
+      return;
+    }
+    if (!(await this.confirmLeave())) return;
+    if (rec.isNew) {
+      const a = analyzeText(rec.text, null);
+      const createdAt = a.schema?.values.createdAt;
+      const id = a.schema?.values.id ?? rec.articleId;
+      const s = new EditorSession({
+        id,
+        text: rec.text,
+        base: null,
+        isNew: true,
+        ...(createdAt ? { newCreatedAt: createdAt } : {}),
+      });
+      s.notice = {
+        kind: "info",
+        text: "未保存の新規記事を復旧ドラフトから開きました。保存するまでディスクには何も作りません。",
+      };
+      this.session = s;
+      await this.drafts.remove(rec);
+      this.drafts.onEdit(s);
+      return;
+    }
+    const r = await readArticle(articles, rec.articleId);
+    if (r.kind !== "ok") {
+      const s = readOnlySession(
+        rec.articleId,
+        rec.text,
+        "元の記事ファイルを読み込めないため、ドラフトは閲覧のみです。原文を退避してください。",
+      );
+      this.session = s;
+      return;
+    }
+    const loaded = textFromBytes(r.bytes);
+    if (!loaded.ok) {
+      this.session = readOnlySession(rec.articleId, rec.text, loaded.reason);
+      return;
+    }
+    const hash = await sha256Hex(r.bytes);
+    const s = new EditorSession({
+      id: rec.articleId,
+      text: loaded.text,
+      base: { bytes: r.bytes, text: loaded.text, readAt: r.readAt, hash },
+      isNew: false,
+    });
+    if (s.analysis.readOnlyReason !== null) {
+      this.session = readOnlySession(rec.articleId, rec.text, s.analysis.readOnlyReason);
+      return;
+    }
+    this.session = s;
+    s.setText(rec.text, null);
+    if (rec.baseHash !== null && rec.baseHash === hash) {
+      s.notice = {
+        kind: "info",
+        text: "復旧ドラフトを開きました。ディスクはドラフト作成時の基準版のままです。保存するまでディスクは変わりません。",
+      };
+    } else {
+      s.recoveryMismatch = true;
+      await s.setConflict({ kind: "bytes", bytes: r.bytes }, Date.now());
+      s.notice = {
+        kind: "warn",
+        text: "外部変更あり：ドラフト作成時の基準版と現在のディスクの内容が異なります。比較してから保存してください。",
+        details: ["基準版の本文は保存していないため、比較はディスク版と編集中（ドラフト）の2版です。"],
+      };
+    }
+    await this.drafts.remove(rec);
+    this.drafts.onEdit(s);
   }
 }
 
