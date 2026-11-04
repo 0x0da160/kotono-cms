@@ -39,7 +39,7 @@ describe("描画（15・16.1）", () => {
 
   it("コードは実行せずエスケープする", () => {
     const r = html("```html\n<script>x</script>\n```\n\n`<b>`\n");
-    expect(r.html).toContain('<pre data-lang="html"><code>&lt;script&gt;x&lt;/script&gt;');
+    expect(r.html).toContain('<pre data-lang="html"><code class="hljs">&lt;script&gt;x&lt;/script&gt;');
     expect(r.html).toContain("<code>&lt;b&gt;</code>");
   });
 
@@ -153,8 +153,12 @@ describe("資源上限（34.2）", () => {
   });
 
   it("プレビュー DOM の要素数が上限を超えたら全文を出さない", () => {
-    const r = html("- a\n".repeat(21_000));
+    // 解析時間の上限は別の試験で確かめる。ここでは並列実行の負荷で時間切れにならないよう時計を止める
+    const p = parseMarkdown("- a\n".repeat(21_000), () => 0);
+    if (!p.ok) throw new Error(p.message);
+    const r = renderHtml(p.tree, []);
     expect(r.overBudget).toBe(true);
     expect(r.html).toBe("");
-  });
+    // 大きな入力の解析は並列実行時に数秒かかる
+  }, 30_000);
 });

@@ -181,6 +181,23 @@ export function installFakeFs(seed: Record<string, string>, binary: Record<strin
       const f = dir.children.get(name);
       return f instanceof FakeFile ? f.writes : -1;
     },
+    /** 全ファイルを base64 で返す（ネイティブ Git での照合用） */
+    dump(): Record<string, string> {
+      const out: Record<string, string> = {};
+      const walkAll = (d: FakeDir, prefix: string) => {
+        for (const [n, c] of d.children) {
+          const p = prefix ? `${prefix}/${n}` : n;
+          if (c instanceof FakeDir) walkAll(c, p);
+          else {
+            let bin = "";
+            for (const b of c.data) bin += String.fromCharCode(b);
+            out[p] = btoa(bin);
+          }
+        }
+      };
+      walkAll(root, "");
+      return out;
+    },
     list(path: string): string[] {
       try {
         const { dir, name } = walk(`${path}/x`, false);
@@ -211,4 +228,5 @@ export interface FakeFsApi {
   read(path: string): string | null;
   writes(path: string): number;
   list(path: string): string[];
+  dump(): Record<string, string>;
 }

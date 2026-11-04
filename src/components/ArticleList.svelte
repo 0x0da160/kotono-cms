@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { GitController } from "../lib/app/git.svelte";
   import type { Workspace } from "../lib/app/workspace.svelte";
   import { LIST_PAGE_SIZE } from "../lib/core/budgets";
   import { formatForDisplay, publishTiming } from "../lib/core/datetime";
@@ -13,7 +14,7 @@
   } from "../lib/core/list";
   import type { ListEntry } from "../lib/fs/repo";
 
-  let { ws, onopen }: { ws: Workspace; onopen?: () => void } = $props();
+  let { ws, onopen, git = null }: { ws: Workspace; onopen?: () => void; git?: GitController | null } = $props();
 
   let keyword = $state(DEFAULT_QUERY.keyword);
   let status = $state<StatusFilter>(DEFAULT_QUERY.status);
@@ -183,6 +184,7 @@
             {#if e.values.status === "published"}<span class="badge pub">公開対象</span
               >{:else if e.values.status === "draft"}<span class="badge">下書き</span>{/if}
             {#if label}<span class="badge err" title={e.problems.join("\n")}>{label}</span>{/if}
+            {#if git?.label(it.id)}<span class="badge git" data-testid="git-badge">{git.label(it.id)}</span>{/if}
           </span>
           <span class="dates">
             {#if e.values.updatedAt}<span>更新 {formatForDisplay(e.values.updatedAt)}</span>{/if}

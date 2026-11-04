@@ -10,6 +10,7 @@
  * 非保証：資源上限（ノード数・入れ子・リンク数）は構文木を構築した後に検査している。
  * 採用パーサーは構築中の打切りフックを持たない（ADR-0003 の緊張点）。
  */
+import { safeClasses, validTokens } from "./highlight-tokens";
 import type { Nodes, Parents, Root, RootContent } from "mdast";
 import { PREVIEW_MAX_ELEMENTS } from "./budgets";
 import { isSafeMediaRef } from "./schema";
@@ -312,14 +313,25 @@ export function renderHtml(tree: Root, images: readonly (ImageSource | null)[] =
         close("table");
         return;
       }
-      case "code":
-        // 実行しない。言語指定は表示のみ（ハイライトは未実装）
+      case "code": {
+        // 実行しない。対象言語だけ解析層のハイライト結果を使い、クラス名を検証する（15）
         open("pre", n.lang ? ` data-lang="${esc(n.lang)}"` : "");
-        open("code");
-        text(n.value);
+        open("code", ` class="hljs"`);
+        const hl = validTokens((n.data as { hl?: unknown } | undefined)?.hl, n.value);
+        if (hl)
+          for (const [cls, t] of hl) {
+            const c = safeClasses(cls);
+            if (c) {
+              open("span", ` class="${esc(c)}"`);
+              text(t);
+              close("span");
+            } else text(t);
+          }
+        else text(n.value);
         close("code");
         close("pre");
         return;
+      }
       case "html":
         // 生 HTML は描画・実行せず、文字として表示する（15）
         open("code", ` class="raw-html"`);

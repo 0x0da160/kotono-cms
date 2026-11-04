@@ -97,3 +97,33 @@ export const DRAFT_MAX_TOTAL_BYTES = 50 * MiB;
 export const DRAFT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 /** PROVISIONAL：ドラフト付随メタデータ（ID・ハッシュ等）の文字数上限（第34.5節、TG09・TG10 で確定） */
 export const PROVISIONAL_DRAFT_META_MAX_CHARS = 256;
+
+/** 第34.4節：Git object の展開後上限と、1要求の展開累計 */
+export const GIT_OBJECT_MAX_BYTES = 64 * MiB;
+export const GIT_REQUEST_INFLATE_MAX_BYTES = 256 * MiB;
+/** 第34.4節：履歴1回の内部走査（先到達） */
+export const GIT_HISTORY_MAX_COMMITS = 1_000;
+export const GIT_HISTORY_MAX_TREES = 10_000;
+export const GIT_HISTORY_MAX_MS = 5_000;
+/** 第22章：履歴の表示単位 */
+export const GIT_HISTORY_PAGE = 50;
+
+/**
+ * 第34.5節：Git index・config・ref 等の非 object メタデータ。
+ * PROVISIONAL：TG09 で確定・承認が必要な暫定値。
+ */
+export const PROVISIONAL_GIT_INDEX_MAX_BYTES = 64 * MiB;
+export const PROVISIONAL_GIT_INDEX_MAX_ENTRIES = 500_000;
+export const PROVISIONAL_GIT_PATH_MAX = 4_096;
+export const PROVISIONAL_GIT_CONFIG_MAX_BYTES = 256 * KiB;
+export const PROVISIONAL_GIT_REF_MAX_BYTES = 4 * KiB;
+export const PROVISIONAL_GIT_PACKED_REFS_MAX_BYTES = 16 * MiB;
+export const PROVISIONAL_GIT_MAX_REFS = 100_000;
+/** PROVISIONAL：pack の delta 連鎖の深さ・pack の .idx の上限 */
+export const PROVISIONAL_GIT_DELTA_MAX_DEPTH = 100;
+export const PROVISIONAL_GIT_PACK_INDEX_MAX_BYTES = 256 * MiB;
+/** PROVISIONAL：状態算出で1要求が扱うツリー項目数・時間 */
+export const PROVISIONAL_GIT_STATUS_MAX_TREE_ENTRIES = 500_000;
+export const PROVISIONAL_GIT_STATUS_MAX_MS = 10_000;
+/** PROVISIONAL：.gitignore・.gitattributes の1ファイル上限 */
+export const PROVISIONAL_GIT_RULES_MAX_BYTES = 256 * KiB;

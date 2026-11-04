@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { GitController } from "../lib/app/git.svelte";
   import type { EditorSession } from "../lib/app/session.svelte";
   import type { Workspace } from "../lib/app/workspace.svelte";
   import { encodeUtf8 } from "../lib/core/bytes";
@@ -8,7 +9,17 @@
   import MediaPanel from "./MediaPanel.svelte";
   import Preview from "./Preview.svelte";
 
-  let { ws, session }: { ws: Workspace; session: EditorSession } = $props();
+  let { ws, session, git = null }: { ws: Workspace; session: EditorSession; git?: GitController | null } = $props();
+
+  const gitLabel = $derived.by(() => {
+    if (!git || !git.info) return "未確認";
+    if (git.info.kind === "none") return "Git 未使用";
+    if (git.info.kind === "unsupported") return "対応外の構成";
+    if (session.isNew) return "未作成";
+    return git.label(session.id) ?? "コミット済み";
+  });
+  const idMismatch = $derived(session.analysis.problems.some((p) => p.code === "id-mismatch"));
+  const createdAtProblem = $derived(session.analysis.problems.some((p) => p.field === "createdAt"));
 
   let mode = $state<"form" | "source" | "preview">("form");
   let modeError = $state<string | null>(null);
@@ -166,6 +177,7 @@
                 : "不正"}</span
         >
       </li>
+      <li><span class="axis">Git</span> <span class="badge" data-testid="git-status">{gitLabel}</span></li>
       <li><span class="axis">配信</span> <span class="badge muted">本CMSでは未確認</span></li>
     </ul>
   </header>
@@ -214,6 +226,15 @@
         disabled={ws.busy || locked}
         data-testid="delete-button">削除…</button
       >
+      {#if git?.repo}
+        <button
+          type="button"
+          onclick={() => git.commitArticle(session.id)}
+          disabled={ws.busy || git.busy || locked || session.dirty || !git.writable}
+          title={session.dirty ? "保存してからコミットしてください" : ""}
+          data-testid="commit-button">コミット…</button
+        >
+      {/if}
     {/if}
     <button type="button" onclick={() => ws.closeArticle()} disabled={ws.busy}>閉じる</button>
   </div>
@@ -262,6 +283,31 @@
           <li>{p.line !== undefined ? `${p.line}行目：` : ""}{p.message}</li>
         {/each}
       </ul>
+      {#if !session.isNew && (idMismatch || createdAtProblem)}
+        <div class="repairs">
+          {#if idMismatch}
+            <button type="button" onclick={() => ws.repairId()} disabled={locked} data-testid="repair-id"
+              >id をフォルダ名（{session.id}）に合わせる…</button
+            >
+          {/if}
+          {#if createdAtProblem}
+            {#if values.updatedAt}
+              <button
+                type="button"
+                onclick={() => ws.repairCreatedAt("updatedAt")}
+                disabled={locked}
+                data-testid="repair-created-updated">createdAt を updatedAt と同じにする…</button
+              >
+            {/if}
+            <button
+              type="button"
+              onclick={() => ws.repairCreatedAt("now")}
+              disabled={locked}
+              data-testid="repair-created-now">createdAt を現在時刻にする…</button
+            >
+          {/if}
+        </div>
+      {/if}
     </details>
   {/if}
 
@@ -351,6 +397,12 @@
 </section>
 
 <style>
+  .repairs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
   .editor {
     display: flex;
     flex-direction: column;
