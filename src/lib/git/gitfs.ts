@@ -30,11 +30,27 @@ export type ReadState =
 export class GitFsError extends Error {
   constructor(
     message: string,
-    readonly code: "path" | "scope" | "missing" | "exists" | "io" | "verify" | "too-large",
+    readonly code: "path" | "scope" | "missing" | "exists" | "io" | "verify" | "too-large" | "blocked",
   ) {
     super(message);
     this.name = "GitFsError";
   }
+}
+
+/**
+ * Chromium 系ブラウザ（Chrome・Edge など）は、File System Access API による次の場所への書き込みを
+ * 常に禁止する（chrome_file_system_access_permission_context.cc の kBlockWrite：
+ * `.git/config`・`.git/hooks`・`.git/modules`）。禁止は SecurityError として現れる。
+ */
+export const BROWSER_BLOCKED_MESSAGE =
+  "ブラウザ（Chrome・Edge など）が安全のため .git/config・.git/hooks・.git/modules への書き込みを禁止しています。";
+
+/** 書き込み系の失敗を GitFsError にする。SecurityError はブラウザの禁止として区別する */
+function writeError(e: unknown, what: string, otherCode: "io" | "missing-or-io"): GitFsError {
+  const k = classifyFsError(e);
+  if (k === "security") return new GitFsError(`${what}：${BROWSER_BLOCKED_MESSAGE}`, "blocked");
+  const code = otherCode === "missing-or-io" && k === "not-found" ? "missing" : "io";
+  return new GitFsError(`${what}：${fsErrorMessage(k)}`, code);
 }
 
 /** Git 用パスの検証（20.2.1：逸脱・絶対パス・OS 固有表現を拒否） */
@@ -207,8 +223,7 @@ export class GitFs {
       for (const p of parts) d = await d.getDirectoryHandle(p, opts.create ? { create: true } : {});
       h = await d.getFileHandle(name, opts.create ? { create: true } : {});
     } catch (e) {
-      const k = classifyFsError(e);
-      throw new GitFsError(`${path} を開けません：${fsErrorMessage(k)}`, k === "not-found" ? "missing" : "io");
+      throw writeError(e, `${path} を開けません`, "missing-or-io");
     }
     await this.#write(h, path, bytes);
   }
@@ -223,7 +238,7 @@ export class GitFs {
       d = this.root;
       for (const p of parts) d = await d.getDirectoryHandle(p, { create: true });
     } catch (e) {
-      throw new GitFsError(`${parts.join("/")} を作れません：${fsErrorMessage(classifyFsError(e))}`, "io");
+      throw writeError(e, `${parts.join("/")} を作れません`, "io");
     }
     try {
       await d.getFileHandle(name);
@@ -240,13 +255,18 @@ export class GitFs {
       if ((await h.getFile()).size !== 0) throw new GitFsError(`${path} が作成直後に空ではありません。`, "exists");
     } catch (e) {
       if (e instanceof GitFsError) throw e;
-      throw new GitFsError(`${path} を作れません：${fsErrorMessage(classifyFsError(e))}`, "io");
+      throw writeError(e, `${path} を作れません`, "io");
     }
     await this.#write(h, path, bytes);
   }
 
   async mkdirs(path: string): Promise<void> {
-    await this.dir(path, true);
+    try {
+      await this.dir(path, true);
+    } catch (e) {
+      if (e instanceof GitFsError) throw e;
+      throw writeError(e, `${path} を作れません`, "io");
+    }
   }
 
   /** 空のファイル・フォルダを1件ずつ削除する（再帰一括削除をしない） */
@@ -257,6 +277,12 @@ export class GitFs {
     const d = await this.dir(parts.join("/"));
     if (!d.removeEntry) throw new GitFsError("この環境では削除できません。", "io");
     await d.removeEntry(name);
+  }
+
+  /** 空の .git フォルダを消す（init の後始末専用）。中身があれば失敗する（再帰削除をしない） */
+  async removeEmptyGitDir(): Promise<void> {
+    if (!this.root.removeEntry) throw new GitFsError("この環境では削除できません。", "io");
+    await this.root.removeEntry(GIT_DIR);
   }
 
   async #write(h: FileHandleLike, path: string, bytes: Uint8Array): Promise<void> {
@@ -274,7 +300,7 @@ export class GitFs {
         throw e;
       }
     } catch (e) {
-      throw new GitFsError(`${path} の書き込みに失敗しました：${fsErrorMessage(classifyFsError(e))}`, "io");
+      throw writeError(e, `${path} の書き込みに失敗しました`, "io");
     }
     let back: Uint8Array;
     try {

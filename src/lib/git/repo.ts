@@ -10,6 +10,8 @@
  *
  * 書き込む Git メタデータ：loose object、.git/index、ブランチ ref、既存の reflog、
  * （明示操作時のみ）.git/config の user.name・user.email。HEAD・packed-refs は書き換えない。
+ * Chromium 系ブラウザは .git/config への書き込みを禁止するため、.git/config がなくても既定値で扱い、
+ * init は .git/config を作れなければ作らずに進める（ADR-0004 の緊張点 11）。
  */
 import {
   GIT_HISTORY_MAX_COMMITS,
@@ -26,7 +28,7 @@ import {
 import { enumerateTree } from "../fs/tree";
 import { classifyFsError, fsErrorMessage, type DirHandleLike, type FileHandleLike } from "../fs/types";
 import { configBool, getConfig, parseConfig, withUser, type GitConfig } from "./config";
-import { checkGitPath, GitFs, GitFsError } from "./gitfs";
+import { BROWSER_BLOCKED_MESSAGE, checkGitPath, GitFs, GitFsError } from "./gitfs";
 import { IgnoreRules } from "./ignore-rules";
 import {
   emptyIndex,
@@ -274,8 +276,8 @@ export class GitRepo {
     let config: GitConfig | null = null;
     try {
       const b = await this.fs.readOrNull(".git/config", PROVISIONAL_GIT_CONFIG_MAX_BYTES, ".git/config");
+      // .git/config がなければ Git の既定値（形式 0・bare でない）で扱う。Git 自体も設定ファイルなしで動く
       config = parseConfig(b ? dec.decode(b) : "");
-      if (!b) blockers.push(blocker("config-missing", ".git/config がありません。"));
     } catch (e) {
       blockers.push(blocker("config", e instanceof Error ? e.message : String(e)));
     }
@@ -895,46 +897,100 @@ export class GitRepo {
         .map((e) => `${e.section}\u0000${e.subsection}\u0000${e.key}\u0000${e.value}`)
         .join("\n");
     if (others(after) !== others(cfg)) throw new GitError("設定の書き換えで他の項目が変わるため保存しません。");
-    await this.fs.replace(".git/config", new TextEncoder().encode(text));
+    try {
+      await this.fs.replace(".git/config", new TextEncoder().encode(text), { create: true });
+    } catch (e) {
+      if (e instanceof GitFsError && e.code === "blocked")
+        throw new GitError(
+          `${BROWSER_BLOCKED_MESSAGE}作者を保存するには、外部の Git で git config user.name・user.email を設定してください。`,
+          "unsupported",
+        );
+      throw e;
+    }
   }
 
   // ---------------------------------------------------------------------------
   // git init（20.1）
 
-  async init(branch = "main"): Promise<{ ok: true } | { ok: false; message: string; created: string[] }> {
+  /**
+   * .git を作る。HEAD を最後に置く（HEAD があって初めて Git はリポジトリとみなす）。
+   * .git/config はブラウザが作成を禁止することがある（Chromium 系）。その場合は作らずに進める：
+   * Git は設定ファイルがなくても既定値（形式 0・bare でない）で動く。
+   * 途中で失敗したら、この呼び出しで作ったものだけを深い順に1件ずつ消す（空でないフォルダは消えない）。
+   */
+  async init(
+    branch = "main",
+  ): Promise<{ ok: true; configSkipped: boolean } | { ok: false; message: string; left: string[] }> {
     if ((await this.fs.kind(".git")) !== "missing")
-      return { ok: false, message: ".git が既にあります。初期化しません。", created: [] };
-    const created: string[] = [];
+      return { ok: false, message: ".git が既にあります。初期化しません。", left: [] };
     const enc = new TextEncoder();
-    const steps: [string, Uint8Array | null][] = [
-      [".git/objects/info", null],
-      [".git/objects/pack", null],
-      [".git/refs/heads", null],
-      [".git/refs/tags", null],
-      [".git/info", null],
-      [".git/logs/refs/heads", null],
+    const steps: [string, Uint8Array | null, "required" | "optional"][] = [
+      [".git/objects/info", null, "required"],
+      [".git/objects/pack", null, "required"],
+      [".git/refs/heads", null, "required"],
+      [".git/refs/tags", null, "required"],
+      [".git/info", null, "required"],
+      [".git/logs/refs/heads", null, "required"],
       [
         ".git/config",
         enc.encode(
           "[core]\n\trepositoryformatversion = 0\n\tfilemode = false\n\tbare = false\n\tlogallrefupdates = true\n",
         ),
+        "optional",
       ],
-      [".git/description", enc.encode("Unnamed repository; edit this file 'description' to name the repository.\n")],
-      [".git/logs/HEAD", new Uint8Array()],
-      [`.git/logs/refs/heads/${branch}`, new Uint8Array()],
-      // HEAD を最後に置く：HEAD があって初めて Git はリポジトリとみなす
-      [".git/HEAD", enc.encode(`ref: refs/heads/${branch}\n`)],
+      [
+        ".git/description",
+        enc.encode("Unnamed repository; edit this file 'description' to name the repository.\n"),
+        "required",
+      ],
+      [".git/logs/HEAD", new Uint8Array(), "required"],
+      [`.git/logs/refs/heads/${branch}`, new Uint8Array(), "required"],
+      [".git/HEAD", enc.encode(`ref: refs/heads/${branch}\n`), "required"],
     ];
+    // 作ったもの（途中のフォルダを含む）。.git は開始時に無かったので、配下はすべてこの呼び出しで作ったもの
+    const created = new Set<string>();
+    const note = (p: string) => {
+      const parts = p.split("/");
+      for (let i = 1; i <= parts.length; i++) created.add(parts.slice(0, i).join("/"));
+    };
+    let configSkipped = false;
     try {
-      for (const [p, b] of steps) {
-        if (b === null) await this.fs.mkdirs(p);
-        else await this.fs.createNew(p, b);
-        created.push(p);
+      for (const [p, b, need] of steps) {
+        try {
+          if (b === null) await this.fs.mkdirs(p);
+          else await this.fs.createNew(p, b);
+          note(p);
+        } catch (e) {
+          if (need === "optional" && e instanceof GitFsError && e.code === "blocked") {
+            configSkipped = true;
+            continue;
+          }
+          // 書き込みが途中まで進んだかもしれないファイルも後始末の対象にする
+          if (!(e instanceof GitFsError && e.code === "exists")) note(p);
+          throw e;
+        }
       }
     } catch (e) {
-      return { ok: false, message: `初期化が途中で止まりました：${errText(e)}`, created };
+      const left = await this.#undoInit(created);
+      return { ok: false, message: `初期化できませんでした：${errText(e)}`, left };
     }
-    return { ok: true };
+    return { ok: true, configSkipped };
+  }
+
+  /** init の後始末。深い順に1件ずつ消す。消せなかったものを返す */
+  async #undoInit(created: Set<string>): Promise<string[]> {
+    const order = [...created].sort((a, b) => b.split("/").length - a.split("/").length || (a < b ? 1 : -1));
+    const left: string[] = [];
+    for (const p of order) {
+      if ((await this.fs.kind(p)) === "missing") continue;
+      try {
+        if (p === ".git") await this.fs.removeEmptyGitDir();
+        else await this.fs.remove(p);
+      } catch {
+        left.push(p);
+      }
+    }
+    return left.sort();
   }
 
   // ---------------------------------------------------------------------------
