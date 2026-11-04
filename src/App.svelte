@@ -106,7 +106,12 @@
   {/if}
 </header>
 
-<main id="main" tabindex="-1" class:wide={ws.root !== null}>
+<main
+  id="main"
+  tabindex="-1"
+  class:wide={ws.root !== null}
+  class:workbench={ws.root !== null && ws.articles !== null && !ws.missingArticles}
+>
   {#if supported}
     {#if drafts.mode === "undecided"}<DraftSettings {ws} dc={drafts} />{/if}
   {/if}
@@ -207,7 +212,11 @@
   {/if}
 </main>
 
-<footer class="app-footer" class:wide={ws.root !== null}>
+<footer
+  class="app-footer"
+  class:wide={ws.root !== null}
+  class:workbench={ws.root !== null && ws.articles !== null && !ws.missingArticles}
+>
   {#if supported && drafts.mode !== "undecided"}<DraftSettings {ws} dc={drafts} />{/if}
   <p class="keys small">
     キーボード：Ctrl/⌘+S 保存、Ctrl/⌘+Z 元に戻す、Ctrl/⌘+Shift+Z または Ctrl+Y やり直す。IME 変換中は保存しません。
@@ -370,6 +379,70 @@
     .panes[data-pane="list"] .editor-pane,
     .panes[data-pane="editor"] .list-pane {
       display: none;
+    }
+  }
+  /*
+   * 作業台レイアウト（UI刷新 方向B）：広い画面では一覧と編集をそれぞれ独立してスクロールさせ、
+   * 画面の高さ全体で作業する。狭い画面（60rem 以下）は従来の単一ペイン切替のまま。
+   */
+  @media (min-width: 60.0625rem) {
+    :global(#app:has(> main.workbench)) {
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: clip;
+    }
+    :global(#app:has(> main.workbench)) > .app-header {
+      flex: none;
+      width: 100%;
+      padding-block: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    :global(#app:has(> main.workbench)) h1 {
+      font-size: 1.125rem;
+    }
+    main.workbench {
+      flex: 1 1 auto;
+      min-height: 0;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    main.workbench > .panes {
+      flex: 1 1 auto;
+      min-height: 0;
+      grid-template-columns: minmax(17rem, 22rem) minmax(0, 1fr);
+      gap: 0;
+      align-items: stretch;
+    }
+    main.workbench .pane {
+      min-height: 0;
+      overflow: auto;
+      overscroll-behavior: contain;
+    }
+    main.workbench .list-pane {
+      border-inline-end: 1px solid var(--border);
+      padding-inline-end: 0.75rem;
+    }
+    main.workbench .editor-pane {
+      padding-inline-start: 1rem;
+    }
+    .app-footer.workbench {
+      flex: none;
+      width: 100%;
+      max-height: 40vh;
+      overflow: auto;
+      padding-block: 0.25rem 0.375rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0 1rem;
+      font-size: 0.75rem;
+    }
+    .app-footer.workbench .keys {
+      margin: 0;
+      font-size: 0.75rem;
     }
   }
   .empty {

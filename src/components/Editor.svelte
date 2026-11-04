@@ -2,6 +2,7 @@
   import type { GitController } from "../lib/app/git.svelte";
   import type { EditorSession } from "../lib/app/session.svelte";
   import type { Workspace } from "../lib/app/workspace.svelte";
+  import { onMount, tick } from "svelte";
   import { encodeUtf8 } from "../lib/core/bytes";
   import { publishTiming } from "../lib/core/datetime";
   import ConflictPanel from "./ConflictPanel.svelte";
@@ -20,6 +21,42 @@
   });
   const idMismatch = $derived(session.analysis.problems.some((p) => p.code === "id-mismatch"));
   const createdAtProblem = $derived(session.analysis.problems.some((p) => p.field === "createdAt"));
+
+  /**
+   * 保存できなかったことを状態の欄でも示す（UI刷新 P-07：表示のみ。状態モデルは変えない）。
+   * 外部変更での停止と、前回の保存候補が書き込めなかった場合だけを示す。
+   */
+  const saveIssue = $derived(
+    session.conflict
+      ? "外部変更で保存を停止"
+      : session.status === "unsaved" && session.pendingCandidate !== null
+        ? "前回の保存に失敗"
+        : null,
+  );
+
+  let editorEl: HTMLElement | undefined = $state();
+  let stickyEl: HTMLElement | undefined = $state();
+  let noticeEl: HTMLElement | undefined = $state();
+  let conflictEl: HTMLElement | undefined = $state();
+
+  onMount(() => {
+    // 記事を開いたら、編集領域を先頭から表示する（独立スクロール時：P-01）
+    const scroller = editorEl?.parentElement;
+    if (scroller) scroller.scrollTop = 0;
+    // 固定した見出し・操作列の高さ。フォーカスやスクロール先が隠れないよう scroll-margin に使う（WCAG 2.4.11）
+    if (!stickyEl || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => editorEl?.style.setProperty("--sticky-h", `${stickyEl?.offsetHeight ?? 0}px`));
+    ro.observe(stickyEl);
+    return () => ro.disconnect();
+  });
+
+  // エラー通知・外部変更パネルが出たら、見える位置へ移す（本文の途中を見ていても気づけるように）
+  $effect(() => {
+    const kind = session.notice?.kind;
+    const conflict = session.conflict;
+    if (kind !== "error" && !conflict) return;
+    void tick().then(() => (conflictEl ?? noticeEl)?.scrollIntoView({ block: "nearest" }));
+  });
 
   let mode = $state<"form" | "source" | "preview">("form");
   let modeError = $state<string | null>(null);
@@ -138,105 +175,113 @@
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <section
   class="editor"
+  bind:this={editorEl}
   aria-labelledby="editor-heading"
   onkeydown={onKeydown}
   onbeforeinput={onBeforeInput}
   oncompositionstart={() => (composing = session.composing = true)}
   oncompositionend={() => (composing = session.composing = false)}
 >
-  <header class="ed-head">
-    <div class="ed-title">
-      <h2 id="editor-heading">
-        {#if values.title && values.title.trim() !== ""}{values.title}{:else}<span class="untitled">無題</span>{/if}
-      </h2>
-      <p class="ids">
-        <span class="mono">{session.id}</span>
-        {#if session.isNew}<span class="badge">新規（未作成）</span>{/if}
-      </p>
-    </div>
-    <ul class="axes" aria-label="状態">
-      <li>
-        <span class="axis">保存</span>
-        <span class="badge {session.status}" data-testid="save-status">{statusLabel}</span>
-      </li>
-      <li>
-        <span class="axis">原稿</span>
-        <span class="badge"
-          >{values.status === "published" ? "公開対象" : values.status === "draft" ? "下書き" : "不明"}</span
-        >
-      </li>
-      <li>
-        <span class="axis">公開日時</span>
-        <span class="badge"
-          >{timing === "unset"
-            ? "未設定"
-            : timing === "future"
-              ? "公開予定日時を設定済み"
-              : timing === "past"
-                ? "過去または現在"
-                : "不正"}</span
-        >
-      </li>
-      <li><span class="axis">Git</span> <span class="badge" data-testid="git-status">{gitLabel}</span></li>
-      <li><span class="axis">配信</span> <span class="badge muted">本CMSでは未確認</span></li>
-    </ul>
-  </header>
+  <div class="ed-sticky" bind:this={stickyEl}>
+    <header class="ed-head">
+      <div class="ed-title">
+        <h2 id="editor-heading">
+          {#if values.title && values.title.trim() !== ""}{values.title}{:else}<span class="untitled">無題</span>{/if}
+        </h2>
+        <p class="ids">
+          <span class="mono">{session.id}</span>
+          {#if session.isNew}<span class="badge">新規（未作成）</span>{/if}
+        </p>
+      </div>
+      <ul class="axes" aria-label="状態">
+        <li>
+          <span class="axis">保存</span>
+          <span class="badge {session.status}" data-testid="save-status">{statusLabel}</span>
+          {#if saveIssue}<span class="badge err" data-testid="save-issue">{saveIssue}</span>{/if}
+        </li>
+        <li>
+          <span class="axis">原稿</span>
+          <span class="badge"
+            >{values.status === "published" ? "公開対象" : values.status === "draft" ? "下書き" : "不明"}</span
+          >
+        </li>
+        <li>
+          <span class="axis">公開日時</span>
+          <span class="badge"
+            >{timing === "unset"
+              ? "未設定"
+              : timing === "future"
+                ? "公開予定日時を設定済み"
+                : timing === "past"
+                  ? "過去または現在"
+                  : "不正"}</span
+          >
+        </li>
+        <li><span class="axis">Git</span> <span class="badge" data-testid="git-status">{gitLabel}</span></li>
+        <li><span class="axis">配信</span> <span class="badge muted">本CMSでは未確認</span></li>
+      </ul>
+    </header>
 
-  <div class="toolbar" role="toolbar" aria-label="記事の操作">
-    <button
-      type="button"
-      class="primary"
-      onclick={() => ws.save()}
-      disabled={readOnly || locked || session.saving}
-      aria-keyshortcuts="Control+S Meta+S"
-      data-testid="save-button"
-    >
-      {session.saving ? "保存中…" : session.isNew ? "保存（作成）" : "保存"}
-    </button>
-    <button
-      type="button"
-      onclick={() => session.undo()}
-      disabled={!session.canUndo || readOnly || locked}
-      aria-keyshortcuts="Control+Z">元に戻す</button
-    >
-    <button
-      type="button"
-      onclick={() => session.redo()}
-      disabled={!session.canRedo || readOnly || locked}
-      aria-keyshortcuts="Control+Shift+Z Control+Y">やり直す</button
-    >
-    <button type="button" onclick={() => copy(session.text)} disabled={session.text === ""}>原文をコピー</button>
-    <button type="button" onclick={() => download(session.text)} disabled={session.text === ""}
-      >原文をダウンロード</button
-    >
-    {#if !session.isNew}
-      <button type="button" onclick={() => ws.reloadCurrent()} disabled={ws.busy || locked}
-        >ディスクから再読み込み</button
+    <div class="toolbar" role="toolbar" aria-label="記事の操作">
+      <button
+        type="button"
+        class="primary"
+        onclick={() => ws.save()}
+        disabled={readOnly || locked || session.saving}
+        aria-keyshortcuts="Control+S Meta+S"
+        data-testid="save-button"
+      >
+        {session.saving ? "保存中…" : session.isNew ? "保存（作成）" : "保存"}
+      </button>
+      <button
+        type="button"
+        class="group-start"
+        onclick={() => session.undo()}
+        disabled={!session.canUndo || readOnly || locked}
+        aria-keyshortcuts="Control+Z">元に戻す</button
       >
       <button
         type="button"
-        onclick={() => ws.duplicateCurrent()}
-        disabled={ws.busy || readOnly || locked}
-        data-testid="duplicate-button">複製…</button
+        onclick={() => session.redo()}
+        disabled={!session.canRedo || readOnly || locked}
+        aria-keyshortcuts="Control+Shift+Z Control+Y">やり直す</button
       >
-      <button
-        type="button"
-        class="danger"
-        onclick={() => ws.deleteCurrent()}
-        disabled={ws.busy || locked}
-        data-testid="delete-button">削除…</button
+      <button type="button" class="group-start" onclick={() => copy(session.text)} disabled={session.text === ""}
+        >原文をコピー</button
       >
-      {#if git?.repo}
+      <button type="button" onclick={() => download(session.text)} disabled={session.text === ""}
+        >原文をダウンロード</button
+      >
+      {#if !session.isNew}
+        <button type="button" onclick={() => ws.reloadCurrent()} disabled={ws.busy || locked}
+          >ディスクから再読み込み</button
+        >
         <button
           type="button"
-          onclick={() => git.commitArticle(session.id)}
-          disabled={ws.busy || git.busy || locked || session.dirty || !git.writable}
-          title={session.dirty ? "保存してからコミットしてください" : ""}
-          data-testid="commit-button">コミット…</button
+          class="group-start"
+          onclick={() => ws.duplicateCurrent()}
+          disabled={ws.busy || readOnly || locked}
+          data-testid="duplicate-button">複製…</button
+        >
+        {#if git?.repo}
+          <button
+            type="button"
+            onclick={() => git.commitArticle(session.id)}
+            disabled={ws.busy || git.busy || locked || session.dirty || !git.writable}
+            title={session.dirty ? "保存してからコミットしてください" : ""}
+            data-testid="commit-button">コミット…</button
+          >
+        {/if}
+        <button
+          type="button"
+          class="danger group-start"
+          onclick={() => ws.deleteCurrent()}
+          disabled={ws.busy || locked}
+          data-testid="delete-button">削除…</button
         >
       {/if}
-    {/if}
-    <button type="button" onclick={() => ws.closeArticle()} disabled={ws.busy}>閉じる</button>
+      <button type="button" class="close" onclick={() => ws.closeArticle()} disabled={ws.busy}>閉じる</button>
+    </div>
   </div>
 
   {#if ws.operation}
@@ -248,6 +293,7 @@
 
   {#if session.notice}
     <div
+      bind:this={noticeEl}
       class="notice {session.notice.kind}"
       role={session.notice.kind === "error" ? "alert" : "status"}
       data-testid="notice"
@@ -265,14 +311,16 @@
   {/if}
 
   {#if session.conflict}
-    <ConflictPanel
-      conflict={session.conflict}
-      id={session.id}
-      oncopy={copy}
-      ondownload={download}
-      ontakedisk={() => ws.takeDisk()}
-      onrecheck={() => ws.recheckDisk()}
-    />
+    <div bind:this={conflictEl}>
+      <ConflictPanel
+        conflict={session.conflict}
+        id={session.id}
+        oncopy={copy}
+        ondownload={download}
+        ontakedisk={() => ws.takeDisk()}
+        onrecheck={() => ws.recheckDisk()}
+      />
+    </div>
   {/if}
 
   {#if !readOnly && a.problems.length > 0}
@@ -353,23 +401,25 @@
       {#if mode === "preview"}
         <Preview {ws} {session} />
       {:else if mode === "form" && formAvailable}
-        <FrontmatterForm {session} />
-        <label class="src">
-          <span>本文（Markdown）</span>
-          <textarea
-            value={body}
-            oninput={(e) => {
-              session.setBody(e.currentTarget.value);
-              session.bodyCaret = e.currentTarget.selectionStart;
-            }}
-            onselect={(e) => (session.bodyCaret = e.currentTarget.selectionStart)}
-            onclick={(e) => (session.bodyCaret = e.currentTarget.selectionStart)}
-            onkeyup={(e) => (session.bodyCaret = e.currentTarget.selectionStart)}
-            readonly={locked}
-            rows="18"
-            spellcheck="false"
-            data-testid="body-editor"></textarea>
-        </label>
+        <div class="form-layout">
+          <FrontmatterForm {session} />
+          <label class="src body">
+            <span>本文（Markdown）</span>
+            <textarea
+              value={body}
+              oninput={(e) => {
+                session.setBody(e.currentTarget.value);
+                session.bodyCaret = e.currentTarget.selectionStart;
+              }}
+              onselect={(e) => (session.bodyCaret = e.currentTarget.selectionStart)}
+              onclick={(e) => (session.bodyCaret = e.currentTarget.selectionStart)}
+              onkeyup={(e) => (session.bodyCaret = e.currentTarget.selectionStart)}
+              readonly={locked}
+              rows="18"
+              spellcheck="false"
+              data-testid="body-editor"></textarea>
+          </label>
+        </div>
       {:else}
         <label class="src">
           <span>原文（frontmatter と本文）</span>
@@ -397,6 +447,91 @@
 </section>
 
 <style>
+  .ed-sticky {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .toolbar .group-start {
+    margin-inline-start: 0.5rem;
+  }
+  .toolbar .close {
+    margin-inline-start: auto;
+  }
+  /* 本文を主、記事情報を右の補助列に置く（UI刷新 方向B：P-02）。幅が足りないときは従来どおり縦に積む */
+  .panel {
+    container-type: inline-size;
+  }
+  .form-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  @container (min-width: 46rem) {
+    .form-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 19rem;
+      gap: 0 1rem;
+      align-items: start;
+    }
+    .form-layout > .body {
+      grid-column: 1;
+      grid-row: 1;
+    }
+    .form-layout > :global(.form) {
+      grid-column: 2;
+      grid-row: 1;
+      margin: 0;
+      border: none;
+      border-inline-start: 1px solid var(--border);
+      border-radius: 0;
+      padding: 0 0 0 0.75rem;
+    }
+    .form-layout :global(.form .grid) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .form-layout :global(.form .grid > *) {
+      grid-column: 1 / -1;
+    }
+  }
+  /*
+   * 作業台レイアウト（広い画面）：見出し・状態・操作列を編集領域の上に固定する（P-03）。
+   * 本文欄は内容に合わせて伸ばし、スクロールを編集領域の1つにまとめる（二重スクロールを避ける）。
+   */
+  @media (min-width: 60.0625rem) {
+    .ed-sticky {
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      background: var(--bg);
+      padding-block: 0.25rem 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .editor :global(*) {
+      scroll-margin-top: calc(var(--sticky-h, 0px) + 0.5rem);
+    }
+    h2 {
+      font-size: 1.125rem;
+    }
+    .axes {
+      font-size: 0.75rem;
+    }
+    .toolbar {
+      gap: 0.375rem;
+    }
+    .toolbar button {
+      padding: 0.25rem 0.625rem;
+      font-size: 0.875rem;
+    }
+    .toolbar button:not(.primary):not(.danger) {
+      background: transparent;
+    }
+    textarea {
+      field-sizing: content;
+      min-height: max(20rem, calc(100dvh - 16rem));
+      resize: none;
+    }
+  }
   .repairs {
     display: flex;
     flex-wrap: wrap;
