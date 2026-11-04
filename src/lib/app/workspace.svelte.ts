@@ -6,6 +6,9 @@ import {
   analyzeText,
   duplicateText,
   newArticleText,
+  proposeCreatedAtFix,
+  proposeIdFix,
+  type RepairProposal,
   textFromBytes,
   unknownKeys,
   verifyCandidateBytes,
@@ -13,7 +16,7 @@ import {
 } from "../core/article-doc";
 import { IMAGE_TASK_MAX_MS } from "../core/budgets";
 import { bytesEqual, encodeUtf8, sha256Hex } from "../core/bytes";
-import { nowDateTime } from "../core/datetime";
+import { isValidDateTime, nowDateTime } from "../core/datetime";
 import { imageMarkdown } from "../core/image";
 import { refsFromTree, type MediaRefs } from "../core/markdown";
 import { unavailableMdService, type MdService } from "../parse/md-service";
@@ -80,6 +83,16 @@ type BuildCandidate = () => { ok: true; bytes: Uint8Array } | { ok: false; probl
 type PickerHost = {
   showDirectoryPicker?: (o?: { mode?: "read" | "readwrite"; id?: string; startIn?: string }) => Promise<unknown>;
 };
+
+/** Git 機能との連携（20.3・19・22）。Git 未使用・判定前は null */
+export interface GitHooks {
+  /** 未解決の競合など、記事を読み取り専用にする理由 */
+  readOnlyReason(id: string): string | null;
+  /** 記事フォルダ内のファイルの Git 状態の説明（削除・画像削除の確認に使う：19） */
+  describe(id: string, relPaths?: readonly string[]): Promise<string[]>;
+  /** 記事の内容がディスク上で変わった（保存・複製・削除・画像の取り込み） */
+  changed(id: string): void;
+}
 
 export interface WorkspaceOptions {
   readonly drafts?: DraftController | null;
@@ -155,6 +168,8 @@ export class Workspace {
   private readonly ownedDirs = new Set<string>();
 
   readonly drafts: DraftController | null;
+  /** Git 機能（App が設定する） */
+  git: GitHooks | null = null;
   private readonly decoder: Decoder;
   readonly md: MdService;
   private readonly appVersion: string;
@@ -335,7 +350,7 @@ export class Workspace {
         base: { bytes: r.bytes, text: loaded.text, readAt: r.readAt, hash },
         isNew: false,
       });
-      const ro = s.analysis.readOnlyReason;
+      const ro = s.analysis.readOnlyReason ?? this.git?.readOnlyReason(id) ?? null;
       if (ro !== null) s.readOnlyReason = ro;
       this.session = s;
       this.announce(`記事 ${id} を開きました。`);
@@ -662,7 +677,72 @@ export class Workspace {
     };
   }
 
+  // -------------------------------------------------------------------------
+  // 専用の修復操作（10.3・24.1）：差分を示し、確認後に編集として適用する（保存は通常の手動保存）
+
+  async repairId(): Promise<void> {
+    const s = this.session;
+    if (!s || s.isNew || !s.editable) return;
+    const p = proposeIdFix(s.text, s.id);
+    await this.applyRepair(s, p, "id をフォルダ名に合わせます", [
+      "フォルダ名（記事ID）を正として、frontmatter の id だけを書き換えます。フォルダ名・画像・他の項目は変更しません。",
+      "別の記事が同じフォルダへ合流した疑いがある場合は、この操作ではなく外部ツールで一方に新しい ID を割り当ててください（10.3）。",
+    ]);
+  }
+
+  async repairCreatedAt(source: "updatedAt" | "now"): Promise<void> {
+    const s = this.session;
+    if (!s || s.isNew || !s.editable) return;
+    const updated = s.analysis.schema?.values.updatedAt;
+    const value = source === "updatedAt" && updated && isValidDateTime(updated) ? updated : nowDateTime();
+    const p = proposeCreatedAtFix(s.text, s.id, value);
+    await this.applyRepair(s, p, "createdAt を設定します", [
+      source === "updatedAt"
+        ? "updatedAt と同じ値を作成日時として使います。実際の作成日時とは異なる可能性があります。"
+        : "現在時刻を作成日時として使います。実際の作成日時とは異なります。",
+      "値は自動では補いません。この確認の後も、保存するまでディスクは変わりません。",
+    ]);
+  }
+
+  private async applyRepair(
+    s: EditorSession,
+    p: RepairProposal | { error: string },
+    title: string,
+    notes: string[],
+  ): Promise<void> {
+    if ("error" in p) {
+      s.notice = { kind: "error", text: p.error };
+      return;
+    }
+    const v = await this.ask({
+      title,
+      message: "次の差分を編集内容に適用します。",
+      details: [`変更前：${p.before ?? "（項目なし）"}`, `変更後：${p.after}`, ...notes],
+      buttons: [
+        { label: "適用する", value: "apply", variant: "primary" },
+        { label: "キャンセル", value: "cancel" },
+      ],
+      initial: "cancel",
+    });
+    if (v !== "apply" || this.session !== s || !s.editable) return;
+    s.setText(p.text, null);
+    s.notice = { kind: "info", text: "修正を編集内容に適用しました。保存すると記事ファイルに反映されます。" };
+  }
+
+  /** 削除確認に添える Git 状態（19）。Git 機能が判定できなければ「未確認」と明示する */
+  private async gitDetails(id: string, relPaths?: readonly string[]): Promise<string[]> {
+    const fallback = ["Git 状態：未確認。Git だけで未コミットの内容を復元できるとは限りません。"];
+    if (!this.git) return fallback;
+    try {
+      const d = await this.git.describe(id, relPaths);
+      return d.length > 0 ? d : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
   private async refreshEntry(id: string): Promise<void> {
+    this.git?.changed(id);
     const articles = this.articles;
     if (!articles) return;
     try {
@@ -769,6 +849,7 @@ export class Workspace {
     try {
       const dir = await articles.getDirectoryHandle(id);
       const r = await listMedia(dir);
+      this.git?.changed(id);
       if (this.session?.id !== id) return;
       this.media = r.ok
         ? { articleId: id, files: r.files, exists: r.exists, error: null, refs }
@@ -923,7 +1004,7 @@ export class Workspace {
         message: `${path}（${bytes.bytes.length.toLocaleString()} バイト）を削除します。削除の前に、リポジトリ外の退避先フォルダへコピーし、検証します。`,
         details: [
           "参照の確認範囲：この記事の保存済み本文と cover だけです。別の記事や独自の frontmatter 項目からの参照は確認していません。",
-          "Git 状態：未確認（Git 機能は未実装）。Git だけで未コミットの内容を復元できるとは限りません。",
+          ...(await this.gitDetails(id, [`${MEDIA_DIR}/${name}`])),
           "復元は CMS では行いません。退避先から外部ツールで戻してください。",
         ],
         buttons: [
@@ -1155,7 +1236,7 @@ export class Workspace {
             (e) =>
               `${e.kind === "dir" ? "フォルダ" : "ファイル"}：${ARTICLES_PATH}${id}/${e.path}${e.kind === "file" ? `（${e.size.toLocaleString()} バイト）` : ""}`,
           ),
-          "Git 状態：未確認（Git 機能は未実装）。Git だけで未コミットの内容を復元できるとは限りません。",
+          ...(await this.gitDetails(id)),
           "CMS 独自のゴミ箱はありません。復元は退避先から外部ツールで行います。",
         ],
         buttons: [
@@ -1228,6 +1309,7 @@ export class Workspace {
           `退避は保持しています：${where}`,
         ]);
       finished = true;
+      this.git?.changed(id);
       const text = s.text;
       if (rep.error === null) {
         if (this.scan) this.scan = { ...this.scan, entries: this.scan.entries.filter((e) => e.dirName !== id) };

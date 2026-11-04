@@ -1,11 +1,14 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import ArticleList from "./components/ArticleList.svelte";
+  import CommitDialog from "./components/CommitDialog.svelte";
+  import GitPanel from "./components/GitPanel.svelte";
   import ConfirmDialog from "./components/ConfirmDialog.svelte";
   import DraftSettings from "./components/DraftSettings.svelte";
   import Editor from "./components/Editor.svelte";
   import RecoveryPanel from "./components/RecoveryPanel.svelte";
   import { DraftController } from "./lib/app/drafts.svelte";
+  import { GitController } from "./lib/app/git.svelte";
   import { Workspace } from "./lib/app/workspace.svelte";
   import { IdbDraftStore } from "./lib/drafts/store";
   import { WorkerMdService } from "./lib/parse/md-worker-service";
@@ -27,6 +30,21 @@
     appVersion,
     specVersion,
     md: new WorkerMdService(),
+  });
+  const git = new GitController(ws);
+  ws.git = git.hooks;
+  // フォルダを開いたとき・一覧を読み直したときに Git 状態を取り直す（23.2：自動監視はしない）
+  let gitRoot: unknown = null;
+  $effect(() => {
+    const root = ws.root;
+    const scannedAt = ws.scan?.scannedAt;
+    untrack(() => {
+      if (root !== gitRoot) {
+        gitRoot = root;
+        git.reset();
+      }
+      if (root && scannedAt !== undefined) void git.refresh();
+    });
   });
   /** 狭い画面での単一ペイン切替（14.1） */
   let pane = $state<"list" | "editor">("list");
@@ -99,7 +117,9 @@
         <p>
           記事を保存しているリポジトリのフォルダ（<code>content/articles/</code> を含むフォルダ）を選んでください。フォルダへのアクセスはこのタブを閉じるまで有効です。
         </p>
-        <p class="muted small">記事は手動で保存します。Git 機能は本版では未実装です。</p>
+        <p class="muted small">
+          記事は手動で保存します。Git を使う場合は、記事単位でコミットできます（push・pull は行いません）。
+        </p>
       {:else}
         <p>このブラウザでは編集を開始できません。デスクトップ版の Chrome または Edge で開いてください。</p>
       {/if}
@@ -170,12 +190,13 @@
       </div>
       <div class="panes" data-pane={pane}>
         <div class="pane list-pane">
-          <ArticleList {ws} onopen={() => (pane = "editor")} />
+          <ArticleList {ws} {git} onopen={() => (pane = "editor")} />
+          <GitPanel {ws} {git} />
         </div>
         <div class="pane editor-pane">
           {#if ws.session}
             {#key ws.session}
-              <Editor {ws} session={ws.session} />
+              <Editor {ws} session={ws.session} {git} />
             {/key}
           {:else}
             <p class="muted empty">一覧から記事を選ぶか、「新規作成」を押してください。</p>
@@ -200,6 +221,7 @@
 </footer>
 
 <ConfirmDialog request={ws.dialog} />
+<CommitDialog {git} />
 <div class="sr-only" aria-live="polite" data-testid="announcer">{ws.announcement}</div>
 
 <style>

@@ -32,6 +32,7 @@ jobs:
           mkdir -p _site
           cp dist/kotono-cms.html _site/kotono-cms.html
           cp dist/kotono-cms.html _site/index.html
+          cp dist/kotono-cms.html.sha256 dist/release-info.json dist/THIRD-PARTY-LICENSES.txt _site/
           touch _site/.nojekyll
       - uses: actions/upload-pages-artifact@v4
         with:

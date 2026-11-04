@@ -310,3 +310,64 @@ export function unknownKeys(a: Analysis): string[] {
   const std = new Set<string>(STANDARD_KEYS);
   return topLevelKeys(a.parse.root).filter((k) => !std.has(k));
 }
+
+// ---------------------------------------------------------------------------
+// 専用の修復操作（10.3・24.1）：勝手に補わず、差分を示して確認後に適用する
+
+export interface RepairProposal {
+  readonly text: string;
+  /** 差分（変更前・変更後の行） */
+  readonly before: string | null;
+  readonly after: string;
+}
+
+/** トップレベルに欠けている文字列項目を frontmatter の末尾へ追加する。他の項目は変えない */
+export function addTopLevelString(text: string, key: string, value: string): TextEdit {
+  const split = splitDocument(text);
+  if (!split.ok) return { ok: false, message: splitErrorMessage(split.code) };
+  const parse = parseCached(split.frontmatter);
+  if (!parse.ok) return { ok: false, message: "frontmatter に構文エラーがあるため追加できません。" };
+  if (topLevelKeys(parse.root).includes(key)) return { ok: false, message: `${key} は既にあります。` };
+  const fm = split.frontmatter;
+  const line = `${key}: ${JSON.stringify(value)}`;
+  const nextFm = fm === "" ? `${line}\n` : fm.endsWith("\n") ? `${fm}${line}\n` : `${fm}\n${line}`;
+  const re = parseFrontmatter(nextFm);
+  if (!re.ok) return { ok: false, message: "追加後の frontmatter を解釈できません。" };
+  const before = topLevelKeys(parse.root);
+  const after = topLevelKeys(re.root);
+  if (after.join("\u0000") !== [...before, key].join("\u0000"))
+    return { ok: false, message: "追加で他の項目が変わるため、原文モードで追加してください。" };
+  for (const k of before)
+    if (!nodesEqual(getValueNode(parse.root, k), getValueNode(re.root, k)))
+      return { ok: false, message: "追加で他の項目が変わるため、原文モードで追加してください。" };
+  return { ok: true, text: text.slice(0, split.fmStart) + nextFm + text.slice(split.fmStart + fm.length) };
+}
+
+/** id をフォルダ名に合わせる提案（10.3：フォルダ名が有効な場合だけ） */
+export function proposeIdFix(text: string, folderId: string): RepairProposal | { error: string } {
+  const a = analyzeText(text, folderId);
+  if (!a.problems.some((p) => p.code === "id-mismatch")) return { error: "id はフォルダ名と一致しています。" };
+  const cur = a.schema?.values.id;
+  const r = editField(text, "id", folderId);
+  if (!r.ok) return { error: r.message };
+  return { text: r.text, before: `id: ${JSON.stringify(cur ?? "")}`, after: `id: ${JSON.stringify(folderId)}` };
+}
+
+/** createdAt の不足・不正を指定値で直す提案（24.1） */
+export function proposeCreatedAtFix(text: string, folderId: string, value: string): RepairProposal | { error: string } {
+  const a = analyzeText(text, folderId);
+  const p = a.problems.find((x) => x.field === "createdAt");
+  if (!p) return { error: "createdAt に問題はありません。" };
+  if (p.code === "missing") {
+    const r = addTopLevelString(text, "createdAt", value);
+    if (!r.ok) return { error: r.message };
+    return { text: r.text, before: null, after: `createdAt: ${JSON.stringify(value)}` };
+  }
+  const r = editField(text, "createdAt", value);
+  if (!r.ok) return { error: r.message };
+  const split = splitDocument(text);
+  const old = split.ok
+    ? (split.frontmatter.split("\n").find((l) => l.startsWith("createdAt:")) ?? "createdAt: （不正な値）")
+    : "createdAt: （不正な値）";
+  return { text: r.text, before: old, after: `createdAt: ${JSON.stringify(value)}` };
+}

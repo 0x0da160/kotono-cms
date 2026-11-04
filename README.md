@@ -4,15 +4,15 @@
 
 Kotono CMS（コトノ シーエムエス）は、Webメディアの記事を作成・編集するためのローカルCMSです。単一のHTMLファイル `kotono-cms.html` をデスクトップ版の Chrome・Edge で `file://` から開き、ユーザーが選んだローカルフォルダに Markdown＋YAML frontmatter の記事を保存します。サーバーも外部CDNも使いません。
 
-> **現在の状態：P1 MVP（Git を除く）**
-> フォルダ選択、記事一覧（検索・絞り込み・ソート）、新規作成、frontmatter フォームと Markdown 原文の編集、外部変更を検出する手動保存、記事IDと slug の検証、YAML の往復保持、Markdown プレビュー、画像の取り込み・挿入・カバー選択・削除、記事の複製・削除（リポジトリ外への検証済み退避が必須）、ブラウザ内復旧ドラフトを実装しています。Git は未実装です。仕様の数値と方式は技術成立性ゲート（仕様 第2.2節）で確認する前の受け入れ要件であり、実機での検証はまだ行っていません。実装方式と未検証の項目は [ADR-0002](docs/knowledge/decisions/0002-p1-editing-and-save.md) と [ADR-0003](docs/knowledge/decisions/0003-p1-preview-media-drafts.md) を参照してください。
+> **現在の状態：P1 MVP（実装完了・実機検証前）**
+> フォルダ選択、記事一覧（検索・絞り込み・ソート）、新規作成、frontmatter フォームと Markdown 原文の編集、外部変更を検出する手動保存、記事IDと slug の検証、ID・createdAt の専用修正、YAML の往復保持、Markdown プレビュー（対象8言語のコードハイライト）、画像の取り込み・挿入・カバー選択・削除、記事の複製・削除（リポジトリ外への検証済み退避が必須）、ブラウザ内復旧ドラフト、ローカル Git（記事単位のコミット・初期化・状態と履歴の表示）を実装しています。仕様の数値と方式は技術成立性ゲート（仕様 第2.2節）で確認する前の受け入れ要件であり、実機（Windows・macOS の Chrome・Edge）での検証はまだ行っていません。実装方式と未検証の項目は [ADR-0002](docs/knowledge/decisions/0002-p1-editing-and-save.md)・[ADR-0003](docs/knowledge/decisions/0003-p1-preview-media-drafts.md)・[ADR-0004](docs/knowledge/decisions/0004-p1-git-and-remaining.md) を参照してください。
 
 ## 特徴（仕様より）
 
 - 単一HTMLを `file://` で起動し、JS・CSS・依存ライブラリをすべて同梱する。
 - 記事は `content/articles/<記事ID>/index.md`（Markdown＋YAML frontmatter）。画像は同じフォルダの `media/` に置く。
 - 手動保存。保存前に外部変更を検出し、無確認で上書きしない。
-- ローカルGitへの記事単位のコミット（外部Gitクライアントとの同期は対象外）。
+- ローカルGitへの記事単位のコミット（push・pull・ブランチ操作など外部との同期は対象外）。CMS は Git のフック・署名・フィルターを実行しません。
 - 記事由来のHTML・スクリプトを実行せず、自動ネットワーク通信を行わない。
 
 詳しくは [仕様書（原本）](docs/spec/local-cms-specification-v3.1.md) と、それを章ごとに整理した [ナレッジ](docs/knowledge/index.md) を参照してください。
@@ -37,6 +37,18 @@ pnpm build        # dist/kotono-cms.html を生成
 ```
 
 `pnpm build` のあと、`dist/kotono-cms.html` をブラウザで直接開くと起動します。
+
+### 配布物の確認
+
+`pnpm build` は `dist/` に次も書き出します（仕様 第29.4節）。同じソースと lockfile からは同じハッシュになります。
+
+| ファイル                   | 内容                                                                                          |
+| -------------------------- | --------------------------------------------------------------------------------------------- |
+| `kotono-cms.html.sha256`   | `kotono-cms.html` の SHA-256。`cd dist && sha256sum -c kotono-cms.html.sha256` で照合できます |
+| `release-info.json`        | アプリ版・仕様版・成果物のハッシュ・同梱した依存ライブラリ（名前・版・ライセンス）            |
+| `THIRD-PARTY-LICENSES.txt` | 同梱した依存ライブラリのライセンス本文                                                        |
+
+ハッシュを配布物と同じ場所に置くだけでは、配布元の真正性は証明できません。署名や別経路での公開方法は、正式リリースまでに決めます。
 
 ### 検査とテスト
 
@@ -65,11 +77,11 @@ E2E の初回は `pnpm exec playwright install chromium` でブラウザを入�
 選定理由：
 
 - **単一HTMLと外部CDN非依存を素直に満たせる。** Vite の成果物を vite-plugin-singlefile で `kotono-cms.html` 1ファイルに畳み込みます。フォントは同梱せず OS 標準の日本語フォントを使います。
-- **速くて小さい。** Svelte 5 はコンパイル時に最適化され、ランタイムが小さく、仮想DOMの差分コストがありません。現在のビルドは約470 kB（yaml・Markdown 解析ライブラリを含む）です。
+- **速くて小さい。** Svelte 5 はコンパイル時に最適化され、ランタイムが小さく、仮想DOMの差分コストがありません。現在のビルドは約630 kB（yaml・Markdown 解析・ハイライトのライブラリを含む）です。
 - **安全側の既定値。** ビルド時にインラインの script・style の SHA-256 ハッシュから CSP を生成し、`default-src 'none'`・`connect-src 'none'` で通信を禁止します。`{@html}` と `eval` 系は ESLint でエラーにします。
 - **安定版を選ぶ。** TypeScript 7（ネイティブ版）は svelte-check・typescript-eslint が未対応のため、6.0 系を使います。
 
-YAML は `yaml`（Document API）、記事IDは `nanoid` を固定版で採用しました（[ADR-0002](docs/knowledge/decisions/0002-p1-editing-and-save.md)）。Markdown は micromark / mdast 系を固定版で採用し、終了可能な Worker の中で解析します（[ADR-0003](docs/knowledge/decisions/0003-p1-preview-media-drafts.md)）。Git・エディタのライブラリは、仕様 第29.1節に従い技術ゲートで採用を決めるため、まだ依存に入れていません。代替案と要検証点は [ADR-0001 技術スタックの選定](docs/knowledge/decisions/0001-tech-stack.md) にまとめています。
+YAML は `yaml`（Document API）、記事IDは `nanoid` を固定版で採用しました（[ADR-0002](docs/knowledge/decisions/0002-p1-editing-and-save.md)）。Markdown は micromark / mdast 系を固定版で採用し、終了可能な Worker の中で解析します（[ADR-0003](docs/knowledge/decisions/0003-p1-preview-media-drafts.md)）。Git は外部プロセスを使わない自前の実装で、書き込みを `.git/` の内側に限っています（isomorphic-git を採用しなかった理由は [ADR-0004](docs/knowledge/decisions/0004-p1-git-and-remaining.md)）。.gitignore の判定に `ignore`、コードハイライトに `lowlight`（`highlight.js`）を固定版で使います。代替案と要検証点は [ADR-0001 技術スタックの選定](docs/knowledge/decisions/0001-tech-stack.md) にまとめています。
 
 ## ディレクトリ構成
 

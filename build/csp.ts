@@ -17,8 +17,11 @@ function sha256(text: string): string {
 }
 
 function collectInline(html: string, tag: "script" | "style"): string[] {
+  // スクリプト本文の文字列（ハイライト文法の "<style" 等）を style 要素と誤認しないよう、
+  // style を集めるときはスクリプト要素を取り除いてから探す
+  const src = tag === "style" ? html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "") : html;
   const re = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)</${tag}>`, "gi");
-  return [...html.matchAll(re)].map((m) => m[1] ?? "").filter((body) => body.length > 0);
+  return [...src.matchAll(re)].map((m) => m[1] ?? "").filter((body) => body.length > 0);
 }
 
 export function buildCsp(html: string): string {

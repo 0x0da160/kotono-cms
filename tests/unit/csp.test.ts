@@ -17,6 +17,13 @@ describe("buildCsp", () => {
     expect(csp).not.toContain("unsafe-eval");
   });
 
+  it("スクリプト本文の中の <style> という文字列を style 要素と誤認しない", () => {
+    const js = 'const re = /<style(?=\\s|>)/; const end = "</style>";';
+    const html = `<script type="module">${js}</script>\n<style rel="stylesheet">.a{}</style>`;
+    const csp = buildCsp(html);
+    expect(csp).toContain(`style-src ${hash(".a{}")} ${hash(PREVIEW_CSS)}`);
+  });
+
   it("インラインコードがなければ script を 'none' にし、style はプレビュー用 CSS だけを許可する", () => {
     const csp = buildCsp("<p>empty</p>");
     expect(csp).toContain("script-src 'none'");
