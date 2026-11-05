@@ -153,6 +153,7 @@ test("偽装した画像は取り込まない（17.1）", async ({ page }) => {
 test("記事を複製すると、未知ファイルも含めてコピーし、下書きとして開く（10.2）", async ({ page }) => {
   await launch(page);
   await openA(page);
+  await page.getByTestId("more-actions").click();
   await page.getByTestId("duplicate-button").click();
   await expect(page.getByRole("dialog")).toContainText("記事を複製します");
   await page.getByRole("button", { name: "複製する" }).click();

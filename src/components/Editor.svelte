@@ -58,6 +58,23 @@
     void tick().then(() => (conflictEl ?? noticeEl)?.scrollIntoView({ block: "nearest" }));
   });
 
+  let moreOpen = $state(false);
+  let moreSummary: HTMLElement | undefined = $state();
+  /** まとめた操作を実行する前に閉じ、フォーカスを「原文の退避・その他」へ戻す（確認ダイアログの復帰先になる） */
+  function fromMore(run: () => unknown) {
+    moreOpen = false;
+    moreSummary?.focus();
+    void run();
+  }
+  function onMoreKeydown(e: KeyboardEvent) {
+    if (e.key === "Escape" && moreOpen) {
+      e.preventDefault();
+      e.stopPropagation();
+      moreOpen = false;
+      moreSummary?.focus();
+    }
+  }
+
   let mode = $state<"form" | "source" | "preview">("form");
   let modeError = $state<string | null>(null);
   let composing = $state(false);
@@ -246,23 +263,30 @@
         disabled={!session.canRedo || readOnly || locked}
         aria-keyshortcuts="Control+Shift+Z Control+Y">やり直す</button
       >
-      <button type="button" class="group-start" onclick={() => copy(session.text)} disabled={session.text === ""}
-        >原文をコピー</button
-      >
-      <button type="button" onclick={() => download(session.text)} disabled={session.text === ""}
-        >原文をダウンロード</button
-      >
+      <!-- 使う頻度の低い操作はまとめる（UI刷新 反復3：操作列の折り返しを減らす）。ホバーでは開かない -->
+      <details class="more group-start" bind:open={moreOpen} onkeydown={onMoreKeydown}>
+        <summary bind:this={moreSummary} data-testid="more-actions">原文の退避・その他</summary>
+        <div class="more-menu" role="group" aria-label="原文の退避・その他">
+          <button type="button" onclick={() => fromMore(() => copy(session.text))} disabled={session.text === ""}
+            >原文をコピー</button
+          >
+          <button type="button" onclick={() => fromMore(() => download(session.text))} disabled={session.text === ""}
+            >原文をダウンロード</button
+          >
+          {#if !session.isNew}
+            <button type="button" onclick={() => fromMore(() => ws.reloadCurrent())} disabled={ws.busy || locked}
+              >ディスクから再読み込み</button
+            >
+            <button
+              type="button"
+              onclick={() => fromMore(() => ws.duplicateCurrent())}
+              disabled={ws.busy || readOnly || locked}
+              data-testid="duplicate-button">複製…</button
+            >
+          {/if}
+        </div>
+      </details>
       {#if !session.isNew}
-        <button type="button" onclick={() => ws.reloadCurrent()} disabled={ws.busy || locked}
-          >ディスクから再読み込み</button
-        >
-        <button
-          type="button"
-          class="group-start"
-          onclick={() => ws.duplicateCurrent()}
-          disabled={ws.busy || readOnly || locked}
-          data-testid="duplicate-button">複製…</button
-        >
         {#if git?.repo}
           <button
             type="button"
@@ -458,6 +482,46 @@
   .toolbar .close {
     margin-inline-start: auto;
   }
+  .more {
+    position: relative;
+  }
+  .more > summary {
+    list-style: none;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.375rem 0.75rem;
+    background: var(--surface);
+    white-space: nowrap;
+  }
+  .more > summary::-webkit-details-marker {
+    display: none;
+  }
+  .more > summary::after {
+    content: " ▾";
+  }
+  .more[open] > summary::after {
+    content: " ▴";
+  }
+  .more-menu {
+    position: absolute;
+    inset-inline-start: 0;
+    top: calc(100% + 0.25rem);
+    z-index: 4;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25rem;
+    min-width: 14rem;
+    padding: 0.375rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgb(0 0 0 / 0.12);
+  }
+  .more-menu button {
+    text-align: start;
+  }
   /* 本文を主、記事情報を右の補助列に置く（UI刷新 方向B：P-02）。幅が足りないときは従来どおり縦に積む */
   .panel {
     container-type: inline-size;
@@ -467,9 +531,14 @@
     flex-direction: column;
     gap: 0.75rem;
   }
-  /* DOM は本文→記事情報（Tab 順を横並びの見た目に合わせる）。縦積みのときは従来どおり記事情報を上に表示する */
-  .form-layout > :global(.form) {
-    order: -1;
+  /*
+   * DOM は本文→記事情報（Tab 順を見た目に合わせる）。広い画面では縦積みのときも本文を先に表示する（P-02）。
+   * 狭い画面（60rem 以下、今回の対象外）は従来どおり記事情報を上に表示する。
+   */
+  @media (max-width: 60rem) {
+    .form-layout > :global(.form) {
+      order: -1;
+    }
   }
   @container (min-width: 46rem) {
     .form-layout {
@@ -483,7 +552,6 @@
       grid-row: 1;
     }
     .form-layout > :global(.form) {
-      order: 0;
       grid-column: 2;
       grid-row: 1;
       margin: 0;
@@ -524,7 +592,8 @@
     .toolbar {
       gap: 0.375rem;
     }
-    .toolbar button {
+    .toolbar button,
+    .more > summary {
       padding: 0.25rem 0.625rem;
       font-size: 0.875rem;
     }
