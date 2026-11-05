@@ -14,7 +14,7 @@ sources:
   - id: isomorphic-git
     resource: "https://www.npmjs.com/package/isomorphic-git/v/1.44.11（index.js の init・readObjectPacked・StreamReader・status・statusMatrix・GitWalkerFs.oid・GitIndex.insert・normalizeMode）"
     title: "isomorphic-git 1.44.11 のソース"
-    author: isomorphic-git contributors
+    author: team:isomorphic-git
     last_modified: 2026-11-05T00:00:00Z
   - id: git-interop
     resource: "Node.js 22 と Git 2.43.0（Linux）での相互運用試験（tests/unit/git.test.ts、2026-11-04）"
