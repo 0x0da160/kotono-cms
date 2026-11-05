@@ -112,6 +112,11 @@ test("外部変更を検出したら保存を止め、3版と差分・退避を�
   await expect(panel).toContainText("現在のディスク原文");
   await expect(panel.getByRole("button", { name: "編集中の原文をコピー" })).toBeVisible();
   await expect(page.getByTestId("save-status")).toHaveText("未保存");
+  await expect(page.getByTestId("save-issue")).toHaveText("外部変更で保存を停止");
+  // 検出したことはパネルの見出しで読み上げ、同じ内容の通知の枠を別に出さない（UI刷新 P-08）
+  await expect(panel.getByRole("alert")).toHaveText(/外部変更あり：保存を止めました/);
+  await expect(page.getByTestId("notice")).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: "編集を破棄してディスク版を読み込む" })).toHaveClass(/danger/);
   expect(await fsRead(page, `content/articles/${B}/index.md`)).toContain("外部で変更");
 });
 

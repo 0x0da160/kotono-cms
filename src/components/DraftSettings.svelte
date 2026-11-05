@@ -1,8 +1,15 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import type { DraftController } from "../lib/app/drafts.svelte";
   import type { Workspace } from "../lib/app/workspace.svelte";
 
   let { ws, dc }: { ws: Workspace; dc: DraftController } = $props();
+
+  // 初回の設定を閉じたら、設定の移り先（フッターの「復旧ドラフト」）へフォーカスを移す。ページの先頭に飛ばさない
+  async function focusSettings() {
+    await tick();
+    document.querySelector<HTMLElement>('[data-testid="draft-settings-summary"]')?.focus();
+  }
 
   async function enable() {
     await dc.enable();
@@ -12,9 +19,15 @@
     ws.announce("ブラウザ内復旧ドラフトを有効にしました。");
   }
 
+  async function enableFirst() {
+    await enable();
+    await focusSettings();
+  }
+
   async function decline() {
     await dc.disable(false);
     ws.announce("ブラウザ内復旧ドラフトを無効にしました。");
+    await focusSettings();
   }
 
   async function turnOff() {
@@ -80,13 +93,13 @@
     <p>未保存の編集を、ブラウザの中に自動で退避します。タブを閉じたりブラウザが落ちたりしても、次回復旧できます。</p>
     {@render explanation()}
     <div class="buttons">
-      <button type="button" class="primary" onclick={enable} data-testid="draft-enable">有効にする（推奨）</button>
+      <button type="button" class="primary" onclick={enableFirst} data-testid="draft-enable">有効にする（推奨）</button>
       <button type="button" onclick={decline}>今は有効にしない</button>
     </div>
   </section>
 {:else}
   <details class="settings">
-    <summary>
+    <summary data-testid="draft-settings-summary">
       復旧ドラフト：{dc.mode === "enabled"
         ? "有効"
         : dc.mode === "disabled"

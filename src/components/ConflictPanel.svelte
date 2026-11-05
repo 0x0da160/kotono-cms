@@ -7,6 +7,7 @@
   let {
     conflict,
     id,
+    alert = false,
     oncopy,
     ondownload,
     ontakedisk,
@@ -14,6 +15,8 @@
   }: {
     conflict: Conflict;
     id: string;
+    /** 保存の前に外部変更を検出した直後。見出しを role="alert" で読み上げる（編集領域の通知の代わり：P-08） */
+    alert?: boolean;
     oncopy: (text: string) => void;
     ondownload: (text: string, suffix: string) => void;
     ontakedisk: () => void;
@@ -62,8 +65,17 @@
   const short = (h: string | null) => (h === null ? "—" : `${h.slice(0, 12)}…`);
 </script>
 
-<section class="conflict" aria-labelledby="conflict-heading" data-testid="conflict-panel">
+{#snippet heading()}
   <h3 id="conflict-heading">外部変更あり：保存を止めました</h3>
+{/snippet}
+
+<section class="conflict" aria-labelledby="conflict-heading" data-testid="conflict-panel">
+  <!-- 検出した直後は、見出しを要素ごと出し直して role="alert" の読み上げを起こす（通知の枠を出していた時と同じ契機） -->
+  {#if alert}
+    <div role="alert" data-testid="conflict-alert">{@render heading()}</div>
+  {:else}
+    {@render heading()}
+  {/if}
   <p>
     読み込み後に、ディスク上の <code>index.md</code> が CMS 以外で変更されました。自動マージ・強制上書きはしません。編集中の原文を退避してから、ディスク版を読み込むか、外部で内容を確認してください。
   </p>
@@ -154,6 +166,10 @@
     margin: 0 0 0.5rem;
     color: var(--ng);
     font-size: 1rem;
+  }
+  /* エラーの通知と同じ記号を付ける（状態を色だけで伝えない。段階4 5章） */
+  h3::before {
+    content: "⚠ ";
   }
   table {
     border-collapse: collapse;

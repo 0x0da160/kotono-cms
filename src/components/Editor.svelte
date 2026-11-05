@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { GitController } from "../lib/app/git.svelte";
   import type { EditorSession } from "../lib/app/session.svelte";
-  import type { Workspace } from "../lib/app/workspace.svelte";
+  import { EXTERNAL_CHANGE_NOTICE, type Workspace } from "../lib/app/workspace.svelte";
   import { onMount, tick } from "svelte";
   import { encodeUtf8 } from "../lib/core/bytes";
   import { publishTiming } from "../lib/core/datetime";
@@ -34,6 +34,15 @@
         : null,
   );
 
+  /**
+   * 外部変更を検出した通知は、外部変更パネルが出ている間はパネルの見出しで伝え、別の枠に出さない
+   * （UI刷新 P-08：同じことを二重に言わない）。読み上げはパネルの見出しの role="alert" が引き継ぐ。
+   * 他のエラー（コピーの失敗など）は従来どおり編集領域の通知に出す。
+   */
+  const conflictAlert = $derived(
+    session.conflict !== null && session.notice?.kind === "error" && session.notice.text === EXTERNAL_CHANGE_NOTICE,
+  );
+
   let editorEl: HTMLElement | undefined = $state();
   let stickyEl: HTMLElement | undefined = $state();
   let noticeEl: HTMLElement | undefined = $state();
@@ -55,7 +64,12 @@
     const kind = session.notice?.kind;
     const conflict = session.conflict;
     if (kind !== "error" && !conflict) return;
-    void tick().then(() => (conflictEl ?? noticeEl)?.scrollIntoView({ block: "nearest" }));
+    void tick().then(() => {
+      // 状態の欄に「外部変更で保存を停止」が加わると固定領域が高くなる（1280px で 2 行になる）。
+      // ResizeObserver より先に scroll-margin の値を取り直し、パネルの見出しが固定領域に隠れないようにする（P-08）
+      if (stickyEl) editorEl?.style.setProperty("--sticky-h", `${stickyEl.offsetHeight}px`);
+      (conflictEl ?? noticeEl)?.scrollIntoView({ block: "nearest" });
+    });
   });
 
   /*
@@ -362,7 +376,7 @@
       <button type="button" class="toast-close" aria-label="通知を閉じる" onclick={closeToast}>×</button>
     </div>
   {/if}
-  {#if session.notice && session.notice.kind === "error"}
+  {#if session.notice && session.notice.kind === "error" && !conflictAlert}
     <div
       bind:this={noticeEl}
       class="notice {session.notice.kind}"
@@ -386,6 +400,7 @@
       <ConflictPanel
         conflict={session.conflict}
         id={session.id}
+        alert={conflictAlert}
         oncopy={copy}
         ondownload={download}
         ontakedisk={() => ws.takeDisk()}

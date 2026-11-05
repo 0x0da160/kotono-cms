@@ -62,6 +62,13 @@ import {
 import { classifyFsError, fsErrorMessage, type DirHandleLike } from "../fs/types";
 import { EditorSession, problemsNotice, type Notice } from "./session.svelte";
 
+/**
+ * 保存の前に外部変更を検出したときの通知の文言。編集画面は、外部変更パネルが出ている間、
+ * この通知を別の枠に出さず、パネルの見出しで伝える（UI刷新 P-08：二重表示をやめる。文言・状態は変えない）。
+ */
+export const EXTERNAL_CHANGE_NOTICE =
+  "外部変更あり：読み込み後にディスク上のファイルが変わったため、保存を止めました。";
+
 export interface DialogButton {
   readonly label: string;
   readonly value: string;
@@ -578,7 +585,7 @@ export class Workspace {
         await s.setConflict(r.disk, Date.now());
         s.notice = {
           kind: "error",
-          text: "外部変更あり：読み込み後にディスク上のファイルが変わったため、保存を止めました。",
+          text: EXTERNAL_CHANGE_NOTICE,
         };
         return;
       case "candidate-invalid":

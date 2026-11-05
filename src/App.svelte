@@ -31,6 +31,7 @@
     specVersion,
     md: new WorkerMdService(),
   });
+  const workbench = $derived(ws.root !== null && ws.articles !== null && !ws.missingArticles);
   const git = new GitController(ws);
   ws.git = git.hooks;
   // フォルダを開いたとき・一覧を読み直したときに Git 状態を取り直す（23.2：自動監視はしない）
@@ -109,15 +110,8 @@
   {/if}
 </header>
 
-<main
-  id="main"
-  tabindex="-1"
-  class:wide={ws.root !== null}
-  class:workbench={ws.root !== null && ws.articles !== null && !ws.missingArticles}
->
-  {#if supported}
-    {#if drafts.mode === "undecided"}<DraftSettings {ws} dc={drafts} />{/if}
-  {/if}
+<main id="main" tabindex="-1" class:wide={ws.root !== null} class:workbench>
+  {#if supported && drafts.mode === "undecided" && !workbench}<DraftSettings {ws} dc={drafts} />{/if}
   {#if !supported || ws.root === null}
     <section aria-labelledby="start-heading" class="card">
       <h2 id="start-heading">はじめに</h2>
@@ -197,6 +191,10 @@
         >
       </div>
       <div class="panes" data-pane={pane}>
+        {#if supported && drafts.mode === "undecided"}
+          <!-- 初回の設定は編集側の列に置き、一覧を押し下げない（UI刷新 P-04） -->
+          <div class="consent-slot"><DraftSettings {ws} dc={drafts} /></div>
+        {/if}
         <div class="pane list-pane">
           <ArticleList {ws} {git} onopen={() => (pane = "editor")} />
           <GitPanel {ws} {git} />
@@ -215,11 +213,7 @@
   {/if}
 </main>
 
-<footer
-  class="app-footer"
-  class:wide={ws.root !== null}
-  class:workbench={ws.root !== null && ws.articles !== null && !ws.missingArticles}
->
+<footer class="app-footer" class:wide={ws.root !== null} class:workbench>
   {#if supported && drafts.mode !== "undecided"}<DraftSettings {ws} dc={drafts} />{/if}
   <p class="keys small">
     キーボード：Ctrl/⌘+S 保存、Ctrl/⌘+Z 元に戻す、Ctrl/⌘+Shift+Z または Ctrl+Y やり直す。IME 変換中は保存しません。
@@ -404,6 +398,13 @@
     :global(#app:has(> main.workbench)) h1 {
       font-size: 1.125rem;
     }
+    /* 作業中は名前と説明を1行にして、縦の領域を空ける（UI刷新 P-10） */
+    :global(#app:has(> main.workbench)) .brand {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 0 0.75rem;
+    }
     main.workbench {
       flex: 1 1 auto;
       min-height: 0;
@@ -429,6 +430,22 @@
     }
     main.workbench .editor-pane {
       padding-inline-start: 1rem;
+    }
+    main.workbench > .panes:has(> .consent-slot) {
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+    main.workbench > .panes > .consent-slot {
+      grid-column: 2;
+      grid-row: 1;
+      padding: 0.75rem 0 0 1rem;
+    }
+    main.workbench > .panes:has(> .consent-slot) > .list-pane {
+      grid-column: 1;
+      grid-row: 1 / span 2;
+    }
+    main.workbench > .panes:has(> .consent-slot) > .editor-pane {
+      grid-column: 2;
+      grid-row: 2;
     }
     .app-footer.workbench {
       flex: none;
