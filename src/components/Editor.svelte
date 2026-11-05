@@ -50,11 +50,11 @@
     return () => ro.disconnect();
   });
 
-  // エラー通知・外部変更パネルが出たら、見える位置へ移す（本文の途中を見ていても気づけるように）
+  // エラー・警告の通知、外部変更パネルが出たら、見える位置へ移す（本文の途中を見ていても気づけるように）
   $effect(() => {
     const kind = session.notice?.kind;
     const conflict = session.conflict;
-    if (kind !== "error" && !conflict) return;
+    if (kind !== "error" && kind !== "warn" && !conflict) return;
     void tick().then(() => (conflictEl ?? noticeEl)?.scrollIntoView({ block: "nearest" }));
   });
 

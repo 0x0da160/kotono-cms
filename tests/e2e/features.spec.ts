@@ -257,6 +257,17 @@ test("キーボードだけで記事を開き、保存できる（14.1）", asyn
   await page.keyboard.type("追記");
   await page.keyboard.press("Control+s");
   await expect(page.getByTestId("save-status")).toHaveText("保存済み");
+  // IME 変換中の Ctrl+S（Microsoft IME などでは key が "Process" になる）は保存せず、確定を案内する（14.1）
+  await page.keyboard.type("変換中");
+  await page.getByTestId("body-editor").dispatchEvent("keydown", {
+    key: "Process",
+    code: "KeyS",
+    ctrlKey: true,
+    isComposing: true,
+    bubbles: true,
+  });
+  await expect(page.getByTestId("notice")).toContainText("変換を確定してから保存してください。");
+  await expect(page.getByTestId("save-status")).toHaveText("未保存");
   // スキップリンク：読み込み直後の最初の Tab で到達する
   await page.goto(url);
   await page.keyboard.press("Tab");
