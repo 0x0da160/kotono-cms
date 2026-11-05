@@ -153,6 +153,7 @@ test("偽装した画像は取り込まない（17.1）", async ({ page }) => {
 test("記事を複製すると、未知ファイルも含めてコピーし、下書きとして開く（10.2）", async ({ page }) => {
   await launch(page);
   await openA(page);
+  await page.getByTestId("more-actions").click();
   await page.getByTestId("duplicate-button").click();
   await expect(page.getByRole("dialog")).toContainText("記事を複製します");
   await page.getByRole("button", { name: "複製する" }).click();
@@ -256,6 +257,17 @@ test("キーボードだけで記事を開き、保存できる（14.1）", asyn
   await page.keyboard.type("追記");
   await page.keyboard.press("Control+s");
   await expect(page.getByTestId("save-status")).toHaveText("保存済み");
+  // IME 変換中の Ctrl+S（Microsoft IME などでは key が "Process" になる）は保存せず、確定を案内する（14.1）
+  await page.keyboard.type("変換中");
+  await page.getByTestId("body-editor").dispatchEvent("keydown", {
+    key: "Process",
+    code: "KeyS",
+    ctrlKey: true,
+    isComposing: true,
+    bubbles: true,
+  });
+  await expect(page.getByTestId("notice")).toContainText("変換を確定してから保存してください。");
+  await expect(page.getByTestId("save-status")).toHaveText("未保存");
   // スキップリンク：読み込み直後の最初の Tab で到達する
   await page.goto(url);
   await page.keyboard.press("Tab");

@@ -57,8 +57,11 @@
 
   function onKeydown(e: KeyboardEvent) {
     const mod = e.ctrlKey || e.metaKey;
-    if (mod && !e.altKey && e.key.toLowerCase() === "s") {
-      e.preventDefault();
+    // IME 変換中は key が "Process" になることがある（Microsoft IME など）。物理キー（code）でも判定し、確定を案内する（14.1）
+    const isS = e.key.toLowerCase() === "s" || (e.isComposing && e.code === "KeyS");
+    if (mod && !e.altKey && isS) {
+      // IME が処理中のキー（"Process"）は IME に任せ、既定動作を止めない
+      if (e.key !== "Process") e.preventDefault();
       if (!ws.session) return;
       // IME の未確定文字列を失わせない（14.1）：変換中は保存しない
       if (e.isComposing) {
