@@ -448,6 +448,12 @@
       font-size: 0.75rem;
     }
   }
+  /* 狭い側の作業台（〜75rem）では一覧の列を最小幅にして、編集側の操作列を1行に収める（UI刷新 反復4） */
+  @media (min-width: 60.0625rem) and (max-width: 75rem) {
+    main.workbench > .panes {
+      grid-template-columns: 17rem minmax(0, 1fr);
+    }
+  }
   .empty {
     padding: 2rem 0;
     text-align: center;

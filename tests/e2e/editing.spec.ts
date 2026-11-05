@@ -164,6 +164,8 @@ test("原文の構文エラー中はフォームへ切り替えず、保存し�
   await expect(page.getByRole("tab", { name: "原文" })).toHaveAttribute("aria-selected", "true");
   await page.getByTestId("save-button").click();
   await expect(page.getByTestId("notice")).toContainText("検証エラー");
+  // 次の操作を選ぶ必要があるエラーは、トーストにせず編集領域の中に残す
+  await expect(page.getByTestId("notice")).not.toHaveCSS("position", "fixed");
   // 共通の Undo で戻すとフォームへ切り替えられる
   await src.press("Control+z");
   await page.getByRole("tab", { name: "フォーム" }).click();
