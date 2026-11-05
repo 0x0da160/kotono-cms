@@ -278,3 +278,19 @@ test("キーボードだけで記事を開き、保存できる（14.1）", asyn
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "本文へ移動" })).toBeFocused();
 });
+
+test("広い画面の作業台レイアウトの上書きが効いている（UI刷新 段階3〜4）", async ({ page }) => {
+  await launch(page);
+  await page.getByRole("button", { name: /最初の記事/ }).click();
+  const body = page.getByTestId("body-editor");
+  // 本文欄は内容に合わせて伸び、手で高さを変えるつまみは出さない（段階3 4章で承認）
+  await expect(body).toHaveCSS("resize", "none");
+  await expect(page.locator("#editor-heading")).toHaveCSS("font-size", "18px");
+  await expect(page.getByRole("toolbar", { name: "記事の操作" })).toHaveCSS("column-gap", "6px");
+  // 961〜1200px では操作列をさらに詰める（反復4）
+  await page.setViewportSize({ width: 1000, height: 800 });
+  await expect(page.getByRole("toolbar", { name: "記事の操作" })).toHaveCSS("column-gap", "4px");
+  // 狭い画面（60rem 以下）は従来どおり
+  await page.setViewportSize({ width: 900, height: 800 });
+  await expect(body).toHaveCSS("resize", "vertical");
+});

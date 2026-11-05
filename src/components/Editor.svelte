@@ -614,58 +614,6 @@
       grid-column: 1 / -1;
     }
   }
-  /*
-   * 作業台レイアウト（広い画面）：見出し・状態・操作列を編集領域の上に固定する（P-03）。
-   * 本文欄は内容に合わせて伸ばし、スクロールを編集領域の1つにまとめる（二重スクロールを避ける）。
-   */
-  @media (min-width: 60.0625rem) {
-    .ed-sticky {
-      position: sticky;
-      top: 0;
-      z-index: 3;
-      background: var(--bg);
-      padding-block: 0.25rem 0.5rem;
-      border-bottom: 1px solid var(--border);
-    }
-    .editor :global(*) {
-      scroll-margin-top: calc(var(--sticky-h, 0px) + 0.5rem);
-    }
-    h2 {
-      font-size: 1.125rem;
-    }
-    .axes {
-      font-size: 0.75rem;
-    }
-    .toolbar {
-      gap: 0.375rem;
-    }
-    .toolbar button,
-    .more > summary {
-      padding: 0.25rem 0.625rem;
-      font-size: 0.875rem;
-    }
-    .toolbar button:not(.primary):not(.danger) {
-      background: transparent;
-    }
-    textarea {
-      field-sizing: content;
-      min-height: max(20rem, calc(100dvh - 16rem));
-      resize: none;
-    }
-  }
-  /* 狭い側の作業台（〜75rem）では操作列の余白を詰めて1行に収める（UI刷新 反復4：OS 標準フォントでの折り返し） */
-  @media (min-width: 60.0625rem) and (max-width: 75rem) {
-    .toolbar {
-      gap: 0.25rem;
-    }
-    .toolbar .group-start {
-      margin-inline-start: 0.25rem;
-    }
-    .toolbar button,
-    .more > summary {
-      padding-inline: 0.5rem;
-    }
-  }
   .repairs {
     display: flex;
     flex-wrap: wrap;
@@ -851,5 +799,60 @@
   .small {
     font-size: 0.8125rem;
     margin: 0;
+  }
+  /*
+   * 以下の広い画面用の上書きは、同じ詳細度の基本ルールより後に置く（前に置くと基本ルールに打ち消される）。
+   */
+  /*
+   * 作業台レイアウト（広い画面）：見出し・状態・操作列を編集領域の上に固定する（P-03）。
+   * 本文欄は内容に合わせて伸ばし、スクロールを編集領域の1つにまとめる（二重スクロールを避ける）。
+   */
+  @media (min-width: 60.0625rem) {
+    .ed-sticky {
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      background: var(--bg);
+      padding-block: 0.25rem 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .editor :global(*) {
+      scroll-margin-top: calc(var(--sticky-h, 0px) + 0.5rem);
+    }
+    h2 {
+      font-size: 1.125rem;
+    }
+    .axes {
+      font-size: 0.75rem;
+    }
+    .toolbar {
+      gap: 0.375rem;
+    }
+    .toolbar button,
+    .more > summary {
+      padding: 0.25rem 0.625rem;
+      font-size: 0.875rem;
+    }
+    .toolbar button:not(.primary):not(.danger) {
+      background: transparent;
+    }
+    textarea {
+      field-sizing: content;
+      min-height: max(20rem, calc(100dvh - 16rem));
+      resize: none;
+    }
+  }
+  /* 狭い側の作業台（〜75rem）では操作列の余白を詰めて1行に収める（UI刷新 反復4：OS 標準フォントでの折り返し） */
+  @media (min-width: 60.0625rem) and (max-width: 75rem) {
+    .toolbar {
+      gap: 0.25rem;
+    }
+    .toolbar .group-start {
+      margin-inline-start: 0.25rem;
+    }
+    .toolbar button,
+    .more > summary {
+      padding-inline: 0.5rem;
+    }
   }
 </style>
