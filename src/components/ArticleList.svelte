@@ -260,6 +260,12 @@
   .row select {
     width: 100%;
   }
+  /* 入力値はラベルの補助の文字設定を受け継がない（UI刷新 段階4：12px を入力値に使わない） */
+  .filters input,
+  .filters select {
+    font-size: 0.875rem;
+    color: var(--text);
+  }
   .hint {
     display: block;
     font-size: 0.75rem;

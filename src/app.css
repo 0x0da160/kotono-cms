@@ -6,6 +6,8 @@
   --text: #1d1d1b;
   --muted: #5c5c57;
   --border: #dcdcd7;
+  /* 入力欄の枠。部品を見分けるための境界なので、背景・面の両方に 3:1 以上（WCAG 1.4.11、UI刷新 段階4） */
+  --field-border: #85857f;
   --ok: #1a7f37;
   --ng: #b42318;
   --focus: #0b57d0;
@@ -29,6 +31,7 @@
     --text: #ececea;
     --muted: #a8a8a2;
     --border: #383835;
+    --field-border: #73736e;
     --ok: #4ac26b;
     --ng: #ff7b72;
     --focus: #8ab4f8;
@@ -86,7 +89,7 @@ textarea {
   font: inherit;
   color: inherit;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--field-border);
   border-radius: 6px;
   padding: 0.375rem 0.5rem;
 }
