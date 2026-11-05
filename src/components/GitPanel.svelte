@@ -53,6 +53,22 @@
     {/if}
   </p>
   {#if git.error}<p class="err small" role="alert">{git.error}</p>{/if}
+  <!-- 操作の結果はパネルの先頭に出す（UI刷新 段階6：変更の一覧が長いと、末尾では初期化の結果が見えない） -->
+  {#if git.notice}
+    <div
+      class="notice"
+      data-kind={git.notice.kind}
+      role={git.notice.kind === "error" ? "alert" : "status"}
+      data-testid="git-notice"
+    >
+      <p>{git.notice.text}</p>
+      {#if git.notice.details?.length}
+        <ul class="small">
+          {#each git.notice.details as d, i (i)}<li>{d}</li>{/each}
+        </ul>
+      {/if}
+    </div>
+  {/if}
 
   {#if git.info?.kind === "none"}
     <p data-testid="git-none">このフォルダは Git で管理されていません。記事の編集はそのまま使えます。</p>
@@ -157,7 +173,7 @@
     {/if}
 
     <h3>履歴</h3>
-    <div class="row">
+    <div class="row actions">
       <button
         type="button"
         onclick={() => git.loadHistory("repo")}
@@ -207,22 +223,6 @@
         </p>{/if}
     {/if}
   {/if}
-
-  {#if git.notice}
-    <div
-      class="notice"
-      data-kind={git.notice.kind}
-      role={git.notice.kind === "error" ? "alert" : "status"}
-      data-testid="git-notice"
-    >
-      <p>{git.notice.text}</p>
-      {#if git.notice.details?.length}
-        <ul class="small">
-          {#each git.notice.details as d, i (i)}<li>{d}</li>{/each}
-        </ul>
-      {/if}
-    </div>
-  {/if}
 </section>
 
 <style>
@@ -271,8 +271,15 @@
     padding-inline-start: 1.25rem;
     font-size: 0.875rem;
   }
+  /* 記事ごとの行は罫線で区切る（方向B、一覧の行と同じ） */
+  .articles {
+    list-style: none;
+    padding-inline-start: 0;
+    border-top: 1px solid var(--border);
+  }
   .articles > li {
-    margin-block: 0.375rem;
+    padding-block: 0.25rem;
+    border-bottom: 1px solid var(--border);
   }
   .history li {
     display: flex;
@@ -316,10 +323,50 @@
   .link {
     background: none;
     border: none;
-    padding: 0;
+    padding: 0.125rem 0;
     color: var(--focus);
     text-decoration: underline;
     cursor: pointer;
     font-size: 0.875rem;
+  }
+  /* 履歴の2つの操作は1つのグループ。両端に離さない（段階4 4章：グループ内は 6px） */
+  .row.actions {
+    justify-content: flex-start;
+    gap: 0.375rem;
+  }
+  /* 「ファイル（n）」も 24px 以上にする（段階4 7章4、WCAG 2.5.8） */
+  summary {
+    padding-block: 0.125rem;
+    cursor: pointer;
+  }
+  /* ID とパスは周りの文字と同じ大きさにする。共通の 0.9em では 14px の中で 12.6px になり、段階4 3章の段階にない */
+  code {
+    font-size: 1em;
+  }
+  /* 状態は色だけで伝えない：通知の先頭に記号を付ける（段階4 5章） */
+  .notice[data-kind="ok"] > p::before {
+    content: "✓ ";
+  }
+  .notice[data-kind="error"] > p::before {
+    content: "⚠ ";
+  }
+  /*
+   * 作業台（広い画面）：Git パネルは一覧の列にあり、画面を占め続けるので詰める（段階4 2章）。
+   * 見出しは一覧の「記事」と同じ 16px。幅に応じた上書きはスタイルの末尾に置く（段階4 7章1）。
+   */
+  @media (min-width: 60.0625rem) {
+    h2 {
+      font-size: 1rem;
+    }
+    h3 {
+      font-size: 0.875rem;
+    }
+    .summary {
+      font-size: 0.875rem;
+    }
+    button:not(.link) {
+      padding: 0.25rem 0.625rem;
+      font-size: 0.875rem;
+    }
   }
 </style>
