@@ -1,9 +1,17 @@
 <script lang="ts">
   import { commitDate, UNOBSERVABLE_NOTE, type GitController } from "../lib/app/git.svelte";
   import type { Workspace } from "../lib/app/workspace.svelte";
+  import { tick } from "svelte";
   import { stagedChange, unstagedChange, type FileState } from "../lib/git/repo";
 
   let { ws, git }: { ws: Workspace; git: GitController } = $props();
+
+  // 操作の結果が画面の外にあれば、見える位置へ移す（段階4 1章：パネルの通知はパネルの先頭。行からコミットした後など）
+  let noticeEl: HTMLElement | undefined = $state();
+  $effect(() => {
+    if (!git.notice) return;
+    void tick().then(() => noticeEl?.scrollIntoView({ block: "nearest" }));
+  });
 
   let showIgnored = $state(false);
   const repo = $derived(git.repo);
@@ -56,6 +64,7 @@
   <!-- 操作の結果はパネルの先頭に出す（UI刷新 段階6：変更の一覧が長いと、末尾では初期化の結果が見えない） -->
   {#if git.notice}
     <div
+      bind:this={noticeEl}
       class="notice"
       data-kind={git.notice.kind}
       role={git.notice.kind === "error" ? "alert" : "status"}

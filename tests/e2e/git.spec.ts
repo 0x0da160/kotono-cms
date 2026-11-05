@@ -125,3 +125,52 @@ test("プレビューで対象言語のコードをハイライトする", async
   const frame = page.frameLocator("iframe");
   await expect(frame.locator("code.hljs .hljs-keyword")).toHaveText("const");
 });
+
+test("キーボードで開いたコミット画面を閉じると、フォーカスは「コミット…」に戻る（14.1）", async ({ page }) => {
+  await page.addInitScript(installFakeFs, SEED);
+  await page.goto(url);
+  await page.getByTestId("choose-folder").click();
+  await page.getByTestId("git-init").click();
+  await page.getByRole("button", { name: "初期化する", exact: true }).click();
+  await expect(page.getByTestId("git-notice")).toContainText("初期化しました");
+  await page.getByRole("button", { name: /最初の記事/ }).click();
+  const commit = page.getByTestId("commit-button");
+  await commit.focus();
+  await page.keyboard.press("Enter");
+  // 初回だけ出る注意を読んで進む
+  await page.getByRole("button", { name: "理解して続ける" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("commit-dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("commit-dialog")).toBeHidden();
+  await expect(commit).toBeFocused();
+  // 2回目（注意なし）も同じ
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("commit-dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(commit).toBeFocused();
+});
+
+test("Git パネルの行からコミットすると、結果の通知が見える位置に出る（UI刷新 段階6）", async ({ page }) => {
+  const many: Record<string, string> = {};
+  for (let i = 0; i < 20; i++) {
+    const id = `k7m2x${String.fromCharCode(97 + i)}q`;
+    many[`content/articles/${id}/index.md`] = article(`記事 ${i}`).replace(/k7m2x9q/g, id);
+  }
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.addInitScript(installFakeFs, many);
+  await page.goto(url);
+  await page.getByTestId("choose-folder").click();
+  await page.getByTestId("git-init").click();
+  await page.getByRole("button", { name: "初期化する", exact: true }).click();
+  await expect(page.getByTestId("git-notice")).toContainText("初期化しました");
+  const last = page.getByTestId("git-commit-article").last();
+  await last.scrollIntoViewIfNeeded();
+  await last.click();
+  await page.getByRole("button", { name: "理解して続ける" }).click();
+  await page.getByTestId("commit-name").fill("山田 太郎");
+  await page.getByTestId("commit-email").fill("taro@example.com");
+  await page.getByTestId("commit-confirm").click();
+  await expect(page.getByTestId("git-notice")).toContainText("コミットしました");
+  await expect(page.getByTestId("git-notice")).toBeInViewport();
+});
