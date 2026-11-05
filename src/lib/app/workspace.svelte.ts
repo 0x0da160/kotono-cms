@@ -313,13 +313,14 @@ export class Workspace {
 
   /** 記憶を消す（ファイルには触れない） */
   async forgetRecent(): Promise<void> {
-    this.recent = null;
-    this.recentHandle = null;
+    // 削除が終わってから表示を消す（消えた表示を見て再読み込みしても、記憶が残らないように）
     try {
       await this.recentStore?.clear();
     } catch {
       // 記憶の削除に失敗しても作業は続けられる
     }
+    this.recent = null;
+    this.recentHandle = null;
   }
 
   private async rememberFolder(handle: DirHandleLike): Promise<void> {
