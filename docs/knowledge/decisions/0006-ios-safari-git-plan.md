@@ -1,8 +1,8 @@
 ---
 type: Architecture Decision
 title: "ADR-0006（案）iOS Safari で記事と Git を扱うための計画"
-description: "iOS Safari（iPhone・iPad）で記事の編集とローカル Git を使えるようにする計画。File System Access API への依存の洗い出し、ブラウザ内ストレージ（OPFS または LightningFS）への置き換え、取り込みと書き出し、消去の危険とバックアップ、仕様の変更箇所、Git 層の選択、段階ごとの規模と未決事項。実装はしない。"
-tags: ["iOS", "Safari", "OPFS", "LightningFS", "IndexedDB", "Git", "対応環境", "計画", "未決定", "要検証"]
+description: "iOS Safari（iPhone・iPad）で記事の編集とローカル Git を使えるようにする計画。File System Access API への依存の洗い出し、ブラウザ内ストレージ（OPFS または LightningFS）への置き換え、取り込みと書き出し、消去の危険とバックアップ、仕様の変更箇所、Git 層の選択、暗号化とパスキー、GitHub の REST API による push・pull、段階ごとの規模と未決事項。実装はしない。"
+tags: ["iOS", "Safari", "OPFS", "LightningFS", "IndexedDB", "Git", "対応環境", "暗号化", "パスキー", "GitHub", "計画", "未決定", "要検証"]
 status: draft
 generated: { by: claude-code/2.1.318, at: 2026-11-05T17:30:00Z }
 sources:
@@ -36,17 +36,44 @@ sources:
     title: "WebKit：Full Third-Party Cookie Blocking and More"
     author: team:webkit
     last_modified: 2020-03-24T00:00:00Z
+  - id: request-2026-11-05-ios-decisions
+    resource: "0x0da160 の回答（2026-11-05）：iPhone も含める。配信は暫定で github.io、将来は専用ドメイン。可能ならデータを暗号化し、パスキーに対応する。push はしたいが CORS のためできないと認識している"
+    title: "iOS 対応の未決事項への回答"
+    author: human:0x0da160
+    last_modified: 2026-11-05T23:42:02Z
+  - id: github-cors
+    resource: "https://docs.github.com/en/rest/using-the-rest-api/using-cors-and-jsonp-to-make-cross-origin-requests（REST API は任意のオリジンからの CORS に対応し、応答例に Access-Control-Allow-Origin: * がある）"
+    title: "GitHub Docs：Using CORS and JSONP to make cross-origin requests"
+    author: team:github
+    last_modified: 2026-11-05T00:00:00Z
+  - id: github-smart-http
+    resource: "Origin を付けた https://github.com/0x0da160/kotono-cms.git/info/refs?service=git-upload-pack への GET（2026-11-05）。200 OK だが Access-Control-Allow-Origin がない"
+    title: "github.com の Git の HTTP 通信が CORS に対応しないことの確認"
+    author: claude-code/2.1.318
+    last_modified: 2026-11-05T23:50:00Z
+  - id: webauthn-prf
+    resource: "https://www.corbado.com/blog/passkeys-prf-webauthn（Safari 18・iOS 18 で iCloud キーチェーンのパスキーが PRF に対応。iOS 18.0〜18.3 の不具合は 18.4 で修正とする第三者の調査）"
+    title: "Passkeys & WebAuthn PRF for End-to-End Encryption"
+    author: team:corbado
+    last_modified: 2026-11-05T00:00:00Z
 ---
 # 状態
 
-**計画（未決定）。** 実装はしていない。本文の「未決事項」を 0x0da160 が決めてから、段階 0 の実機検証に進む。依頼は「LightningFS と isomorphic-git で iOS Safari でも Git を使えるか」[^request-2026-11-05-ios]。
+**計画（一部決定）。** 実装はしていない。依頼は「LightningFS と isomorphic-git で iOS Safari でも Git を使えるか」[^request-2026-11-05-ios]。0x0da160 の回答[^request-2026-11-05-ios-decisions]で次が決まった（第6.1節）。
+
+- 対象は iPad と iPhone。
+- 配信は暫定で `github.io`、将来は専用ドメインへ移る。できるならデータを暗号化し、パスキーに対応する（第7章）。
+- iOS から GitHub へ push したい（第8章：CORS を避ける方法がある）。
+
+残りの未決事項（第6.2節）が決まったら、段階 0 の実機検証に進む。
 
 # 結論
 
 - **成立する見込みはある。ただし「フォルダを開いて編集する」CMS から「ブラウザの中に作業場所を持ち、手元のフォルダとは取り込み・書き出しでやり取りする」CMS に変わる。** iOS Safari には `showDirectoryPicker` がなく、実フォルダ（ファイル App・iCloud Drive）を読み書きし続ける手段がないため。
 - **保存先は LightningFS より OPFS（Origin Private File System）を第一候補にする。** CMS のファイル操作はすべて `DirHandleLike`（`src/lib/fs/types.ts`）という File System Access API の形を通っており、OPFS の `navigator.storage.getDirectory()` が返すハンドルはこの形をそのまま満たす。LightningFS は Node の `fs` の形なので、包む層を新たに書く必要があり、後述の永続化の遅れもある。LightningFS は、OPFS の書き込み（`createWritable`）が対象の iOS で使えないと分かった場合の代替とする。
-- **Git は自前の Git 層（`src/lib/git/`）をそのまま使う。** isomorphic-git に切り替える理由のうち、iOS で消えるのは「Chromium が `.git/config`・`.git/hooks` への書き込みを禁止する」ことだけで、pack 全体の読み込みと `Buffer` の同梱は残る。デスクトップと iOS で別の Git 実装を持つと、相互運用試験が二重になる。例外は、iOS から GitHub へ push したい場合（未決事項 4）。
-- **最大の危険はデータの消去。** OPFS も IndexedDB も Safari の「スクリプトが書き込めるストレージ」で、ブラウザでの利用では 7 日間操作がないと消されうる[^webkit-itp]。ホーム画面に追加した Web アプリとして使うこと、`navigator.storage.persist()` を求めること、書き出し（バックアップ）を習慣にさせる表示を組み合わせる。それでも「端末の中だけにある記事」は保証できないことを仕様に書く。
+- **Git は自前の Git 層（`src/lib/git/`）をそのまま使う。** isomorphic-git に切り替える理由のうち、iOS で消えるのは「Chromium が `.git/config`・`.git/hooks` への書き込みを禁止する」ことだけで、pack 全体の読み込みと `Buffer` の同梱は残る。デスクトップと iOS で別の Git 実装を持つと、相互運用試験が二重になる。GitHub への push も isomorphic-git なしで行える。GitHub の Git の通信（`github.com/<repo>.git`）は CORS に対応しないが、REST API（`api.github.com`）は対応しているので、REST API の Git Data（blob・tree・commit・ref）で送る（第8章）。
+- **最大の危険はデータの消去。** OPFS も IndexedDB も Safari の「スクリプトが書き込めるストレージ」で、ブラウザでの利用では 7 日間操作がないと消されうる[^webkit-itp]。ホーム画面に追加した Web アプリとして使うこと、`navigator.storage.persist()` を求めること、書き出し（バックアップ）を習慣にさせる表示を組み合わせる。それでも「端末の中だけにある記事」は保証できないことを仕様に書く。GitHub への push ができれば、それが主なバックアップになる。
+- **暗号化とパスキーは成り立つ見込み。** 作業場所の中身をアプリが鍵で暗号化して保存し、鍵はパスキーの PRF 拡張で開ける。パスキーを失ったときのために回復コードを必ず作る（第7章）。
 
 # 1. 何が File System Access API と Chrome・Edge に依存しているか
 
@@ -103,7 +130,7 @@ IndexedDB
 ```
 
 - 作業場所の中身は、デスクトップで開くフォルダと同じ構成にする。そうすれば記事・画像・Git の処理は変えずに済み、書き出した zip をデスクトップでそのまま開ける。
-- 作業場所は複数持てるようにする（サイトごと）。最初は 1 つでもよい（未決事項 6）。
+- 作業場所は複数持てるようにする（サイトごと）。最初は 1 つでもよい（未決事項 9）。
 
 ## 2.2 取り込み（手元 → iOS）
 
@@ -112,9 +139,9 @@ IndexedDB
 | zip の取り込み | ファイル App・iCloud Drive の zip を `<input type="file">` で選び、`.git/` を含めて作業場所へ展開する | **推奨。** デスクトップの CMS に「zip で書き出す」を足せば、往復が同じ形式になる |
 | 空の作業場所 | 新規作成し、必要なら Git を初期化する | 必須 |
 | フォルダの選択 | iOS の Safari は `webkitdirectory` によるフォルダ選択に対応していない見込み | 採用しない（段階 0 で確認） |
-| clone | GitHub などから取得 | 仕様 20.1 で対象外。採るなら isomorphic-git と CORS の問題が出る（未決事項 4） |
+| GitHub から取得 | REST API で既存のリポジトリを取り込む（第8章の pull を空の作業場所に行う） | push・pull と同じ段階で入れる |
 
-展開は未信頼入力の処理として扱う（第32章・第34章）。パスの検査（`checkGitPath` と同じ規則に加え、zip 特有の絶対パス・`..`・重複・大文字小文字の衝突）、展開後の合計サイズ・件数・1 件のサイズの上限、圧縮率の上限（zip 爆弾）、既存の作業場所への上書きをしない（新しい作業場所へ展開する）を必須とする。zip の読み書きは `DecompressionStream("deflate-raw")` を使った自前の実装か、小さな依存（fflate など）にする（未決事項 7）。
+展開は未信頼入力の処理として扱う（第32章・第34章）。パスの検査（`checkGitPath` と同じ規則に加え、zip 特有の絶対パス・`..`・重複・大文字小文字の衝突）、展開後の合計サイズ・件数・1 件のサイズの上限、圧縮率の上限（zip 爆弾）、既存の作業場所への上書きをしない（新しい作業場所へ展開する）を必須とする。zip の読み書きは `DecompressionStream("deflate-raw")` を使った自前の実装か、小さな依存（fflate など）にする（未決事項 10）。
 
 ## 2.3 書き出し（iOS → 手元）
 
@@ -136,7 +163,7 @@ IndexedDB
 1. **書き出しを唯一の確実なバックアップとする。** 最後の書き出し日時を作業場所ごとに記録し、書き出し後にコミットや保存があれば「未書き出しの変更あり（○日前から）」を画面上部に出し続ける。
 2. 一定日数（例 3 日）書き出していなければ、起動時に書き出しを促す。閉じても次回また出る。
 3. 復旧ドラフトは同じストレージにあるため、消去への備えにならないと説明を改める。
-4. push による自動バックアップは仕様の対象外。必要なら未決事項 4 で決める。
+4. GitHub へ push できれば、それが端末の外の主なバックアップになる（第8章）。最後の push 日時も書き出しと同じように表示する。
 
 # 3. 仕様と ADR の変更箇所
 
@@ -167,40 +194,131 @@ IndexedDB
 4. **LightningFS の `rename` はメモリ上で原子的だが、自前の Git 層は rename を使っていない。** ADR-0004 の書き込み順（object → index → tree・commit → ref と読み直し）は rename なしで設計してあるので、LightningFS の rename は利点にならない。
 5. **二つの実装を持つ費用。** iOS だけ isomorphic-git にすると、ネイティブ Git との相互運用試験（`tests/unit/git.test.ts`）・対応構成の判定（`inspect`）・上限（第34章）を二重に持つことになる。
 
-**isomorphic-git を選ぶ価値があるのは、iOS から GitHub などへ push・pull したい場合だけ。** その場合も、ローカルの読み書きは自前の層のまま、送受信だけを isomorphic-git の HTTP 実装に任せる形を先に検討する（CORS のため、GitHub へはプロキシが要る。仕様 20.1 は CORS プロキシを対象外にしている）。
+**push・pull のためにも isomorphic-git は要らない。** isomorphic-git の送受信は Git の HTTP 通信を使うため、ブラウザからは CORS プロキシが要る（github.com はこの通信に `Access-Control-Allow-Origin` を返さないことを確認した[^github-smart-http]）。GitHub に限れば、CORS に対応した REST API で同じことができる（第8章）。
 
 **LightningFS を使うのは、OPFS の `createWritable` が対象の iOS で使えない場合。** Safari 26 で File System の WritableStream に対応したとされる[^webkit-writable]が、iOS 26 未満も対象にするなら使えない。その場合は、LightningFS の上に `DirHandleLike` を実装する包み層（推定 300〜500 行）を書き、書き込みごとに `flush()` を呼ぶ。
 
 # 5. 規模の見積もり
 
-1 人で作業した場合の目安。段階 0 の結果で後の段階が増減する。
+1 人で作業した場合の目安。iPhone を含め、暗号化と GitHub への push・pull を入れた場合。段階 0 の結果で後の段階が増減する。
 
 | 段階 | 内容 | 目安 |
 |---|---|---|
-| 0. 実機検証 | iPhone・iPad の Safari（ブラウザとホーム画面）で：OPFS の `createWritable`・`removeEntry`・`values`・`isSameEntry`・`resolve`・`getFile().lastModified`、`.git/config` の書き込み、`CompressionStream`・SHA-1、`persist()` の結果、容量、7 日後の消去、zip の取り込みと共有シートでの書き出し、`OffscreenCanvas` の WebP、`contenteditable` と日本語入力。小さな検証用ページで記録する | 2〜3 日 |
+| 0. 実機検証 | iPhone・iPad の Safari（ブラウザとホーム画面）で：OPFS の `createWritable`・`removeEntry`・`values`・`isSameEntry`・`resolve`・`getFile().lastModified`、`.git/config` の書き込み、`CompressionStream`・SHA-1、`persist()` の結果、容量、7 日後の消去、zip の取り込みと共有シートでの書き出し、`OffscreenCanvas` の WebP、`contenteditable` と日本語入力。加えて、パスキーの PRF（作成・取得・別の端末で同期したパスキーで同じ値になるか）と、REST API での commit が手元と同じ ID になるか。小さな検証用ページで記録する | 3〜4 日 |
 | 1. 保存先の切り替え | 起動時の能力検査を 2 系統に分ける。作業場所の作成・選択・削除の画面。`openFolder`・`pickBackupRoot`・前回の記憶を OPFS に対応させる。記事・画像・Git の処理は変えない | 3〜5 日 |
-| 2. 取り込みと書き出し | zip の読み書き（上限・パス検査を含む）、共有シート、最後の書き出し日時と警告、`persist()` と使用量の表示。デスクトップ側にも zip の書き出し・取り込みを足す | 5〜7 日 |
-| 3. 配信 | https 配信用のビルド、マニフェスト、Service Worker（オフライン起動と更新の扱い）、CSP の見直し、専用オリジンの用意 | 3〜4 日 |
-| 4. 画面 | iPhone の幅での一覧と編集の切り替え、タッチ操作、ソフトウェアキーボードで隠れる部分、見たまま編集の調整。現在の画面は 60rem（960px）未満で一覧と編集を切り替える作りがあり、iPad の横向きは今の画面に近い | iPad のみ 3〜5 日／iPhone も 7〜12 日 |
-| 5. 試験 | Playwright の WebKit での E2E（iOS の Safari そのものではない）、OPFS 用アダプターの意味論表、OPFS に書いた `.git` をネイティブ Git で検証する試験、実機でのゲートの記録 | 4〜6 日 |
-| 6. 仕様・ADR | 第3章の変更 | 1〜2 日 |
-| 合計 | | iPad のみ：約 4〜5 週間／iPhone も：約 5〜7 週間 |
+| 2. 暗号化とパスキー | 暗号化する `DirHandleLike`（第7章）、鍵の作成・包み直し、パスキーの登録と解錠、回復コード、ロックと自動ロック、復旧ドラフトの暗号化 | 7〜10 日 |
+| 3. 取り込みと書き出し | zip の読み書き（上限・パス検査を含む）、共有シート、暗号化した書き出し、最後のバックアップ日時と警告、`persist()` と使用量の表示。デスクトップ側にも zip の書き出し・取り込みを足す | 5〜7 日 |
+| 4. GitHub との同期 | REST API での push（fast-forward のみ）・pull（fast-forward のみ）、トークンの保管、送信前の照合、分岐の検出と案内（第8章） | 8〜12 日 |
+| 5. 配信 | `github.io` 用のビルド、マニフェスト、Service Worker（オフライン起動と更新の扱い）、CSP の見直し、専用オリジンへの移行手順 | 3〜4 日 |
+| 6. 画面 | iPhone の幅での一覧と編集の切り替え、タッチ操作、ソフトウェアキーボードで隠れる部分、見たまま編集の調整。現在の画面は 60rem（960px）未満で一覧と編集を切り替える作りがあり、iPad の横向きは今の画面に近い | 7〜12 日 |
+| 7. 試験 | Playwright の WebKit での E2E（iOS の Safari そのものではない）、OPFS 用アダプターの意味論表、OPFS に書いた `.git` をネイティブ Git で検証する試験、暗号化の往復と改ざん検出、REST API の模擬サーバーでの push・pull、実機でのゲートの記録 | 6〜8 日 |
+| 8. 仕様・ADR | 第3章の変更と、暗号化・同期の章の追加 | 2〜3 日 |
+| 合計 | | 約 9〜13 週間 |
 
-LightningFS を使うことになった場合は段階 1 に 3〜4 日を足す。push を加える場合は別に 2〜3 週間（認証・CORS・プロキシの用意を含む）。
+段階 1〜3 と 5〜6 だけ（暗号化と同期なし）なら約 5〜7 週間。段階 2 と 4 は独立しているので、どちらを先にしてもよい。LightningFS を使うことになった場合は段階 1 に 3〜4 日を足す。
 
-# 6. 未決事項（0x0da160 が決める）
+# 6. 決定事項と未決事項
+
+## 6.1 決定（2026-11-05、0x0da160）
+
+| 項目 | 決定 | 計画への影響 |
+|---|---|---|
+| 対象の端末 | iPad と iPhone | 段階 6（画面）を iPhone の幅まで行う |
+| 配信元 | 暫定で `github.io`。将来は専用ドメインへ移る | 第7.1節のオリジンの注意と移行手順。暗号化を入れる |
+| データの暗号化 | できるならする。パスキーに対応する | 第7章 |
+| GitHub への push | したい | 第8章。CORS は REST API で避けられる |
+
+## 6.2 未決事項（0x0da160 が決める）
 
 1. **対応環境を正式に広げるか。** 仕様 3.1 の改訂（3.2）として iOS を対応環境に入れるか、ADR に差を記録した「試験的な対応」に留めるか。推奨：まず試験的な対応とし、段階 0 の結果で改訂を判断する。
-2. **対象の端末と版。** iPad だけか、iPhone も含めるか。対象の iOS の最低版（OPFS の書き込みに Safari 26 以降が要る見込み。それより古い版も対象なら LightningFS が要る）。推奨：iPad、iOS 26 以降。
-3. **配信元。** iOS は `file://` で開けないため、https の配信元が要る。GitHub Pages を使う場合、`<user>.github.io` のオリジンは同じアカウントの他のリポジトリのページと保存領域・権限を共有するので、専用の独自ドメイン（またはサブドメイン）にすべき。どこで配信するか。
-4. **iOS から GitHub へ push するか。** しないなら Git はローカルの記録だけで、端末の外へ出す手段は zip の書き出しになる。するなら isomorphic-git の送受信、トークンの保管、CORS プロキシが要り、仕様 20.1 の対象外を変えることになる。推奨：最初はしない。
-5. **デスクトップとの往復の形。** 推奨は「zip（`.git` を含む）を書き出し、デスクトップではネイティブ Git で取り込む」。CMS に Git での取り込み（fetch とマージ）を持たせないことでよいか。
-6. **作業場所の数。** 1 つ（単一サイト）か、複数か。推奨：最初から複数（構造は同じで、選ぶ画面が 1 つ増えるだけ）。
-7. **zip の実装。** 自前（`DecompressionStream("deflate-raw")` を使う）か、小さな依存（fflate など）か。推奨：依存を固定版で入れ、上限とパス検査は CMS 側で行う。
-8. **LightningFS をどう位置づけるか。** 本 ADR は OPFS を第一候補にし、LightningFS は代替としている。依頼の文言どおり LightningFS を使う理由（たとえば既存の isomorphic-git の例に合わせたい）があれば知らせてほしい。
+2. **対象の iOS の最低版。** OPFS の書き込みに Safari 26 以降が要る見込み。パスキーの PRF は iOS 18.4 以降で安定とされる[^webauthn-prf]。推奨：iOS 26 以降。
+3. **`github.io` のどこに置くか。** `0x0da160.github.io` の下に置くと、同じアカウントの他のページと保存領域を共有する（第7.1節）。推奨：Kotono 専用の GitHub Organization を作り、その `<org>.github.io` に置く（無料で、専用のオリジンになる）。
+4. **何を暗号化するか。** 推奨：ファイルの中身（記事・画像・`.git`）と復旧ドラフトと書き出しの zip。ファイル名・フォルダ名（slug を含む）は最初は暗号化しない（第7.3節）。名前も隠す必要があるか。
+5. **パスキーが使えないときの解錠方法。** 推奨：回復コード（必須）に加え、パスフレーズを任意で設定できるようにする。
+6. **GitHub の認証。** 推奨：対象リポジトリ 1 つだけに Contents の読み書きを許した fine-grained personal access token（有効期限つき）を、暗号化して端末に保存する（第8.3節）。
+7. **デスクトップとの往復。** push・pull ができれば GitHub 経由が主になり、zip は予備（バックアップ・オフライン）になる。デスクトップ版の CMS にも同じ push・pull を入れるか。推奨：入れる（REST API は `file://` からも同じく使える見込みで、段階 0 で確かめる）。入れない場合は、デスクトップではネイティブ Git で push・pull する。
+8. **分岐したときの扱い。** iPhone とデスクトップの両方でコミットして GitHub と食い違った場合、CMS はマージしない（仕様 20.1）。推奨：push・pull を止め、分岐を表示し、デスクトップのネイティブ Git で合流してもらう。
+9. **作業場所の数。** 推奨：最初から複数（サイトごと）。
+10. **zip の実装。** 推奨：小さな依存（fflate など）を固定版で入れ、上限とパス検査は CMS 側で行う。
+11. **LightningFS の位置づけ。** 本 ADR は OPFS を第一候補にし、LightningFS は代替としている。
+
+# 7. 暗号化とパスキー
+
+## 7.1 `github.io` に置くときの注意
+
+- オリジンは `https://<アカウント名>.github.io` 単位。同じアカウントの他のリポジトリのページ（`/<他のリポジトリ>/`）は同じオリジンなので、OPFS・IndexedDB の中身を読み書き・削除できる。特に `<アカウント名>.github.io` リポジトリ（ルートのページ）があると、ルートを範囲とする Service Worker を登録でき、CMS のページに割り込める。
+- 暗号化は「読まれる」「書き換えられる」ことへの対策になるが、「消される」ことと「CMS のページ自体を差し替えられる」ことは防げない。そのため、**専用の Organization を作り、その `<org>.github.io` に CMS だけを置く**ことを推奨する（未決事項 3）。
+- 専用ドメインへ移るとオリジンが変わり、保存領域もパスキーも引き継がれない。移行は「旧オリジンで書き出し（暗号化した zip）または push → 新オリジンで取り込みまたは pull → 新オリジンでパスキーを登録し直す」の手順にする。旧オリジンのページは、移行先を案内する版に差し替えてから消す。WebAuthn の Related Origin Requests（`/.well-known/webauthn`）で旧 RP ID のパスキーを使い続けられる可能性があるが、`github.io` では `/.well-known/` の配置に制約があり、Safari の対応も未確認のため、当てにしない。
+
+## 7.2 鍵の構成
+
+| 鍵 | 作り方 | 保存 |
+|---|---|---|
+| データ鍵（DK） | 作業場所ごとに `crypto.subtle.generateKey`（AES-GCM 256 bit、取り出し不可にはしない：包み直しに使う） | 平文では保存しない。下の鍵で包んで（AES-KW または AES-GCM）`meta.json` に置く |
+| パスキー由来の鍵 | WebAuthn の PRF 拡張（`prf.eval.first` に作業場所ごとの salt）で得た 32 バイトを HKDF で AES 鍵にする。RP ID は配信元のホスト名 | パスキーは iCloud キーチェーンが持つ。CMS は credential ID・salt・包んだ DK だけを持つ |
+| 回復コード由来の鍵 | 作成時に 128 bit 以上の乱数を表示し、紙・パスワード管理アプリに控えてもらう。PBKDF2-SHA-256（反復回数は段階 0 で測定して決める）で AES 鍵にする | 回復コードは保存しない |
+| パスフレーズ由来の鍵（任意） | 回復コードと同じ方式 | 同上 |
+
+- 起動時はロック状態。「パスキーで開く」→ PRF の値で DK を開き、メモリにだけ持つ。一定時間操作がない・タブが隠れたら DK を捨ててロックする（時間は設定）。
+- パスキーを消した・別の Apple アカウントに移った等で PRF が使えなくなっても、回復コードで開ける。**回復コードも失うと、データは誰も開けない**ことを作成時に説明し、確認を求める。PRF だけに頼る設計は危険とされているため、回復コードを必須にする。
+- パスキーは iCloud キーチェーンで同期されるので、同じ Apple アカウントの iPhone と iPad で同じパスキーが使える見込み（PRF の値が端末間で一致するかは段階 0 で確認）。
+- ここでのパスキーは「サーバーへのログイン」ではなく「端末内の鍵を開ける手段」。サーバーは関与しない。
+
+## 7.3 何をどう暗号化するか
+
+- **暗号化する `DirHandleLike` を 1 層挟む。** OPFS のハンドルを包み、`getFile()` で読んだ中身を復号し、`createWritable()` の `close()` で暗号化して書く。上の層（記事・画像・Git）は平文の `DirHandleLike` として扱うので、変更はこの層に閉じる。
+- 形式：ファイルごとに `マジック・形式版・12 バイトの IV・暗号文・認証タグ`。追加認証データ（AAD）に作業場所の ID とファイルのパスを入れ、別のパスへの差し替えを検出する。IV はファイルの書き込みごとに乱数で作る。
+- 改ざん・破損で復号できないファイルは「読めない」として扱い、上書きしない（第13章・第31章の「失敗時に元を消さない」と同じ）。
+- `size` は平文の大きさを返す必要がある（Git の index の比較に使う）。形式の先頭に平文の長さを置くか、暗号文の長さから計算する。`lastModified` は OPFS の値をそのまま使う。
+- 大きな画像は一度に暗号化すると一時的にメモリを倍使う。第34章の上限（1 ファイル 64 MiB など）の範囲で一括とし、分割はしない（段階 0 で iPhone のメモリを測る）。
+- **ファイル名は最初は平文。** フォルダ名に slug が入るため、記事の題名が推測できる。名前も隠すには、名前を乱数にして対応表を暗号化して持つ必要があり、`resolve`・`isSameEntry`・Git のパスとの対応がすべてこの層を通ることになる。規模が大きいため、必要なら後の段階にする（未決事項 4）。
+- 復旧ドラフト（IndexedDB）も同じ DK で暗号化する。設定（作業場所の名前・最後の書き出し日時）は平文でよい。
+- 書き出しの zip は、中身を平文で zip にしたものを DK とは別の鍵（書き出しごとの鍵を回復コードまたはパスフレーズで包む）で暗号化し、`.kotono` のような拡張子にする。デスクトップで開くにはデスクトップ版の CMS での取り込みが要る。平文の zip を書き出す選択肢も残す（確認を挟む）。
+- GitHub へ送る内容は平文（GitHub のリポジトリの公開・非公開に従う）。暗号化は端末内とブラウザの保存領域に対するもの。
+
+# 8. GitHub への push・pull
+
+## 8.1 CORS について
+
+認識のとおり、Git の通常の通信（`https://github.com/<owner>/<repo>.git` の `info/refs`・`git-upload-pack`・`git-receive-pack`）は CORS に対応していない。`Origin` を付けて `info/refs` を取得すると 200 が返るが `Access-Control-Allow-Origin` がなく、ブラウザは応答を読めない[^github-smart-http]。isomorphic-git が CORS プロキシを前提にしているのはこのため。
+
+一方、**GitHub の REST API（`api.github.com`）は任意のオリジンからの CORS に対応している**[^github-cors]。REST API の Git Data（blob・tree・commit・ref）を使えば、プロキシなしで push・pull と同じことができる。GitHub 以外（GitLab 等）は対象外とする。
+
+## 8.2 push（fast-forward のみ）
+
+1. `GET /repos/{owner}/{repo}/git/ref/heads/{branch}` でリモートの先頭を得る。手元の履歴にそのコミットがなければ「分岐」として止める（未決事項 8）。
+2. リモートの先頭から手元の先頭までのコミットを古い順に並べ、各コミットについて、リモートにない blob を `POST /git/blobs`（base64）、tree を `POST /git/trees`、commit を `POST /git/commits`（作者・コミッター・日時・メッセージ・親を手元と同じにする）で作る。
+3. **API が返したコミット ID が手元のコミット ID と一致することを確かめる。** 中身が同じなら Git の object ID は同じになるはず。一致しなければ（GitHub が署名を付けた等）ref を更新せずに止める。作られた object はリモートに残るが、ref から辿れないので害はない。
+4. `PATCH /git/refs/heads/{branch}`（`force: false`）で先頭を進める。他から push されていれば GitHub が拒否するので、上書きは起きない。
+5. 結果を読み直して確かめる。
+
+## 8.3 pull（fast-forward のみ）
+
+1. リモートの先頭が手元の先頭の子孫かを、`GET /git/commits/{sha}` で親を辿って確かめる（上限つき：第34章）。手元に未 push のコミットがあれば止める。
+2. 新しいコミット・tree・blob を REST API で取得し、ID を自前で計算し直して一致を確かめてから、自前の Git 層で loose object として書く。
+3. 作業ツリー（記事・画像）を新しい tree に合わせて書き換える。**これは CMS がこれまでしなかった checkout に当たる**（ADR-0004：作業ツリーへは書かない）。未保存・未コミットの記事があれば止め、変わる記事の一覧を確認してから書く。仕様 20.1 の「pull は対象外」と ADR-0004 の書き込み範囲を変える。
+4. index とブランチの ref を更新する。
+
+## 8.4 認証とトークン
+
+- GitHub のブラウザ向け OAuth（Device Flow を含む）のトークン取得の窓口は CORS に対応していないため、サーバーなしでは使えない。**fine-grained personal access token** を利用者に作ってもらい、貼り付けてもらう。権限は対象リポジトリ 1 つの Contents の読み書きだけ、有効期限つきを案内する。
+- トークンは DK で暗号化して保存し、ロック中は使えない。画面にも履歴にも出さない。
+- 送信先は `api.github.com` だけに固定し、CSP の `connect-src` もそれだけにする（第16章の通信禁止の例外として明記する）。
+- 回数制限（認証済みで 1 時間 5,000 回）に対し、1 回の push は「変更したファイル数＋tree 数＋コミット数＋2」程度。大量の画像を一度に push する場合は制限に近づくことがあるので、残り回数を見て分ける。
+
+## 8.5 仕様への影響
+
+- 第20.1節の対象外（push・pull・GitHub API 同期）から、GitHub の REST API による fast-forward の push・pull を外す。CORS プロキシは引き続き対象外。
+- 第16章：`api.github.com` への通信を、利用者が操作したときだけ許す例外として加える。
+- 第21章・第31章：pull による作業ツリーの書き換えの確定点と中断時の扱い（どの記事まで書いたかを記録し、途中なら再実行で揃える）。
+- 第35章：GitHub に送ったものが端末の外のバックアップになること。
 
 [^request-2026-11-05-ios]: iOS Safari での Git の依頼
 [^isomorphic-git]: isomorphic-git 1.44.11 のソース
 [^lightning-fs]: @isomorphic-git/lightning-fs 4.10.5 のソース
 [^webkit-writable]: WebKit Bug 231706：File System 標準の実装
 [^webkit-itp]: WebKit：Full Third-Party Cookie Blocking and More
+[^request-2026-11-05-ios-decisions]: iOS 対応の未決事項への回答
+[^github-cors]: GitHub Docs：Using CORS and JSONP to make cross-origin requests
+[^github-smart-http]: github.com の Git の HTTP 通信が CORS に対応しないことの確認
+[^webauthn-prf]: Passkeys & WebAuthn PRF for End-to-End Encryption
