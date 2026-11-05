@@ -50,12 +50,40 @@
     return () => ro.disconnect();
   });
 
-  // エラー・警告の通知、外部変更パネルが出たら、見える位置へ移す（本文の途中を見ていても気づけるように）
+  // エラーの通知と外部変更パネルが出たら、見える位置へ移す（本文の途中を見ていても気づけるように）
   $effect(() => {
     const kind = session.notice?.kind;
     const conflict = session.conflict;
-    if (kind !== "error" && kind !== "warn" && !conflict) return;
+    if (kind !== "error" && !conflict) return;
     void tick().then(() => (conflictEl ?? noticeEl)?.scrollIntoView({ block: "nearest" }));
+  });
+
+  /*
+   * 成功・案内・警告は右上のトーストに出す（UI刷新 反復4、0x0da160 の決定）。本文の位置をずらさない。
+   * 次の操作を選ぶ必要があるエラーは、従来どおり編集領域の中に残す。
+   * 一定時間で隠すが、ポインターやフォーカスがある間は隠さない。通知の内容（session.notice）は変えない。
+   */
+  const TOAST_MS = { ok: 5000, info: 5000, warn: 10000 } as const;
+  const toast = $derived(session.notice && session.notice.kind !== "error" ? session.notice : null);
+  let toastHidden = $state(false);
+  let toastHold = $state(false);
+  /** 閉じたらフォーカスを本文へ戻す（閉じるボタンが消えてフォーカスを失わないように） */
+  function closeToast() {
+    toastHidden = true;
+    toastHold = false;
+    editorEl?.querySelector<HTMLElement>('[data-testid="body-editor"]')?.focus();
+  }
+  // 新しい通知が来たら表示し直す
+  $effect.pre(() => {
+    void toast;
+    toastHidden = false;
+    toastHold = false;
+  });
+  $effect(() => {
+    const t = toast;
+    if (!t || toastHold) return;
+    const timer = setTimeout(() => (toastHidden = true), TOAST_MS[t.kind as keyof typeof TOAST_MS] ?? 5000);
+    return () => clearTimeout(timer);
   });
 
   let moreOpen = $state(false);
@@ -315,7 +343,26 @@
     <p class="readonly" role="status" data-testid="locked">{session.locked}</p>
   {/if}
 
-  {#if session.notice}
+  {#if toast && !toastHidden}
+    <div
+      class="toast notice {toast.kind}"
+      role="status"
+      data-testid="notice"
+      onpointerenter={() => (toastHold = true)}
+      onpointerleave={() => (toastHold = false)}
+      onfocusin={() => (toastHold = true)}
+      onfocusout={() => (toastHold = false)}
+    >
+      <p>{toast.text}</p>
+      {#if toast.details?.length}
+        <ul>
+          {#each toast.details as d, i (i)}<li>{d}</li>{/each}
+        </ul>
+      {/if}
+      <button type="button" class="toast-close" aria-label="通知を閉じる" onclick={closeToast}>×</button>
+    </div>
+  {/if}
+  {#if session.notice && session.notice.kind === "error"}
     <div
       bind:this={noticeEl}
       class="notice {session.notice.kind}"
@@ -606,6 +653,19 @@
       resize: none;
     }
   }
+  /* 狭い側の作業台（〜75rem）では操作列の余白を詰めて1行に収める（UI刷新 反復4：OS 標準フォントでの折り返し） */
+  @media (min-width: 60.0625rem) and (max-width: 75rem) {
+    .toolbar {
+      gap: 0.25rem;
+    }
+    .toolbar .group-start {
+      margin-inline-start: 0.25rem;
+    }
+    .toolbar button,
+    .more > summary {
+      padding-inline: 0.5rem;
+    }
+  }
   .repairs {
     display: flex;
     flex-wrap: wrap;
@@ -681,6 +741,39 @@
   }
   .notice.ok p::before {
     content: "✓ ";
+  }
+  .notice.warn {
+    border-color: var(--ng);
+  }
+  .notice.warn p::before {
+    content: "! ";
+  }
+  .toast {
+    position: fixed;
+    top: 1rem;
+    inset-inline-end: 1rem;
+    z-index: 20;
+    max-width: min(26rem, calc(100vw - 2rem));
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 0 0.5rem;
+    padding-inline-end: 0.375rem;
+    box-shadow: 0 4px 16px rgb(0 0 0 / 0.16);
+  }
+  .toast > :not(.toast-close) {
+    grid-column: 1;
+  }
+  .toast-close {
+    grid-column: 2;
+    grid-row: 1;
+    border: none;
+    background: transparent;
+    padding: 0 0.375rem;
+    min-width: 1.5rem;
+    min-height: 1.5rem;
+    line-height: 1;
+    color: var(--muted);
   }
   .problems {
     border: 1px solid var(--ng);

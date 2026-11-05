@@ -268,6 +268,11 @@ test("キーボードだけで記事を開き、保存できる（14.1）", asyn
   });
   await expect(page.getByTestId("notice")).toContainText("変換を確定してから保存してください。");
   await expect(page.getByTestId("save-status")).toHaveText("未保存");
+  // 警告は本文の位置をずらさないトーストで出し、閉じられる（UI刷新 反復4）
+  await expect(page.getByTestId("notice")).toHaveCSS("position", "fixed");
+  await page.getByRole("button", { name: "通知を閉じる" }).click();
+  await expect(page.getByTestId("notice")).toHaveCount(0);
+  await expect(page.getByTestId("body-editor")).toBeFocused();
   // スキップリンク：読み込み直後の最初の Tab で到達する
   await page.goto(url);
   await page.keyboard.press("Tab");
