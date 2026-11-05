@@ -402,7 +402,6 @@
         <Preview {ws} {session} />
       {:else if mode === "form" && formAvailable}
         <div class="form-layout">
-          <FrontmatterForm {session} />
           <label class="src body">
             <span>本文（Markdown）</span>
             <textarea
@@ -419,6 +418,7 @@
               spellcheck="false"
               data-testid="body-editor"></textarea>
           </label>
+          <FrontmatterForm {session} />
         </div>
       {:else}
         <label class="src">
@@ -467,6 +467,10 @@
     flex-direction: column;
     gap: 0.75rem;
   }
+  /* DOM は本文→記事情報（Tab 順を横並びの見た目に合わせる）。縦積みのときは従来どおり記事情報を上に表示する */
+  .form-layout > :global(.form) {
+    order: -1;
+  }
   @container (min-width: 46rem) {
     .form-layout {
       display: grid;
@@ -479,6 +483,7 @@
       grid-row: 1;
     }
     .form-layout > :global(.form) {
+      order: 0;
       grid-column: 2;
       grid-row: 1;
       margin: 0;
