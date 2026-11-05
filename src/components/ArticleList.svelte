@@ -80,8 +80,11 @@
 
   <div class="filters" role="search">
     <label class="kw">
-      <span>キーワード（タイトル・slug・ID・タグの部分一致、英字の大小は区別しない）</span>
-      <input type="search" bind:value={keyword} placeholder="キーワードで検索" />
+      <span
+        >キーワード <span class="hint" id="kw-hint">タイトル・slug・ID・タグの部分一致。英字の大小は区別しない</span
+        ></span
+      >
+      <input type="search" bind:value={keyword} placeholder="キーワードで検索" aria-describedby="kw-hint" />
     </label>
     <div class="row">
       <label>
@@ -231,7 +234,7 @@
   }
   h2 {
     margin: 0;
-    font-size: 1.125rem;
+    font-size: 1rem;
   }
   .actions {
     display: flex;
@@ -245,14 +248,24 @@
   .filters label {
     display: flex;
     flex-direction: column;
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     color: var(--muted);
     gap: 0.125rem;
   }
   .row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+    gap: 0.375rem 0.5rem;
+  }
+  .row select {
+    width: 100%;
+  }
+  .hint {
+    display: block;
+    font-size: 0.75rem;
+  }
+  .row label:last-child {
+    grid-column: 1 / -1;
   }
   .kw input {
     width: 100%;
@@ -262,33 +275,42 @@
     font-size: 0.875rem;
     color: var(--muted);
   }
+  /* 行は罫線で区切る（UI刷新 方向B：P-06）。選択中は面と左の太線で示し、色だけに頼らない */
   .rows {
     list-style: none;
     margin: 0;
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    border-top: 1px solid var(--border);
   }
   .row-btn {
     width: 100%;
     text-align: start;
     display: flex;
-    flex-direction: column;
-    gap: 0.125rem;
-    padding: 0.5rem 0.625rem;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 6px;
+    flex-flow: row wrap;
+    align-items: baseline;
+    gap: 0.0625rem 0.5rem;
+    padding: 0.375rem 0.5rem;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
     color: inherit;
     font: inherit;
     cursor: pointer;
   }
   .row-btn.current {
-    border-color: var(--focus);
+    background: var(--surface);
     box-shadow: inset 4px 0 0 var(--focus);
   }
+  .title,
+  .tags {
+    flex-basis: 100%;
+  }
   .title {
+    font-size: 0.9375rem;
+    line-height: 1.5;
     font-weight: 600;
     overflow-wrap: anywhere;
   }
@@ -301,8 +323,8 @@
   .tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.25rem 0.5rem;
-    font-size: 0.8125rem;
+    gap: 0.125rem 0.5rem;
+    font-size: 0.75rem;
     color: var(--muted);
   }
   .id {
