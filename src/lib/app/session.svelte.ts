@@ -81,6 +81,8 @@ export class EditorSession {
   composing = $state(false);
   /** 本文エディタのカーソル位置（画像の挿入位置） */
   bodyCaret = $state<number | null>(null);
+  /** bodyCaret がブロックの境目を指す（見たまま編集）。挿入する画像を独立した段落にする */
+  bodyCaretBlock = $state(false);
   /** 復旧ドラフトから開いた記事で、ドラフトの基準版とディスクが一致しなかった（33.4） */
   recoveryMismatch = $state(false);
   /** 復旧ドラフトの退避状態（33.1・33.3） */
@@ -199,8 +201,20 @@ export class EditorSession {
     const body = a.split.body;
     const at = this.bodyCaret !== null && this.bodyCaret <= body.length ? this.bodyCaret : body.length;
     const before = body.slice(0, at);
+    const after = body.slice(at);
+    if (this.bodyCaretBlock) {
+      // 前後の段落とつながらないよう、空行で区切った独立の段落として入れる
+      const pre = before === "" || before.endsWith("\n\n") ? "" : before.endsWith("\n") ? "\n" : "\n\n";
+      const post = after === "" ? "\n" : after.startsWith("\n\n") ? "" : after.startsWith("\n") ? "\n" : "\n\n";
+      const r = replaceBody(this.text, `${before}${pre}${snippet}${post}${after}`);
+      if (r.ok) {
+        this.setText(r.text, null);
+        this.bodyCaret = at + pre.length + snippet.length;
+      }
+      return r;
+    }
     const pre = before === "" || before.endsWith("\n") ? "" : "\n";
-    const next = `${before}${pre}${snippet}\n${body.slice(at)}`;
+    const next = `${before}${pre}${snippet}\n${after}`;
     const r = replaceBody(this.text, next);
     if (r.ok) {
       this.setText(r.text, null);

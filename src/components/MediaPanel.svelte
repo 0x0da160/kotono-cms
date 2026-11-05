@@ -3,7 +3,8 @@
   import type { EditorSession } from "../lib/app/session.svelte";
   import type { Workspace } from "../lib/app/workspace.svelte";
   import { IMAGE_MAX_BYTES } from "../lib/core/budgets";
-  import { loadForDisplay } from "../lib/fs/media";
+  import { listVariants, loadDisplayImage } from "../lib/fs/media";
+  import { ORIGINAL_MAX_BYTES, ORIGINAL_MAX_PIXELS, ORIGINAL_MAX_SIDE, VARIANT_WIDTHS } from "../lib/fs/optimize";
 
   let { ws, session }: { ws: Workspace; session: EditorSession } = $props();
 
@@ -40,7 +41,9 @@
     if (!articles) return;
     try {
       const dir = await articles.getDirectoryHandle(session.id);
-      const r = await loadForDisplay(dir, name, IMAGE_MAX_BYTES);
+      // 一覧の表示は小さい派生画像を使う（ADR-0005）。なければ原本を検証して表示する
+      const want = Math.ceil(256 * (globalThis.devicePixelRatio || 1));
+      const r = await loadDisplayImage(dir, name, want, IMAGE_MAX_BYTES, await listVariants(dir));
       const prev = thumbs[name];
       if (prev && "url" in prev) URL.revokeObjectURL(prev.url);
       thumbs = {
@@ -90,8 +93,10 @@
     </div>
   </div>
   <p class="muted small">
-    JPEG・PNG・GIF・WebP・AVIF
-    を取り込めます。原本は加工しません（撮影情報・位置情報などのメタデータもそのまま保存されます）。
+    JPEG・PNG・GIF・WebP・AVIF を取り込めます。取り込むときに、縦横 {ORIGINAL_MAX_SIDE}px・{ORIGINAL_MAX_PIXELS /
+      10_000}万画素・{ORIGINAL_MAX_BYTES / 1_048_576} MiB 以内に収め、撮影情報・位置情報などのメタデータを削除したものを原本として保存します。表示には幅
+    {VARIANT_WIDTHS.join("・")}px の派生画像（WebP
+    など、media/variants/）を使います。アニメーション画像は加工せずに保存します。
     取り込んだ画像は、編集を破棄しても削除されません。
   </p>
 
@@ -152,7 +157,9 @@
             {#if f.kind === "dir"}
               <span class="muted small">フォルダ（CMS では扱いません）</span>
             {:else}
-              <span class="muted small">{fmt(f.size)}・{refLabel(f.name)}</span>
+              <span class="muted small"
+                >{fmt(f.size)}・{refLabel(f.name)}{f.variants ? `・派生画像 ${f.variants} 件` : ""}</span
+              >
             {/if}
           </div>
           {#if f.kind === "file"}

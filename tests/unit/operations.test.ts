@@ -9,6 +9,7 @@ import { checkBackupTarget, createBackup, readManifest, verifyBackup } from "../
 import { enumerateTree } from "../../src/lib/fs/tree";
 import { saveMedia } from "../../src/lib/fs/media";
 import type { DirHandleLike } from "../../src/lib/fs/types";
+import type { ImageProcessor } from "../../src/lib/fs/optimize";
 import { inlineMdService } from "../../src/lib/parse/md-inline";
 import { gif, png } from "./support/images";
 import { MemDir, MemFile, MemFs } from "./support/memory-fs";
@@ -19,7 +20,18 @@ const article = (body = "本文\n", cover = "null", extra = "") =>
 
 type Answer = string | ((r: Omit<DialogRequest, "resolve">) => string);
 
-async function setup(files: Record<string, string | Uint8Array> = {}, body?: string, cover?: string, extra?: string) {
+/** 単体試験の画像処理：原本はそのまま、派生画像は指定どおり（実際の縮小・再エンコードはブラウザの E2E で確かめる） */
+const passthrough: ImageProcessor = {
+  process: async (bytes, info) => ({ ok: true, original: { bytes, info }, variants: [], notes: [] }),
+};
+
+async function setup(
+  files: Record<string, string | Uint8Array> = {},
+  body?: string,
+  cover?: string,
+  extra?: string,
+  processor: ImageProcessor = passthrough,
+) {
   const fs = new MemFs();
   fs.write(`content/articles/${ID}/index.md`, article(body, cover, extra));
   for (const [p, c] of Object.entries(files)) fs.write(`content/articles/${ID}/${p}`, c);
@@ -36,6 +48,7 @@ async function setup(files: Record<string, string | Uint8Array> = {}, body?: str
       },
       appVersion: "test",
       specVersion: "3.1",
+      processor,
     },
   );
   const answers: Answer[] = [];
@@ -87,7 +100,7 @@ describe("画像の取り込み（17）", () => {
     const name = job?.name ?? "";
     expect(name).toMatch(/^[0-9a-hjkmnp-tv-z]{10}\.png$/);
     const saved = fs.get(`content/articles/${ID}/media/${name}`) as MemFile;
-    expect(saved.data).toEqual(png(4, 3)); // 原本を加工しない
+    expect(saved.data).toEqual(png(4, 3)); // 画像処理（ここでは素通し）の結果を保存する
     // 取り込みだけでは本文を変えない
     expect(s.dirty).toBe(false);
     ws.insertImage(name, "説明 [注]");
@@ -158,6 +171,45 @@ describe("画像の取り込み（17）", () => {
     expect(ws.importJobs.map((j) => j.status)).toEqual(["done", "cancelled"]);
   });
 
+  it("最適化した画像を原本として保存し、派生画像を media/variants/ に置く（ADR-0005）", async () => {
+    const small = png(2, 1);
+    const processor: ImageProcessor = {
+      process: async () => ({
+        ok: true,
+        original: { bytes: small, info: { format: "png", width: 2, height: 1, pixels: 2, frames: 1, animated: false } },
+        variants: [
+          {
+            width: 2,
+            bytes: png(2, 1),
+            info: { format: "png", width: 2, height: 1, pixels: 2, frames: 1, animated: false },
+          },
+        ],
+        notes: ["メタデータを削除"],
+      }),
+    };
+    const { ws, fs } = await setup({}, undefined, undefined, undefined, processor);
+    await ws.importImages([file("photo.png", png(4000, 3000), "image/png")]);
+    const job = ws.importJobs[0];
+    expect(job?.status).toBe("done");
+    expect(job?.message).toContain("メタデータを削除");
+    expect(job?.message).toContain("派生画像 1 件");
+    const name = job?.name ?? "";
+    expect((fs.get(`content/articles/${ID}/media/${name}`) as MemFile).data).toEqual(small);
+    const id = name.replace(/\.png$/, "");
+    expect(fs.get(`content/articles/${ID}/media/variants/${id}-2w.png`)).toBeInstanceOf(MemFile);
+    // 一覧には variants/ を出さず、画像ごとの件数として示す
+    expect(ws.media?.files).toEqual([{ name, kind: "file", size: small.length, variants: 1 }]);
+  });
+
+  it("画像処理が失敗した画像は保存しない", async () => {
+    const processor: ImageProcessor = { process: async () => ({ ok: false, message: "書き出せません" }) };
+    const { ws, fs } = await setup({}, undefined, undefined, undefined, processor);
+    await ws.importImages([file("a.png", png(1, 1))]);
+    expect(ws.importJobs[0]?.status).toBe("failed");
+    expect(ws.importJobs[0]?.message).toBe("書き出せません");
+    expect(fs.get(`content/articles/${ID}/media`)).toBeUndefined();
+  });
+
   it("カバー画像は取り込み済み画像から選べ、本文への挿入は不要", async () => {
     const { ws, s } = await setup({ "media/abcdefghjk.png": png(1, 1) });
     ws.setCover("abcdefghjk.png", "表紙");
@@ -184,6 +236,29 @@ describe("画像の削除（18.2・19.1・11.3）", () => {
     ]);
     expect(JSON.stringify(m.ok && m.manifest)).not.toContain("repo");
     expect(s.locked).toBeNull();
+  });
+
+  it("画像を削除するときは、派生画像も一緒に退避・削除する（ADR-0005）", async () => {
+    const { ws, s, fs, backup, answers, asked } = await setup({
+      [`media/${IMG}`]: png(1, 1),
+      "media/variants/abcdefghjk-480w.webp": "v1",
+      "media/variants/abcdefghjk-480w.jpg": "v2",
+      "media/variants/zzzzzzzzzz-480w.webp": "other",
+    });
+    await ws.refreshMedia();
+    answers.push("backup", "delete");
+    await ws.deleteMedia(IMG);
+    expect(s.notice?.kind).toBe("ok");
+    expect(asked[0]?.details?.join("\n")).toContain("派生画像 2 件");
+    expect(fs.get(`content/articles/${ID}/media/variants/abcdefghjk-480w.webp`)).toBeUndefined();
+    expect(fs.get(`content/articles/${ID}/media/variants/abcdefghjk-480w.jpg`)).toBeUndefined();
+    expect(fs.readText(`content/articles/${ID}/media/variants/zzzzzzzzzz-480w.webp`)).toBe("other");
+    const m = await readManifest(backupFolder(backup));
+    expect(m.ok && m.manifest.entries.map((e) => e.path).sort()).toEqual([
+      `media/${IMG}`,
+      "media/variants/abcdefghjk-480w.jpg",
+      "media/variants/abcdefghjk-480w.webp",
+    ]);
   });
 
   it("参照中・参照状況不明の画像は削除しない", async () => {
