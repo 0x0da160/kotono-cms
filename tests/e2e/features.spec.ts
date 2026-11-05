@@ -283,6 +283,27 @@ test("復旧ドラフトは同意後にだけ退避し、退避済みを表示�
   await expect(panel.getByRole("button", { name: "原文を退避" }).first()).toBeVisible();
 });
 
+test("初回の復旧ドラフトの設定は編集側の列に出し、決めたらフッターの設定へフォーカスを移す（UI刷新 P-04）", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await launch(page);
+  const consent = page.getByTestId("draft-consent");
+  await expect(consent).toBeVisible();
+  // 一覧を押し下げない：一覧と同意の欄は横に並ぶ
+  const listBox = await page.locator(".list-pane").boundingBox();
+  const consentBox = await consent.boundingBox();
+  if (!listBox || !consentBox) throw new Error("領域の位置を取得できません");
+  expect(consentBox.x).toBeGreaterThanOrEqual(listBox.x + listBox.width);
+  expect(consentBox.y).toBeLessThan(listBox.y + 40);
+  // 説明はすべて表示したまま
+  await expect(consent.locator("li")).toHaveCount(7);
+  await consent.getByRole("button", { name: "今は有効にしない" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(consent).toHaveCount(0);
+  await expect(page.getByTestId("draft-settings-summary")).toBeFocused();
+});
+
 test("キーボードだけで記事を開き、保存できる（14.1）", async ({ page }) => {
   await launch(page);
   await page.getByRole("button", { name: /最初の記事/ }).focus();
