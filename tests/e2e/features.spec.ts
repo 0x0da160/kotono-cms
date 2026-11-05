@@ -198,6 +198,41 @@ test("記事の削除は、リポジトリ外へ退避・検証してから確�
   await expect(page.getByTestId("save-button")).toBeDisabled();
 });
 
+test("キーボードで開いた削除の確認を閉じると、フォーカスは「削除…」に戻る（14.1）", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await launch(page);
+  await openA(page);
+  const del = page.getByTestId("delete-button");
+  const dialog = page.getByRole("dialog");
+  const cancel = page.getByRole("button", { name: "キャンセル" });
+  // 確認の間「削除…」は無効になる（11.3）。閉じた後、有効に戻ってからフォーカスを戻す
+  // Esc で閉じる
+  await del.focus();
+  await page.keyboard.press("Enter");
+  await expect(dialog).toContainText("記事を削除します");
+  await expect(cancel).toBeFocused();
+  await expect(del).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(del).toBeFocused();
+  // 「キャンセル」で閉じる
+  await page.keyboard.press("Enter");
+  await expect(cancel).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(dialog).toBeHidden();
+  await expect(del).toBeFocused();
+  // 退避を検証した後の、2回目の確認を取り消した場合も戻る
+  await page.evaluate(() => (window as unknown as Api).__fakeFs.pickNext("backup"));
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "退避先を選んで退避する" }).click();
+  await expect(dialog).toContainText("退避を検証しました");
+  await expect(cancel).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.getByText("削除を取り消しました")).toBeVisible();
+  await expect(del).toBeFocused();
+  expect(await list(page, "content/articles")).toEqual([A]);
+});
+
 test("退避先にリポジトリ自身を選ぶと退避・削除を始めない（19.1・T24）", async ({ page }) => {
   await launch(page);
   await openA(page);
