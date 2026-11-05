@@ -11,6 +11,11 @@ sources:
     title: "ローカルCMS 仕様書 改訂版 3.1"
     author: human:0x0da160
     last_modified: 2026-11-04T00:00:00+09:00
+  - id: isomorphic-git
+    resource: "https://www.npmjs.com/package/isomorphic-git/v/1.44.11（index.js の init・readObjectPacked・StreamReader・status・statusMatrix・GitWalkerFs.oid・GitIndex.insert・normalizeMode）"
+    title: "isomorphic-git 1.44.11 のソース"
+    author: isomorphic-git contributors
+    last_modified: 2026-11-05T00:00:00Z
   - id: git-interop
     resource: "Node.js 22 と Git 2.43.0（Linux）での相互運用試験（tests/unit/git.test.ts、2026-11-04）"
     title: "CMS が書いた Git メタデータのネイティブ Git による検証"
@@ -46,7 +51,13 @@ sources:
 
 # 理由
 
-- **isomorphic-git を採用しなかった。** [第29.1節](/spec/foundation/29-technology-candidates-and-records.md) の候補だが、(1) ブラウザで `Buffer` の代替実装を同梱する必要がある、(2) 状態の取得（`statusMatrix` 等）が stat の違いを見つけると index を書き換え、File System Access API で取れない mode を通常ファイルとして書くため、実行属性付きのファイルが「mode 変更がステージされた」状態になりうる、(3) 書き込むメタデータの範囲を CMS 側で閉じにくい。CMS が必要とする操作（記事単位の追加・変更・削除のコミット、初期化、履歴）は小さく、書き込み先を `.git/` に閉じた実装の方が [第31章](/spec/git/31-fs-adapter-contract.md) の「実現済み・近似・実現不能」を説明しやすい。
+- **isomorphic-git を採用しなかった。** [第29.1節](/spec/foundation/29-technology-candidates-and-records.md) の候補だが、isomorphic-git 1.44.11 のソース（npm 配布の `index.js`、2026-11-05 確認）[^isomorphic-git] で次を確かめた。
+  1. `init` は `.git/hooks` と `.git/config` を作る。どちらも Chromium 系ブラウザが書き込みを禁止する場所（緊張点 11）のため、Chrome・Edge では初期化が必ず失敗する。
+  2. pack から object を読むとき（`readObjectPacked`）は `.pack` 全体を読み込む。[第34章](/spec/quality/34-resource-budgets.md) の object・1 要求のメモリ上限を守れない。CMS の実装は `.idx` の位置から必要な範囲だけを読む。
+  3. 内部で `Buffer` を多用し（`StreamReader` は `Buffer` がなければ例外）、ブラウザでは代替実装の同梱が要る。本体だけで圧縮後約 270 KB あり、成果物（約 627 KB）が大きく増える。
+  4. `status`・`statusMatrix` は既定（`refresh = true`）で index の stat 情報を書き戻す。File System Access API では mode が取れず 100644 として書かれるため、`status` は常に、`statusMatrix` は `core.filemode` が false か未設定のとき、実行属性付きファイルの mode 変更がステージされた状態になりうる。ただし `refresh: false` で避けられる（不採用の決め手ではない）。
+
+  CMS が必要とする操作（記事単位の追加・変更・削除のコミット、初期化、履歴）は小さく、仕様が求める判定・上限・書き込み範囲の制限はいずれにせよ CMS 側に要る。書き込み先を `.git/` に閉じた実装の方が [第31章](/spec/git/31-fs-adapter-contract.md) の「実現済み・近似・実現不能」を説明しやすい。
 - **ネイティブ Git で検証できる。** 単体試験では一時フォルダの実リポジトリに対して CMS の実装でコミットし、`git fsck --strict`・`git status`・`git log`・`git show` で整合を確かめた。gc 後の pack（delta を含む）からの読み取り、記事別の履歴が `git log -- <path>` と一致すること、ネイティブ Git でステージした変更の検出も確かめた。[^git-interop] ヘッドレス Chromium の E2E では、ブラウザの圧縮・ハッシュ API で書いた `.git` を取り出してネイティブ Git で検証した。[^browser-git]
 - **index の比較は stat を除いた内容で行う。** ネイティブ Git の `git status` は stat 情報だけを書き換えて index を書き直すため、バイト列の一致で比べると、確認後に外部で `git status` を実行しただけで再試行できなくなった。パス・mode・object・stage の要約で比べる。
 - **ビルド時の CSP 算出を直した。** ハイライトの文法に `<style` という文字列が含まれ、インラインの style 要素を探す処理がスクリプト本文の中を誤って拾い、実際の style のハッシュが CSP から抜けた（E2E のコンソールエラーで検出）。style を探す前にスクリプト要素を取り除く。
@@ -89,5 +100,6 @@ ADR-0002 の緊張点（壊れた記事による slug の「重複検査不能�
 - `pnpm test:e2e` に、file:// 起動の成果物で Git を初期化し、記事の追加・更新をコミットしてネイティブ Git で検証する試験と、プレビューのハイライトの試験を追加した。
 - 上記の未検証ゲートは、リリース判定（[第27.3節](/spec/foundation/27-mvp-and-roadmap.md)）の前に実機で確認する必要がある。
 
+[^isomorphic-git]: isomorphic-git 1.44.11 のソース
 [^git-interop]: CMS が書いた Git メタデータのネイティブ Git による検証
 [^browser-git]: ブラウザの圧縮・ハッシュ API で書いた Git メタデータの検証
