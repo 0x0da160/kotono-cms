@@ -188,6 +188,11 @@ export function installFakeFs(seed: Record<string, string>, binary: Record<strin
         return null;
       }
     },
+    readBytes(path: string): Uint8Array {
+      const { dir, name } = walk(path, false);
+      const f = dir.children.get(name);
+      return f instanceof FakeFile ? f.data.slice() : new Uint8Array();
+    },
     writes(path: string): number {
       const { dir, name } = walk(path, false);
       const f = dir.children.get(name);
@@ -238,6 +243,7 @@ export interface FakeFsApi {
   backupList(path?: string): string[];
   backupRead(path: string): string | null;
   read(path: string): string | null;
+  readBytes(path: string): Uint8Array;
   writes(path: string): number;
   list(path: string): string[];
   dump(): Record<string, string>;

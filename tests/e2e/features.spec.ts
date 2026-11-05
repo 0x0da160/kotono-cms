@@ -55,6 +55,14 @@ async function launch(page: Page) {
   page.on("console", (m) => {
     if (m.type() === "error") errors.push(m.text());
   });
+  // 本文を Markdown の欄で編集する試験（見たまま編集は visual.spec.ts）
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem("kotono-cms:body-view", "markdown");
+    } catch {
+      // プレビューの sandbox iframe では localStorage を使えない
+    }
+  });
   await page.addInitScript(installFakeFs, SEED);
   await page.addInitScript(
     ([bin]) => {
@@ -129,9 +137,12 @@ test("画像を取り込み、alt を付けて本文へ挿入し、保存する�
   });
   await expect(page.getByTestId("notice")).toContainText("画像を 1 件取り込みました");
   const names = await list(page, `content/articles/${A}/media`);
-  const added = names.filter((n) => n !== IMG);
+  const added = names.filter((n) => n !== IMG && n !== "variants");
   expect(added).toHaveLength(1);
   expect(added[0]).toMatch(/^[0-9a-hjkmnp-tv-z]{10}\.png$/);
+  // 表示用の派生画像（ADR-0005）：1×1 の画像は原寸の1幅だけ、WebP と PNG（透過あり）
+  const id = (added[0] ?? "").replace(/\.png$/, "");
+  expect((await list(page, `content/articles/${A}/media/variants`)).sort()).toEqual([`${id}-1w.png`, `${id}-1w.webp`]);
   await page.getByTestId("job-alt").fill("写真");
   await page.getByTestId("job-insert").click();
   await expect(page.getByTestId("body-editor")).toHaveValue(new RegExp(`!\\[写真\\]\\(\\./media/${added[0]}\\)`));

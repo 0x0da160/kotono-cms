@@ -5,6 +5,15 @@ import { customAlphabet } from "nanoid";
 import { ID_ALPHABET } from "../core/article-id";
 import { ID_MAX_CANDIDATES, IMAGE_MAX_BYTES, MEDIA_ID_LENGTH, MiB } from "../core/budgets";
 import { FORMAT_EXT, inspectImage, type ImageInfo, type Inspect } from "../core/image";
+import {
+  chooseVariant,
+  mediaIdOf,
+  parseVariantName,
+  variantName,
+  VARIANTS_DIR,
+  type EncodedVariant,
+  type VariantRef,
+} from "./optimize";
 import { readAllBytes, writeNewFile } from "./tree";
 import { classifyFsError, fsErrorMessage, type DirHandleLike, type FileHandleLike } from "./types";
 
@@ -14,6 +23,8 @@ export interface MediaFile {
   readonly name: string;
   readonly kind: "file" | "dir";
   readonly size: number;
+  /** 表示用の派生画像（media/variants/）の数 */
+  readonly variants?: number;
 }
 
 export type MediaList = { ok: true; files: MediaFile[]; exists: boolean } | { ok: false; message: string };
@@ -35,15 +46,22 @@ export async function listMedia(article: DirHandleLike): Promise<MediaList> {
     return { ok: false, message: `media/ を開けません：${fsErrorMessage(classifyFsError(e))}` };
   }
   if (!dir) return { ok: true, files: [], exists: false };
-  const files: MediaFile[] = [];
+  let files: MediaFile[] = [];
+  let hasVariants = false;
   try {
     for await (const c of dir.values()) {
-      if (c.kind === "directory") files.push({ name: c.name, kind: "dir", size: 0 });
+      // 表示用の派生画像のフォルダは、画像ごとの件数として示す（ADR-0005）
+      if (c.kind === "directory" && c.name === VARIANTS_DIR) hasVariants = true;
+      else if (c.kind === "directory") files.push({ name: c.name, kind: "dir", size: 0 });
       else files.push({ name: c.name, kind: "file", size: (await c.getFile()).size });
       if (files.length > 10_000) return { ok: false, message: "media/ のエントリーが多すぎます。" };
     }
   } catch (e) {
     return { ok: false, message: `media/ を読み取れません：${fsErrorMessage(classifyFsError(e))}` };
+  }
+  if (hasVariants) {
+    const v = await listVariants(article);
+    files = files.map((f) => (f.kind === "file" ? { ...f, variants: v.get(mediaIdOf(f.name))?.length ?? 0 } : f));
   }
   files.sort((a, b) => (a.name < b.name ? -1 : 1));
   return { ok: true, files, exists: true };
@@ -170,6 +188,77 @@ export async function saveMedia(
   return { ok: false, message: "画像の名前の候補がすべて既存のエントリーと重なりました。", leftover: null };
 }
 
+/** media/variants/ の派生画像をメディアIDごとにまとめる。読めなければ空（表示は原本に戻る） */
+export async function listVariants(article: DirHandleLike): Promise<Map<string, VariantRef[]>> {
+  const out = new Map<string, VariantRef[]>();
+  try {
+    const media = await article.getDirectoryHandle(MEDIA_DIR);
+    const dir = await media.getDirectoryHandle(VARIANTS_DIR);
+    let n = 0;
+    for await (const c of dir.values()) {
+      if (++n > 100_000) break;
+      if (c.kind !== "file") continue;
+      const v = parseVariantName(c.name);
+      if (!v) continue;
+      const list = out.get(v.mediaId) ?? [];
+      list.push({ name: v.name, width: v.width, format: v.format });
+      out.set(v.mediaId, list);
+    }
+  } catch {
+    // variants/ がない・読めない
+  }
+  return out;
+}
+
+/** 派生画像を media/variants/ に書く。失敗しても原本は残す（表示は原本に戻る） */
+export async function saveVariants(
+  article: DirHandleLike,
+  mediaName: string,
+  variants: readonly EncodedVariant[],
+): Promise<{ saved: string[]; failed: string | null }> {
+  const saved: string[] = [];
+  if (variants.length === 0) return { saved, failed: null };
+  let dir: DirHandleLike;
+  try {
+    const media = await article.getDirectoryHandle(MEDIA_DIR);
+    dir = await media.getDirectoryHandle(VARIANTS_DIR, { create: true });
+  } catch (e) {
+    return { saved, failed: `media/${VARIANTS_DIR}/ を作成できません：${fsErrorMessage(classifyFsError(e))}` };
+  }
+  const id = mediaIdOf(mediaName);
+  for (const v of variants) {
+    const name = variantName(id, v.width, v.info.format);
+    const w = await writeNewFile(dir, name, v.bytes);
+    if (!w.ok) return { saved, failed: `${name}：${w.message}` };
+    saved.push(`${VARIANTS_DIR}/${name}`);
+  }
+  return { saved, failed: null };
+}
+
+/**
+ * 表示用に読み込む（ADR-0005）：必要な幅に合う派生画像を優先し、なければ・検証に通らなければ原本を読む。
+ * どちらも表示前の検証（17.3）を通す。
+ */
+export async function loadDisplayImage(
+  article: DirHandleLike,
+  name: string,
+  wantWidth: number,
+  maxBytes: number,
+  variants: ReadonlyMap<string, readonly VariantRef[]>,
+): Promise<DisplayLoad & { variant?: string }> {
+  const v = chooseVariant(variants.get(mediaIdOf(name)) ?? [], wantWidth);
+  if (v) {
+    try {
+      const dir = await (await article.getDirectoryHandle(MEDIA_DIR)).getDirectoryHandle(VARIANTS_DIR);
+      const r = await loadFromDir(dir, v.name, maxBytes);
+      if (r.ok) return { ...r, variant: v.name };
+    } catch {
+      // 原本に戻る
+    }
+  }
+  return loadForDisplay(article, name, maxBytes);
+}
+
 export type DisplayLoad =
   { ok: true; bytes: Uint8Array; info: ImageInfo; mime: string } | { ok: false; message: string };
 
@@ -178,9 +267,19 @@ export type DisplayLoad =
  * アニメーションは自動再生しない。静止フレームを安全に取り出す方法を実装していないため表示しない。
  */
 export async function loadForDisplay(article: DirHandleLike, name: string, maxBytes: number): Promise<DisplayLoad> {
+  let dir: DirHandleLike;
+  try {
+    dir = await article.getDirectoryHandle(MEDIA_DIR);
+  } catch (e) {
+    const k = classifyFsError(e);
+    return { ok: false, message: k === "not-found" ? "ファイルがありません" : fsErrorMessage(k) };
+  }
+  return loadFromDir(dir, name, maxBytes);
+}
+
+async function loadFromDir(dir: DirHandleLike, name: string, maxBytes: number): Promise<DisplayLoad> {
   let h: FileHandleLike;
   try {
-    const dir = await article.getDirectoryHandle(MEDIA_DIR);
     h = await dir.getFileHandle(name);
   } catch (e) {
     const k = classifyFsError(e);

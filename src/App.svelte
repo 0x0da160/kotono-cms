@@ -11,6 +11,7 @@
   import { GitController } from "./lib/app/git.svelte";
   import { Workspace } from "./lib/app/workspace.svelte";
   import { IdbDraftStore } from "./lib/drafts/store";
+  import { IdbRecentFolderStore } from "./lib/app/recent-folder";
   import { WorkerMdService } from "./lib/parse/md-worker-service";
   import { detectCapabilities, isSupported } from "./lib/capabilities";
   import { ARTICLES_PATH } from "./lib/fs/repo";
@@ -30,6 +31,7 @@
     appVersion,
     specVersion,
     md: new WorkerMdService(),
+    recent: typeof indexedDB === "undefined" ? null : new IdbRecentFolderStore(indexedDB),
   });
   const workbench = $derived(ws.root !== null && ws.articles !== null && !ws.missingArticles);
   const git = new GitController(ws);
@@ -54,6 +56,8 @@
   onMount(() => {
     void probeWorker().then((ok) => (workerProbe = ok ? "ok" : "failed"));
     if (supported) void drafts.init();
+    // 前回のフォルダ：権限が残っていればそのまま開く。残っていなければ「前回のフォルダを開く」を示す（ADR-0005）
+    if (supported) void ws.loadRecent();
   });
 
   function onKeydown(e: KeyboardEvent) {
@@ -99,7 +103,7 @@
       {/if}
       <button
         type="button"
-        class={ws.root ? "" : "primary"}
+        class={ws.root || ws.recent ? "" : "primary"}
         onclick={() => ws.chooseFolder()}
         disabled={ws.busy}
         data-testid="choose-folder"
@@ -118,6 +122,22 @@
       {#if supported}
         <p>
           記事を保存しているリポジトリのフォルダ（<code>content/articles/</code> を含むフォルダ）を選んでください。フォルダへのアクセスはこのタブを閉じるまで有効です。
+        </p>
+        {#if ws.recent}
+          <div class="recent" data-testid="recent-folder">
+            <button
+              type="button"
+              class="primary"
+              onclick={() => ws.reopenRecent()}
+              disabled={ws.busy}
+              data-testid="reopen-recent">前回のフォルダ「{ws.recent.name}」を開く</button
+            >
+            <button type="button" onclick={() => ws.forgetRecent()} data-testid="forget-recent">記憶を消す</button>
+          </div>
+          {#if ws.folderError}<p class="banner" role="alert" data-testid="folder-error">{ws.folderError}</p>{/if}
+        {/if}
+        <p class="muted small">
+          開いたフォルダは、次回すぐ開けるようこのブラウザ内に記憶します（フォルダ名とアクセス用の情報だけで、記事の内容は保存しません）。開くときにブラウザがアクセスの許可を求めることがあります。
         </p>
         <p class="muted small">
           記事は手動で保存します。Git を使う場合は、記事単位でコミットできます（push・pull は行いません）。
@@ -249,6 +269,12 @@
   }
   .keys {
     margin: 0.5rem 0;
+  }
+  .recent {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-block: 0.5rem;
   }
   .app-header,
   main,

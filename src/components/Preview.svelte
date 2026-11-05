@@ -8,7 +8,8 @@
     PROVISIONAL_PREVIEW_TOTAL_IMAGE_BYTES,
   } from "../lib/core/budgets";
   import { collectImages, renderHtml, type ImageSource, type PreviewLink } from "../lib/core/markdown";
-  import { loadForDisplay, toDataUrl } from "../lib/fs/media";
+  import { listVariants, loadDisplayImage, toDataUrl } from "../lib/fs/media";
+  import type { VariantRef } from "../lib/fs/optimize";
   import { buildSrcdoc, PREVIEW_CSS } from "../lib/preview/frame";
 
   let { ws, session }: { ws: Workspace; session: EditorSession } = $props();
@@ -20,6 +21,7 @@
   let stopped = $state<string | null>(null);
   let imageNote = $state<string | null>(null);
   let styleHash: string | null = null;
+  let frameEl: HTMLIFrameElement | undefined = $state();
   let token = 0;
   let timer: ReturnType<typeof setTimeout> | null = null;
   /** 画像の表示用資源。記事の切替・画像の取り込み・削除・再読込で破棄する（16.2・17.3） */
@@ -74,13 +76,17 @@
     let total = 0;
     let shown = 0;
     let dir = null;
+    let variants: Map<string, VariantRef[]> = new Map();
     if (!session.isNew && ws.articles) {
       try {
         dir = await ws.articles.getDirectoryHandle(session.id);
+        variants = await listVariants(dir);
       } catch {
         dir = null;
       }
     }
+    // 表示幅に合う派生画像を使う（ADR-0005）
+    const want = Math.ceil((frameEl?.clientWidth || 800) * (globalThis.devicePixelRatio || 1));
     for (const im of imgs) {
       if (im.target.kind !== "media") {
         sources.push({
@@ -108,7 +114,7 @@
         sources.push({ kind: "placeholder", reason: session.isNew ? "保存前の記事には画像がありません" : "未読込" });
         continue;
       }
-      const r = await loadForDisplay(dir, im.target.name, PROVISIONAL_PREVIEW_IMAGE_MAX_BYTES);
+      const r = await loadDisplayImage(dir, im.target.name, want, PROVISIONAL_PREVIEW_IMAGE_MAX_BYTES, variants);
       if (my !== token) return;
       let src: ImageSource;
       if (!r.ok) src = { kind: "placeholder", reason: r.message };
@@ -175,6 +181,7 @@
   {/if}
   {#if imageNote}<p class="muted small">{imageNote}</p>{/if}
   <iframe
+    bind:this={frameEl}
     sandbox=""
     title="記事のプレビュー（操作できません）"
     {srcdoc}

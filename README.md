@@ -5,12 +5,14 @@
 Kotono CMS（コトノ シーエムエス）は、Webメディアの記事を作成・編集するためのローカルCMSです。単一のHTMLファイル `kotono-cms.html` をデスクトップ版の Chrome・Edge で `file://` から開き、ユーザーが選んだローカルフォルダに Markdown＋YAML frontmatter の記事を保存します。サーバーも外部CDNも使いません。
 
 > **現在の状態：P1 MVP（実装完了・実機検証前）**
-> フォルダ選択、記事一覧（検索・絞り込み・ソート）、新規作成、frontmatter フォームと Markdown 原文の編集、外部変更を検出する手動保存、記事IDと slug の検証、ID・createdAt の専用修正、YAML の往復保持、Markdown プレビュー（対象8言語のコードハイライト）、画像の取り込み・挿入・カバー選択・削除、記事の複製・削除（リポジトリ外への検証済み退避が必須）、ブラウザ内復旧ドラフト、ローカル Git（記事単位のコミット・初期化・状態と履歴の表示）を実装しています。仕様の数値と方式は技術成立性ゲート（仕様 第2.2節）で確認する前の受け入れ要件であり、実機（Windows・macOS の Chrome・Edge）での検証はまだ行っていません。実装方式と未検証の項目は [ADR-0002](docs/knowledge/decisions/0002-p1-editing-and-save.md)・[ADR-0003](docs/knowledge/decisions/0003-p1-preview-media-drafts.md)・[ADR-0004](docs/knowledge/decisions/0004-p1-git-and-remaining.md) を参照してください。
+> フォルダ選択、記事一覧（検索・絞り込み・ソート）、新規作成、frontmatter フォームと Markdown 原文の編集、外部変更を検出する手動保存、記事IDと slug の検証、ID・createdAt の専用修正、YAML の往復保持、Markdown プレビュー（対象8言語のコードハイライト）、画像の取り込み（縮小・メタデータ削除による最適化と、表示用の派生画像の生成）・挿入・カバー選択・削除、本文の見たまま編集（WYSIWYG）、前回開いたフォルダの記憶、記事の複製・削除（リポジトリ外への検証済み退避が必須）、ブラウザ内復旧ドラフト、ローカル Git（記事単位のコミット・初期化・状態と履歴の表示）を実装しています。仕様の数値と方式は技術成立性ゲート（仕様 第2.2節）で確認する前の受け入れ要件であり、実機（Windows・macOS の Chrome・Edge）での検証はまだ行っていません。実装方式と未検証の項目は [ADR-0002](docs/knowledge/decisions/0002-p1-editing-and-save.md)・[ADR-0003](docs/knowledge/decisions/0003-p1-preview-media-drafts.md)・[ADR-0004](docs/knowledge/decisions/0004-p1-git-and-remaining.md)・[ADR-0005](docs/knowledge/decisions/0005-wysiwyg-images-recent-folder.md) を参照してください。
 
 ## 特徴（仕様より）
 
 - 単一HTMLを `file://` で起動し、JS・CSS・依存ライブラリをすべて同梱する。
 - 記事は `content/articles/<記事ID>/index.md`（Markdown＋YAML frontmatter）。画像は同じフォルダの `media/` に置く。
+- 本文は見たまま（WYSIWYG）でも Markdown でも編集できる。正本は Markdown で、変更していない部分の記述はそのまま保つ（[ADR-0005](docs/knowledge/decisions/0005-wysiwyg-images-recent-folder.md)）。
+- 画像は取り込み時に縦横 4096px・1,600万画素・4 MiB 以内に収め、メタデータを削除したものを原本にする。表示には幅 480・960・1920px の WebP・JPEG（または PNG）の派生画像（`media/variants/`）を使う（ADR-0005。仕様 3.1 からの変更）。
 - 手動保存。保存前に外部変更を検出し、無確認で上書きしない。
 - ローカルGitへの記事単位のコミット（push・pull・ブランチ操作など外部との同期は対象外）。CMS は Git のフック・署名・フィルターを実行しません。
 - 記事由来のHTML・スクリプトを実行せず、自動ネットワーク通信を行わない。

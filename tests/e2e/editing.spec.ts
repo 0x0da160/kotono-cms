@@ -38,6 +38,14 @@ async function launch(page: Page, seed: Record<string, string> = SEED) {
   page.on("console", (m) => {
     if (m.type() === "error") errors.push(m.text());
   });
+  // 本文を Markdown の欄で編集する試験（見たまま編集は visual.spec.ts）
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem("kotono-cms:body-view", "markdown");
+    } catch {
+      // プレビューの sandbox iframe では localStorage を使えない
+    }
+  });
   await page.addInitScript(installFakeFs, seed);
   await page.goto(url);
   await page.getByTestId("choose-folder").click();

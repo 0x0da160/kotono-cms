@@ -30,6 +30,9 @@ import {
   listMedia,
   MEDIA_DIR,
   saveMedia,
+  saveVariants,
+  listVariants,
+  withTimeout,
   validateImport,
   type Decoder,
   type MediaFile,
@@ -61,6 +64,16 @@ import {
 } from "../fs/save";
 import { classifyFsError, fsErrorMessage, type DirHandleLike } from "../fs/types";
 import { EditorSession, problemsNotice, type Notice } from "./session.svelte";
+import { looksLikeDirHandle, type RecentFolderStore } from "./recent-folder";
+import {
+  browserProcessor,
+  mediaIdOf,
+  VARIANTS_DIR,
+  type EncodedVariant,
+  type ImageProcessor,
+  type ProcessResult,
+} from "../fs/optimize";
+import type { ImageInfo } from "../core/image";
 
 /**
  * 保存の前に外部変更を検出したときの通知の文言。編集画面は、外部変更パネルが出ている間、
@@ -108,6 +121,10 @@ export interface WorkspaceOptions {
   readonly md?: MdService;
   readonly appVersion?: string;
   readonly specVersion?: string;
+  /** 前回開いたフォルダの記憶（ADR-0005）。未指定なら記憶しない */
+  readonly recent?: RecentFolderStore | null;
+  /** 画像の取り込み時の最適化と表示用派生画像の生成（ADR-0005）。null なら原本をそのまま保存する */
+  readonly processor?: ImageProcessor | null;
 }
 
 export interface MediaState {
@@ -168,6 +185,10 @@ export class Workspace {
   /** 支援技術へ通知する短い状態文（14.1） */
   announcement = $state("");
   opening = $state(false);
+  /** 前回開いたフォルダ（名前だけを表示に使う） */
+  recent = $state<{ name: string; at: number } | null>(null);
+  private recentHandle: unknown = null;
+  private readonly recentStore: RecentFolderStore | null;
 
   readonly queue = new SerialQueue();
   /** このセッションで作成した記事フォルダ（新規作成の再試行で所有を判断する） */
@@ -178,6 +199,7 @@ export class Workspace {
   /** Git 機能（App が設定する） */
   git: GitHooks | null = null;
   private readonly decoder: Decoder;
+  private readonly processor: ImageProcessor | null;
   readonly md: MdService;
   private readonly appVersion: string;
   private readonly specVersion: string;
@@ -191,6 +213,8 @@ export class Workspace {
     this.md = opts.md ?? unavailableMdService;
     this.appVersion = opts.appVersion ?? "dev";
     this.specVersion = opts.specVersion ?? "dev";
+    this.recentStore = opts.recent ?? null;
+    this.processor = opts.processor === undefined ? browserProcessor : opts.processor;
   }
 
   get busy(): boolean {
@@ -230,6 +254,83 @@ export class Workspace {
     }
     if (!handle) return;
     await this.openRoot(handle as DirHandleLike);
+    if (this.root === handle) await this.rememberFolder(handle as DirHandleLike);
+  }
+
+  // -------------------------------------------------------------------------
+  // 前回のフォルダ（ADR-0005）
+
+  /**
+   * 起動時に前回のフォルダを読み込む。権限が既に許可されていればそのまま開く。
+   * 許可が必要な場合は、ユーザー操作（reopenRecent）まで待つ（requestPermission はユーザー操作が必要）。
+   */
+  async loadRecent(): Promise<void> {
+    if (!this.recentStore || this.root) return;
+    let r;
+    try {
+      r = await this.recentStore.load();
+    } catch {
+      return;
+    }
+    if (!r || this.root) return;
+    this.recentHandle = r.handle;
+    this.recent = { name: r.name, at: r.at };
+    if (!looksLikeDirHandle(r.handle)) return;
+    const h = r.handle as DirHandleLike;
+    let state: string | undefined;
+    try {
+      state = await h.queryPermission?.({ mode: "readwrite" });
+    } catch {
+      state = undefined;
+    }
+    if (state === "granted" && !this.root && !this.busy) await this.openRoot(h);
+  }
+
+  /** 前回のフォルダを開き直す（権限を求める） */
+  async reopenRecent(): Promise<void> {
+    if (this.busy || !this.recent) return;
+    if (!(await this.confirmLeave("別のフォルダを開く前に、未保存の編集をどうしますか。"))) return;
+    const h = this.recentHandle;
+    if (!looksLikeDirHandle(h)) {
+      this.folderError = `前回のフォルダ「${this.recent.name}」を開けません。「フォルダを選択」から選び直してください。`;
+      return;
+    }
+    const dir = h as DirHandleLike;
+    let granted: boolean;
+    try {
+      const q = (await dir.queryPermission?.({ mode: "readwrite" })) ?? "granted";
+      granted = q === "granted" || ((await dir.requestPermission?.({ mode: "readwrite" })) ?? "denied") === "granted";
+    } catch {
+      granted = false;
+    }
+    if (!granted) {
+      this.folderError = `前回のフォルダ「${this.recent.name}」へのアクセスが許可されませんでした。`;
+      return;
+    }
+    await this.openRoot(dir);
+    if (this.root === dir) await this.rememberFolder(dir);
+  }
+
+  /** 記憶を消す（ファイルには触れない） */
+  async forgetRecent(): Promise<void> {
+    this.recent = null;
+    this.recentHandle = null;
+    try {
+      await this.recentStore?.clear();
+    } catch {
+      // 記憶の削除に失敗しても作業は続けられる
+    }
+  }
+
+  private async rememberFolder(handle: DirHandleLike): Promise<void> {
+    if (!this.recentStore) return;
+    try {
+      await this.recentStore.save(handle, handle.name);
+      this.recentHandle = handle;
+      this.recent = { name: handle.name, at: Date.now() };
+    } catch {
+      // 構造化複製できないハンドル・ストレージ不可：記憶しないだけで、作業は続けられる
+    }
   }
 
   async openRoot(root: DirHandleLike): Promise<void> {
@@ -925,15 +1026,54 @@ export class Workspace {
           update(i, { status: "failed", message: v.message });
           continue;
         }
+        // 取り込み時の最適化と表示用の派生画像（ADR-0005）
+        let original: { bytes: Uint8Array; info: ImageInfo } = { bytes: v.bytes, info: v.info };
+        let variants: EncodedVariant[] = [];
+        let notes: string[] = [];
+        if (this.processor) {
+          update(i, { status: "validating", message: "最適化中" });
+          let p: ProcessResult;
+          try {
+            p = await withTimeout(
+              this.processor.process(v.bytes, v.info),
+              IMAGE_TASK_MAX_MS,
+              "画像の最適化が時間上限を超えました。",
+            );
+          } catch (e) {
+            p = { ok: false, message: e instanceof Error ? e.message : String(e) };
+          }
+          if (!p.ok) {
+            update(i, { status: "failed", message: p.message });
+            continue;
+          }
+          original = p.original;
+          variants = p.variants;
+          notes = p.notes;
+        }
         update(i, { status: "saving", message: "保存中" });
         const r = await this.queue.run(async () => {
           if (!(await ensureWritePermission(root)))
             return { ok: false as const, message: "書き込みが許可されていません。", leftover: null };
           const dir = await articles.getDirectoryHandle(id);
-          return saveMedia(dir, v.info, v.bytes);
+          const saved = await saveMedia(dir, original.info, original.bytes);
+          if (!saved.ok) return saved;
+          const vs = await saveVariants(dir, saved.name, variants);
+          return { ...saved, variants: vs };
         });
-        if (r.ok) update(i, { status: "done", message: `保存しました（media/${r.name}）`, name: r.name });
-        else
+        if (r.ok) {
+          const extra = [
+            ...notes,
+            ...(r.variants.saved.length > 0 ? [`表示用の派生画像 ${r.variants.saved.length} 件`] : []),
+            ...(r.variants.failed
+              ? [`派生画像の一部を保存できません（表示は原本を使います）：${r.variants.failed}`]
+              : []),
+          ];
+          update(i, {
+            status: "done",
+            message: `保存しました（media/${r.name}）${extra.length > 0 ? `：${extra.join("、")}` : ""}`,
+            name: r.name,
+          });
+        } else
           update(i, {
             status: "failed",
             message: r.leftover ? `${r.message}（残存の可能性：${r.leftover}）` : r.message,
@@ -1005,13 +1145,28 @@ export class Workspace {
       const handle = await mediaDir.getFileHandle(name);
       const bytes = await readAllBytes(handle, Number.MAX_SAFE_INTEGER);
       if (!bytes.ok) return this.fail(s, `画像を読み取れません：${bytes.message}`);
+      // 表示用の派生画像も一緒に退避・削除する（ADR-0005）
+      const variantItems: BackupItem[] = [];
+      const vrefs = (await listVariants(articleDir)).get(mediaIdOf(name)) ?? [];
+      if (vrefs.length > 0) {
+        const vdir = await mediaDir.getDirectoryHandle(VARIANTS_DIR);
+        for (const v of vrefs)
+          variantItems.push({
+            path: `${MEDIA_DIR}/${VARIANTS_DIR}/${v.name}`,
+            kind: "file",
+            handle: await vdir.getFileHandle(v.name),
+          });
+      }
       const confirmedRevision = s.revision;
       const v = await this.ask({
         title: "画像を削除します",
         message: `${path}（${bytes.bytes.length.toLocaleString()} バイト）を削除します。削除の前に、リポジトリ外の退避先フォルダへコピーし、検証します。`,
         details: [
           "参照の確認範囲：この記事の保存済み本文と cover だけです。別の記事や独自の frontmatter 項目からの参照は確認していません。",
-          ...(await this.gitDetails(id, [`${MEDIA_DIR}/${name}`])),
+          ...(variantItems.length > 0
+            ? [`表示用の派生画像 ${variantItems.length} 件（media/${VARIANTS_DIR}/）も一緒に退避・削除します。`]
+            : []),
+          ...(await this.gitDetails(id, [`${MEDIA_DIR}/${name}`, ...variantItems.map((v) => v.path)])),
           "復元は CMS では行いません。退避先から外部ツールで戻してください。",
         ],
         buttons: [
@@ -1031,7 +1186,7 @@ export class Workspace {
           repoRoot: root,
           operation: "delete-media",
           articleId: id,
-          items: [item],
+          items: [item, ...variantItems],
           appVersion: this.appVersion,
           specVersion: this.specVersion,
         }),
@@ -1077,11 +1232,12 @@ export class Workspace {
           const now = await refsOf(s.base.text);
           if (now.status !== "ok" || now.names.has(name)) return "最新の保存済み本文で参照を確認できません。";
           const cur = await readAllBytes(handle, Number.MAX_SAFE_INTEGER);
-          const want = b.manifest.entries[0]?.sha256;
+          const want = b.manifest.entries.find((e) => e.path === item.path)?.sha256;
           if (!cur.ok || (await sha256Hex(cur.bytes)) !== want) return "確認の後に画像の内容が変わりました。";
+          const extra: Fingerprint[] = b.manifest.entries.filter((e) => variantItems.some((v) => v.path === e.path));
           const rep = await deleteEntries(
             articleDir,
-            [{ path: item.path, kind: "file", size: cur.bytes.length, sha256: want ?? null }],
+            [{ path: item.path, kind: "file", size: cur.bytes.length, sha256: want ?? null }, ...extra],
             null,
           );
           return rep.error;

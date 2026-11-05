@@ -9,6 +9,7 @@
   import FrontmatterForm from "./FrontmatterForm.svelte";
   import MediaPanel from "./MediaPanel.svelte";
   import Preview from "./Preview.svelte";
+  import VisualEditor from "./VisualEditor.svelte";
 
   let { ws, session, git = null }: { ws: Workspace; session: EditorSession; git?: GitController | null } = $props();
 
@@ -85,7 +86,7 @@
   function closeToast() {
     toastHidden = true;
     toastHold = false;
-    editorEl?.querySelector<HTMLElement>('[data-testid="body-editor"]')?.focus();
+    editorEl?.querySelector<HTMLElement>("[data-body-focus]")?.focus();
   }
   // 新しい通知が来たら表示し直す
   $effect.pre(() => {
@@ -118,6 +119,28 @@
   }
 
   let mode = $state<"form" | "source" | "preview">("form");
+  /** 本文の編集方法（ADR-0005）：見たまま（既定）か Markdown。ブラウザ内に記憶する */
+  const BODY_VIEW_KEY = "kotono-cms:body-view";
+  let bodyView = $state<"visual" | "markdown">(readBodyView());
+  function readBodyView(): "visual" | "markdown" {
+    try {
+      return globalThis.localStorage?.getItem(BODY_VIEW_KEY) === "markdown" ? "markdown" : "visual";
+    } catch {
+      return "visual";
+    }
+  }
+  function setBodyView(v: "visual" | "markdown") {
+    if (v === bodyView) return;
+    session.sealHistory();
+    session.bodyCaret = null;
+    session.bodyCaretBlock = false;
+    bodyView = v;
+    try {
+      globalThis.localStorage?.setItem(BODY_VIEW_KEY, v);
+    } catch {
+      // 記憶できなくても切り替えは使える
+    }
+  }
   let modeError = $state<string | null>(null);
   let composing = $state(false);
   let clock = $state(Date.now());
@@ -488,22 +511,48 @@
         <Preview {ws} {session} />
       {:else if mode === "form" && formAvailable}
         <div class="form-layout">
-          <label class="src body">
-            <span>本文（Markdown）</span>
-            <textarea
-              value={body}
-              oninput={(e) => {
-                session.setBody(e.currentTarget.value);
-                session.bodyCaret = e.currentTarget.selectionStart;
-              }}
-              onselect={(e) => (session.bodyCaret = e.currentTarget.selectionStart)}
-              onclick={(e) => (session.bodyCaret = e.currentTarget.selectionStart)}
-              onkeyup={(e) => (session.bodyCaret = e.currentTarget.selectionStart)}
-              readonly={locked}
-              rows="18"
-              spellcheck="false"
-              data-testid="body-editor"></textarea>
-          </label>
+          <div class="src body">
+            <div class="body-head">
+              <span id="body-label">本文</span>
+              <div class="seg" role="group" aria-label="本文の編集方法">
+                <button
+                  type="button"
+                  aria-pressed={bodyView === "visual"}
+                  onclick={() => setBodyView("visual")}
+                  data-testid="body-view-visual">見たまま</button
+                >
+                <button
+                  type="button"
+                  aria-pressed={bodyView === "markdown"}
+                  onclick={() => setBodyView("markdown")}
+                  data-testid="body-view-markdown">Markdown</button
+                >
+              </div>
+            </div>
+            {#if bodyView === "visual"}
+              <VisualEditor {ws} {session} />
+            {:else}
+              <textarea
+                value={body}
+                aria-labelledby="body-label"
+                oninput={(e) => {
+                  session.setBody(e.currentTarget.value);
+                  session.bodyCaret = e.currentTarget.selectionStart;
+                  session.bodyCaretBlock = false;
+                }}
+                onselect={(e) => (session.bodyCaret = e.currentTarget.selectionStart)}
+                onclick={(e) => {
+                  session.bodyCaret = e.currentTarget.selectionStart;
+                  session.bodyCaretBlock = false;
+                }}
+                onkeyup={(e) => (session.bodyCaret = e.currentTarget.selectionStart)}
+                readonly={locked}
+                rows="18"
+                spellcheck="false"
+                data-testid="body-editor"
+                data-body-focus></textarea>
+            {/if}
+          </div>
           <FrontmatterForm {session} />
         </div>
       {:else}
@@ -628,6 +677,33 @@
     .form-layout :global(.form .grid > *) {
       grid-column: 1 / -1;
     }
+  }
+  .body-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.25rem 0.5rem;
+  }
+  .seg {
+    display: inline-flex;
+  }
+  .seg button {
+    padding: 0.125rem 0.625rem;
+    font-size: 0.8125rem;
+    font-weight: 400;
+    border-radius: 0;
+  }
+  .seg button:first-child {
+    border-radius: 6px 0 0 6px;
+  }
+  .seg button:last-child {
+    border-radius: 0 6px 6px 0;
+    margin-inline-start: -1px;
+  }
+  .seg button[aria-pressed="true"] {
+    font-weight: 600;
+    box-shadow: inset 0 -3px 0 var(--focus);
   }
   .repairs {
     display: flex;
