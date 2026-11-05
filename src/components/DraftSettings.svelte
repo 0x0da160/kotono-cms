@@ -140,7 +140,10 @@
     gap: 0.5rem;
     flex-wrap: wrap;
   }
+  /* フッターで文字を詰めても、操作できる高さは 24px 以上にする（段階4 4章、WCAG 2.5.8） */
   .settings summary {
     cursor: pointer;
+    min-height: 1.5rem;
+    padding-block: 0.15rem;
   }
 </style>

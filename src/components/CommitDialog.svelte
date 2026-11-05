@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { GitController } from "../lib/app/git.svelte";
   import { checkIdentity, checkMessage } from "../lib/git/model";
+  import { focusReturn } from "../lib/ui/focus-return";
 
   let { git }: { git: GitController } = $props();
   let el: HTMLDialogElement | undefined = $state();
@@ -15,7 +16,7 @@
     const d = el;
     if (!d) return;
     if (req && !d.open) {
-      returnFocus = document.activeElement;
+      returnFocus = focusReturn.capture();
       d.showModal();
       d.querySelector<HTMLTextAreaElement>("textarea")?.focus();
     } else if (!req && d.open) d.close();
@@ -24,7 +25,9 @@
   function finish(ok: boolean) {
     const r = req;
     el?.close();
-    if (returnFocus instanceof HTMLElement) returnFocus.focus();
+    // 「コミット…」はコミット画面の間無効になる。有効に戻ったらフォーカスを戻す
+    focusReturn.restore(returnFocus);
+    returnFocus = null;
     r?.resolve(ok);
   }
 </script>

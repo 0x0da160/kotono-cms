@@ -1,20 +1,17 @@
 <script lang="ts">
+  import { focusReturn } from "../lib/ui/focus-return";
   import type { DialogRequest } from "../lib/app/workspace.svelte";
 
   let { request }: { request: DialogRequest | null } = $props();
   let el: HTMLDialogElement | undefined = $state();
   let returnFocus: Element | null = null;
-  /** 無効のため戻せなかった戻り先（有効に戻るのを待つ） */
-  let pending: { target: HTMLElement; observer: MutationObserver } | null = null;
 
   $effect(() => {
     const d = el;
     if (!d) return;
     if (request && !d.open) {
-      const active = document.activeElement;
       // 続けて開く確認（削除の2回目など）では、前の確認の戻り先を引き継ぐ
-      returnFocus = pending && (active === null || active === document.body) ? pending.target : active;
-      cancelPending();
+      returnFocus = focusReturn.capture();
       d.showModal();
       // 危険操作を既定にしない（14.1）：指定されたボタンへ初期フォーカス
       const initial = d.querySelector<HTMLButtonElement>(`button[data-value="${CSS.escape(request.initial)}"]`);
@@ -24,38 +21,10 @@
     }
   });
 
-  /*
-   * 閉じたらフォーカスを開いた操作へ戻す。
-   * 確認の間だけ無効になる操作（「削除…」などは ws.busy で無効になる）は、閉じた時点では
-   * フォーカスできない。有効に戻ったときに、フォーカスがどこにも無ければ（BODY）戻す。
-   */
-  function cancelPending() {
-    pending?.observer.disconnect();
-    pending = null;
-  }
-  function restoreFocus(target: Element | null) {
-    cancelPending();
-    if (!(target instanceof HTMLElement) || !target.isConnected) return;
-    if (!target.matches(":disabled")) {
-      target.focus();
-      return;
-    }
-    const observer = new MutationObserver(() => {
-      if (!target.isConnected) return cancelPending();
-      if (target.matches(":disabled")) return;
-      cancelPending();
-      const active = document.activeElement;
-      if (active === null || active === document.body) target.focus();
-    });
-    observer.observe(target, { attributes: true, attributeFilter: ["disabled"] });
-    pending = { target, observer };
-  }
-  $effect(() => cancelPending);
-
   function choose(value: string) {
     const r = request;
     el?.close();
-    restoreFocus(returnFocus);
+    focusReturn.restore(returnFocus);
     returnFocus = null;
     r?.resolve(value);
   }
