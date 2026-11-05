@@ -46,6 +46,28 @@
     page = 0;
   });
 
+  /*
+   * 状態・並び順・方向・タグは折り畳みにまとめる（UI刷新 P-06 の追加試行）。
+   * 折り畳んでいても、今の条件を見出しで読めるようにする（計画 10.1：重要な情報を折り畳む場合）。
+   */
+  let filtersOpen = $state(false);
+  const STATUS_LABEL: Record<StatusFilter, string> = { all: "すべて", draft: "下書き", published: "公開対象" };
+  const SORT_LABEL: Record<SortKey, string> = {
+    updatedAt: "更新日時",
+    createdAt: "作成日時",
+    publishedAt: "公開日時",
+    title: "タイトル",
+  };
+  const conditionText = $derived(
+    [
+      `状態：${STATUS_LABEL[status]}`,
+      tags.length > 0 ? `タグ ${tags.length}件` : null,
+      `${SORT_LABEL[sort]}の${dir === "desc" ? "降順" : "昇順"}`,
+    ]
+      .filter(Boolean)
+      .join("・"),
+  );
+
   function addTag(e: Event) {
     const sel = e.currentTarget as HTMLSelectElement;
     const t = sel.value;
@@ -86,41 +108,47 @@
       >
       <input type="search" bind:value={keyword} placeholder="キーワードで検索" aria-describedby="kw-hint" />
     </label>
-    <div class="row">
-      <label>
-        <span>状態</span>
-        <select bind:value={status}>
-          <option value="all">すべて</option>
-          <option value="draft">下書き</option>
-          <option value="published">公開対象</option>
-        </select>
-      </label>
-      <label>
-        <span>並び順</span>
-        <select bind:value={sort}>
-          <option value="updatedAt">更新日時</option>
-          <option value="createdAt">作成日時</option>
-          <option value="publishedAt">公開日時</option>
-          <option value="title">タイトル</option>
-        </select>
-      </label>
-      <label>
-        <span>方向</span>
-        <select bind:value={dir}>
-          <option value="desc">降順</option>
-          <option value="asc">昇順</option>
-        </select>
-      </label>
-      <label>
-        <span>タグ（完全一致・大小区別）</span>
-        <select onchange={addTag} disabled={knownTags.length === 0}>
-          <option value="">タグを追加…</option>
-          {#each knownTags as t (t)}
-            <option value={t}>{t}</option>
-          {/each}
-        </select>
-      </label>
-    </div>
+    <details class="cond" bind:open={filtersOpen} data-testid="list-conditions">
+      <summary
+        ><span class="cond-name">絞り込み・並び順</span>
+        <span class="cond-now" data-testid="list-conditions-summary">{conditionText}</span></summary
+      >
+      <div class="row">
+        <label>
+          <span>状態</span>
+          <select bind:value={status}>
+            <option value="all">すべて</option>
+            <option value="draft">下書き</option>
+            <option value="published">公開対象</option>
+          </select>
+        </label>
+        <label>
+          <span>並び順</span>
+          <select bind:value={sort}>
+            <option value="updatedAt">更新日時</option>
+            <option value="createdAt">作成日時</option>
+            <option value="publishedAt">公開日時</option>
+            <option value="title">タイトル</option>
+          </select>
+        </label>
+        <label>
+          <span>方向</span>
+          <select bind:value={dir}>
+            <option value="desc">降順</option>
+            <option value="asc">昇順</option>
+          </select>
+        </label>
+        <label>
+          <span>タグ（完全一致・大小区別）</span>
+          <select onchange={addTag} disabled={knownTags.length === 0}>
+            <option value="">タグを追加…</option>
+            {#each knownTags as t (t)}
+              <option value={t}>{t}</option>
+            {/each}
+          </select>
+        </label>
+      </div>
+    </details>
     {#if tags.length > 0}
       <ul class="chips" aria-label="選択中のタグ（すべてを持つ記事）">
         {#each tags as t (t)}
@@ -269,6 +297,34 @@
   .hint {
     display: block;
     font-size: 0.75rem;
+  }
+  .cond > summary {
+    cursor: pointer;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 0.5rem;
+    min-height: 1.5rem;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+  /* display: flex にすると既定の開閉マーカーが消えるので、記号を付けて開閉できることを示す */
+  .cond > summary::-webkit-details-marker {
+    display: none;
+  }
+  .cond > summary::before {
+    content: "▸";
+    color: var(--text);
+  }
+  .cond[open] > summary::before {
+    content: "▾";
+  }
+  .cond-now {
+    color: var(--text);
+    font-size: 0.8125rem;
+  }
+  .cond[open] > summary {
+    margin-bottom: 0.375rem;
   }
   .row label:last-child {
     grid-column: 1 / -1;

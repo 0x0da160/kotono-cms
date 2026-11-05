@@ -298,3 +298,17 @@ test("広い画面の作業台レイアウトの上書きが効いている（UI
   await page.setViewportSize({ width: 900, height: 800 });
   await expect(body).toHaveCSS("resize", "vertical");
 });
+
+test("一覧の絞り込み・並び順は折り畳んでも今の条件を見出しで示す（UI刷新 P-06）", async ({ page }) => {
+  await launch(page);
+  const cond = page.getByTestId("list-conditions");
+  await expect(cond).not.toHaveAttribute("open", "");
+  await expect(page.getByTestId("list-conditions-summary")).toHaveText("状態：すべて・更新日時の降順");
+  // キーボードで開いて条件を変える
+  await cond.locator("summary").focus();
+  await page.keyboard.press("Enter");
+  await page.getByLabel("状態").selectOption("draft");
+  await page.getByLabel("方向").selectOption("asc");
+  await cond.locator("summary").click();
+  await expect(page.getByTestId("list-conditions-summary")).toHaveText("状態：下書き・更新日時の昇順");
+});
