@@ -25,7 +25,7 @@ test("単一HTMLを file:// で起動できる（仕様 2.1・A01）", async ({ 
   await expect(page).toHaveTitle("Kotono CMS");
   await expect(page.getByRole("heading", { level: 1, name: "Kotono CMS" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "対応環境の確認" })).toBeVisible();
-  await expect(page.getByTestId("spec-version")).toHaveText("3.1");
+  await expect(page.getByTestId("spec-version")).toHaveText("3.2");
   // file:// でも安全なコンテキストとして扱われること
   await expect(page.locator('[data-capability="secure-context"]')).toHaveAttribute("data-ok", "true");
 

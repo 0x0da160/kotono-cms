@@ -4,6 +4,7 @@ import { viteSingleFile } from "vite-plugin-singlefile";
 import pkg from "./package.json" with { type: "json" };
 import { inlineCsp } from "./build/csp";
 import { releaseInfo } from "./build/release";
+import { serviceWorker } from "./build/pwa";
 
 /**
  * decode-named-character-reference の browser 版は document を使うため Worker で動かない。
@@ -22,7 +23,7 @@ function noDomEntities(): Plugin {
 }
 
 /** 仕様書のバージョン（docs/spec/ の版と一致させる） */
-const SPEC_VERSION = "3.1";
+const SPEC_VERSION = "3.2";
 
 const release = releaseInfo({ appVersion: pkg.version, specVersion: SPEC_VERSION, html: "kotono-cms.html" });
 
@@ -36,11 +37,14 @@ export default defineConfig({
     // JS・CSS・アセットをすべて単一の kotono-cms.html へインライン化する（仕様 2.1）
     viteSingleFile({ outputFileName: "kotono-cms.html", removeViteModuleLoader: true }),
     inlineCsp(),
+    // https 配信用の Service Worker（38.5。file:// 起動では使わない）
+    serviceWorker(pkg.version),
     // 配布物のハッシュ・依存一覧・ライセンス（29.4）
     release.main,
   ],
   build: {
-    target: ["chrome120", "edge120"],
+    // iOS・iPadOS 26 以降の Safari にも対応する（仕様 3.2 第2.1節）
+    target: ["chrome120", "edge120", "safari18"],
     outDir: "dist",
     emptyOutDir: true,
     modulePreload: false,

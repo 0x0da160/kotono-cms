@@ -69,10 +69,18 @@ export class DraftController {
   }
 
   /** 作業フォルダの識別（33.2：ランダム識別子、ハンドルの同一性で照合。フォルダ名では認定しない） */
-  async attach(root: unknown): Promise<void> {
+  async attach(root: unknown, fixedId: string | null = null): Promise<void> {
     this.wsId = null;
     this.wsMatched = false;
     if (!this.store || this.mode !== "enabled") return;
+    // ブラウザ内の作業場所は ID が決まっているので、ハンドルで照合しない（38.1）
+    if (fixedId !== null) {
+      this.wsId = fixedId;
+      this.wsMatched = true;
+      this.wsPersisted = true;
+      await this.reload();
+      return;
+    }
     try {
       const id = await this.store.identify(root, sameEntry);
       this.wsId = id.id;

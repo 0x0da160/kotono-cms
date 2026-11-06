@@ -13,7 +13,7 @@
 
   async function enable() {
     await dc.enable();
-    if (ws.root) await dc.attach(ws.root);
+    await ws.attachDrafts();
     // 同意の前から開いていた未保存の編集も、同意の後は退避の対象にする
     if (ws.session) dc.onEdit(ws.session);
     ws.announce("ブラウザ内復旧ドラフトを有効にしました。");
@@ -64,7 +64,7 @@
     await dc.disable(true);
     if (enabled) {
       await dc.enable();
-      if (ws.root) await dc.attach(ws.root);
+      await ws.attachDrafts();
     }
   }
 </script>

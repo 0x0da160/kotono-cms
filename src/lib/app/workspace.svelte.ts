@@ -127,6 +127,15 @@ export interface WorkspaceOptions {
   readonly processor?: ImageProcessor | null;
 }
 
+/** ブラウザ内の作業場所として開くときの情報（第38章） */
+export interface OpenPlace {
+  readonly displayName: string;
+  readonly backupRoot: () => Promise<DirHandleLike>;
+  readonly onDiskChange?: () => void;
+  /** 復旧ドラフトの作業フォルダ識別（作業場所の ID から決める。暗号化した作業場所は `e:` で始まる：39.1） */
+  readonly draftsId?: string;
+}
+
 export interface MediaState {
   readonly articleId: string;
   readonly files: MediaFile[];
@@ -198,6 +207,11 @@ export class Workspace {
   readonly drafts: DraftController | null;
   /** Git 機能（App が設定する） */
   git: GitHooks | null = null;
+  /**
+   * ブラウザ内の作業場所として開いたときの設定（仕様 3.2 第38章）。実フォルダでは null。
+   * 退避先は利用者に選ばせず、作業場所の外の退避領域を使う（19.1 手順1）。
+   */
+  private place: OpenPlace | null = null;
   private readonly decoder: Decoder;
   private readonly processor: ImageProcessor | null;
   readonly md: MdService;
@@ -334,16 +348,17 @@ export class Workspace {
     }
   }
 
-  async openRoot(root: DirHandleLike): Promise<void> {
+  async openRoot(root: DirHandleLike, place: OpenPlace | null = null): Promise<void> {
     this.session = null;
+    this.place = place;
     this.root = root;
-    this.rootName = root.name;
+    this.rootName = place?.displayName ?? root.name;
     this.folderError = null;
     this.articles = null;
     this.missingArticles = false;
     this.scan = null;
     this.config = await readConfig(root);
-    await this.drafts?.attach(root);
+    await this.drafts?.attach(root, place?.draftsId ?? null);
     const st = await openArticlesDir(root);
     if (st.kind === "ok") {
       this.articles = st.dir;
@@ -852,6 +867,7 @@ export class Workspace {
 
   private async refreshEntry(id: string): Promise<void> {
     this.git?.changed(id);
+    this.noteDiskChange();
     const articles = this.articles;
     if (!articles) return;
     try {
@@ -931,7 +947,41 @@ export class Workspace {
     this.announce(text);
   }
 
+  /** 作業場所として開いているか（第38章） */
+  get isPlace(): boolean {
+    return this.place !== null;
+  }
+
+  /** ディスク上の記事が変わった（保存・複製・削除・画像の取り込み・コミット）。作業場所の「端末の外にない変更」に使う */
+  noteDiskChange(): void {
+    this.place?.onDiskChange?.();
+  }
+
+  /** 復旧ドラフトを有効にした後などに、開いているフォルダ・作業場所へ結び付け直す */
+  async attachDrafts(): Promise<void> {
+    if (this.root) await this.drafts?.attach(this.root, this.place?.draftsId ?? null);
+  }
+
+  /** 作業場所を閉じる（ロック・削除の前：第39.3節） */
+  close(): void {
+    this.session = null;
+    this.place = null;
+    this.root = null;
+    this.rootName = "";
+    this.articles = null;
+    this.missingArticles = false;
+    this.scan = null;
+    this.config = null;
+  }
+
   private async pickBackupRoot(): Promise<DirHandleLike | null> {
+    if (this.place) {
+      try {
+        return await this.place.backupRoot();
+      } catch {
+        return null;
+      }
+    }
     try {
       const h = await this.host.showDirectoryPicker?.({ mode: "readwrite", id: "kotono-backup" });
       return (h as DirHandleLike | undefined) ?? null;
@@ -959,6 +1009,7 @@ export class Workspace {
       const dir = await articles.getDirectoryHandle(id);
       const r = await listMedia(dir);
       this.git?.changed(id);
+      this.noteDiskChange();
       if (this.session?.id !== id) return;
       this.media = r.ok
         ? { articleId: id, files: r.files, exists: r.exists, error: null, refs }
@@ -1474,6 +1525,7 @@ export class Workspace {
         ]);
       finished = true;
       this.git?.changed(id);
+      this.noteDiskChange();
       const text = s.text;
       if (rep.error === null) {
         if (this.scan) this.scan = { ...this.scan, entries: this.scan.entries.filter((e) => e.dirName !== id) };
