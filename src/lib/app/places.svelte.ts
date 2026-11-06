@@ -70,7 +70,7 @@ export class PlacesController {
     sealed: { key: Unlocked; slots: readonly KeySlot[] } | null;
   } | null>(null);
   /** 暗号化した書き出しの解錠待ち（38.2・39.4） */
-  pendingSealed = $state<{ name: string; bytes: Uint8Array } | null>(null);
+  pendingSealed = $state<{ name: string; bytes: Uint8Array; passphrase: boolean; passkey: boolean } | null>(null);
   /** 作成直後に一度だけ表示する回復コード（39.2） */
   recoveryToShow = $state<{ id: string; code: string } | null>(null);
 
@@ -222,11 +222,13 @@ export class PlacesController {
         this.error = "この環境では暗号化した書き出しを開けません。";
         return;
       }
-      if (!Vault.readExportHeader(bytes)) {
+      const h = Vault.readExportHeader(bytes);
+      if (!h) {
         this.error = "暗号化した書き出しの形式が違います（壊れている可能性があります）。";
         return;
       }
-      this.pendingSealed = { name: base, bytes };
+      const has = (k: string) => h.header.slots.some((x) => x.kind === k);
+      this.pendingSealed = { name: base, bytes, passphrase: has("passphrase"), passkey: has("passkey") };
       return;
     }
     this.planImport(base, bytes, null);

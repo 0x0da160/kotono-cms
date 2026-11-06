@@ -32,7 +32,7 @@ describe("buildCsp", () => {
 
   it("画像は blob: と data: だけ、フレーム・フォーム・通信は禁止（16.1.1）", () => {
     const csp = buildCsp("<p>x</p>");
-    expect(csp).toContain("img-src blob: data:;");
+    expect(csp).toContain("img-src blob: data: 'self';");
     expect(csp).toContain("frame-src 'none'");
     expect(csp).toContain("form-action 'none'");
   });

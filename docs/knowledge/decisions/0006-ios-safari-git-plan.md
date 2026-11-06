@@ -1,7 +1,7 @@
 ---
 type: Architecture Decision
 title: "ADR-0006（案）iOS Safari で記事と Git を扱うための計画"
-description: "iOS Safari（iPhone・iPad）で記事の編集とローカル Git を使えるようにする計画。File System Access API への依存の洗い出し、ブラウザ内ストレージ（OPFS または LightningFS）への置き換え、取り込みと書き出し、消去の危険とバックアップ、仕様の変更箇所、Git 層の選択、暗号化とパスキー、GitHub の REST API による push・pull、段階ごとの規模と未決事項。実装はしない。"
+description: "iOS Safari（iPhone・iPad）で記事の編集とローカル Git を使えるようにする計画。File System Access API への依存の洗い出し、ブラウザ内ストレージ（OPFS または LightningFS）への置き換え、取り込みと書き出し、消去の危険とバックアップ、仕様の変更箇所、Git 層の選択、暗号化とパスキー、GitHub の REST API による push・pull、段階ごとの規模と未決事項、実装の記録（既定値・試験・未検証の項目）。"
 tags: ["iOS", "Safari", "OPFS", "LightningFS", "IndexedDB", "Git", "対応環境", "暗号化", "パスキー", "GitHub", "計画", "未決定", "要検証"]
 status: draft
 generated: { by: claude-code/2.1.318, at: 2026-11-05T17:30:00Z }
@@ -389,6 +389,31 @@ iPhone とデスクトップの両方でコミットし、GitHub の先頭が手
 - 第16章：`api.github.com` への通信を、利用者が操作したときだけ許す例外として加える。
 - 第21章・第31章：pull による作業ツリーの書き換えの確定点と中断時の扱い（どの記事まで書いたかを記録し、途中なら再実行で揃える）。
 - 第35章：GitHub に送ったものが端末の外のバックアップになること。
+
+
+# 9. 実装の記録（2026-11-06）
+
+第6.1節の決定どおりに実装した。コードは `src/lib/workspaces/`（作業場所・zip）、`src/lib/crypto/`（鍵・暗号化・パスキー）、`src/lib/drafts/sealed.ts`（暗号化した復旧ドラフト）、`src/lib/sync/`（GitHub との同期・簡易マージ）、`src/lib/app/places.svelte.ts`・`sync.svelte.ts`・`pwa.svelte.ts`（画面の状態）、`build/pwa.ts`（Service Worker）。
+
+**決め方を選んだ既定値（変えやすいように定数・設定にしてある）：**
+
+- 保存先：フォルダ選択がある環境は実フォルダ、なければ作業場所。`?storage=workspace` で作業場所を選べる（`supportedMode`）。
+- 暗号化：新しい作業場所・取り込みは既定で暗号化（画面で外せる）。書き出しも既定で暗号化（`.kotono`）、平文の zip は確認を経て選ぶ。
+- PBKDF2-SHA256 600,000 回（`PBKDF2_ITERATIONS`、TG14 で確定）。パスフレーズは 10 文字以上（`PASSPHRASE_MIN`）。
+- 自動ロック：15 分の無操作（5・15・30・60 分・しないから選択）。非表示から戻ったときは、無操作時間と 5 分の短い方を過ぎていればロック（共有シート・ファイル選択で隠れても締め出さない）。ロック前に未保存の編集を暗号化した復旧ドラフトへ退避する。
+- バックアップの催促：最後の書き出し・同期から 3 日（`BACKUP_REMIND_DAYS`）。
+- zip の上限：zip 1 GiB・5 万件・1 件 64 MiB・合計 2 GiB・圧縮率 200・深さ 32（`DEFAULT_ZIP_LIMITS`、第34章の予算として要確定）。
+- 新しい作業場所には `content/articles/` を作っておく（初回フォルダ準備を省く）。
+- トークン：暗号化した作業場所では鍵で暗号化して保存できる。暗号化しない作業場所とデスクトップの実フォルダでは保存せず、タブを閉じるまでメモリにだけ置く（デスクトップの保存方法は技術ゲートで確定するまでの暫定）。デスクトップでは `.git/config` の `remote.origin.url` が GitHub なら同期先の既定にする。
+- 同期の上限：1 回で 2,000 コミット・2 万 object（`SYNC_MAX_COMMITS`・`SYNC_MAX_OBJECTS`）。
+- 空の GitHub リポジトリへは REST API で送れないため、README 等で初期化してから取得（pull）する。
+- マージの途中状態は `.git/kotono-merge.json`。接する変更も競合とする（ネイティブ Git より保守的）。両側が変えた `updatedAt` は新しい方。
+
+**pull でのコミットの ID の確かめ方：** REST API はコミットの日時を UTC に直して返すため、元の時差が分からない。日付の時差・手元の時差・UTC・+09:00・15 分刻みのすべてを試し、計算した ID が一致した組み合わせを採る。署名つきコミットは `verification.payload` と署名から組み立てる。一致しなければ取得を止める（外部の Git を案内）。
+
+**試験：** ネイティブ Git のリポジトリを裏に持つ偽の REST API（UTC の日時・末尾改行なしのメッセージで返す）で、初回取得・push・変更中のファイルがあるときの停止・自動マージ・競合の選択を通し、マージ結果の tree が `git merge-tree` と一致し、`git fsck --strict` が通ることを確かめた（`tests/unit/sync.test.ts`）。作業場所は Chromium の OPFS で E2E を通した（`tests/e2e/workspace.spec.ts`）。
+
+**未検証（実機が要る）：** iOS・iPadOS 26 の Safari での OPFS の書き込み・容量・消去の挙動（TG13）、PBKDF2 の所要時間とパスキーの PRF（TG14）、ホーム画面に追加したときの Service Worker と保存領域（TG15）、GitHub の実 API で作られるコミットの ID が手元と一致すること（偽の API では一致を確認済み）。
 
 [^request-2026-11-05-ios]: iOS Safari での Git の依頼
 [^isomorphic-git]: isomorphic-git 1.44.11 のソース

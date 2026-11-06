@@ -83,6 +83,12 @@
     return null;
   }
 
+  /** 狭い画面では、作った記事の編集へ切り替える（14.1） */
+  async function createNew() {
+    await ws.createNew();
+    if (ws.session) onopen?.();
+  }
+
   async function open(id: string) {
     await ws.openArticle(id);
     onopen?.();
@@ -93,9 +99,7 @@
   <div class="list-head">
     <h2 id="list-heading">記事一覧</h2>
     <div class="actions">
-      <button type="button" class="primary" onclick={() => ws.createNew()} disabled={ws.busy || !ws.articles}
-        >新規作成</button
-      >
+      <button type="button" class="primary" onclick={createNew} disabled={ws.busy || !ws.articles}>新規作成</button>
       <button type="button" onclick={() => ws.refreshList()} disabled={ws.busy}>一覧を再読み込み</button>
     </div>
   </div>

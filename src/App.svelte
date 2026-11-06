@@ -11,6 +11,7 @@
   import PlaceBar from "./components/PlaceBar.svelte";
   import SyncPanel from "./components/SyncPanel.svelte";
   import { SyncController } from "./lib/app/sync.svelte";
+  import { PwaController } from "./lib/app/pwa.svelte";
   import { PlacesController, browserDeliver } from "./lib/app/places.svelte";
   import { Vault } from "./lib/crypto/vault";
   import { browserPasskey } from "./lib/crypto/passkey";
@@ -56,6 +57,7 @@
       })
     : null;
   const sync = new SyncController(ws, git, places);
+  const pwa = new PwaController(host);
   // フォルダを開いたとき・一覧を読み直したときに Git 状態を取り直す（23.2：自動監視はしない）
   let gitRoot: unknown = null;
   $effect(() => {
@@ -67,6 +69,7 @@
         gitRoot = root;
         git.reset();
         sync.reset();
+        pane = "list";
       }
       if (root && scannedAt !== undefined)
         void git.refresh().then(() => {
@@ -81,6 +84,7 @@
   let workerProbe: "pending" | "ok" | "failed" = $state("pending");
   onMount(() => {
     void probeWorker().then((ok) => (workerProbe = ok ? "ok" : "failed"));
+    void pwa.start();
     if (supported) void drafts.init();
     // 前回のフォルダ：権限が残っていればそのまま開く。残っていなければ「前回のフォルダを開く」を示す（ADR-0005）
     if (mode === "folder") void ws.loadRecent();
@@ -99,6 +103,11 @@
       };
     }
   });
+
+  async function updateApp() {
+    if (!(await ws.confirmLeave("新しい版に切り替える前に、未保存の編集をどうしますか。"))) return;
+    pwa.apply();
+  }
 
   function onActivity() {
     places?.activity();
@@ -309,6 +318,14 @@
   <p class="keys small">
     キーボード：Ctrl/⌘+S 保存、Ctrl/⌘+Z 元に戻す、Ctrl/⌘+Shift+Z または Ctrl+Y やり直す。IME 変換中は保存しません。
   </p>
+  {#if pwa.updateReady}
+    <p class="update" role="status" data-testid="update-ready">
+      新しい版を取得しました。
+      <button type="button" onclick={updateApp}>新しい版に切り替える</button>
+    </p>
+  {:else if pwa.active}
+    <p class="small"><button type="button" class="link" onclick={() => pwa.check()}>新しい版を確かめる</button></p>
+  {/if}
   <dl>
     <dt>アプリ版</dt>
     <dd data-testid="app-version">{appVersion}</dd>
@@ -340,6 +357,12 @@
   }
   .keys {
     margin: 0.5rem 0;
+  }
+  /* 指で操作する画面ではキーボードの案内を出さない（iPhone・iPad） */
+  @media (pointer: coarse) and (max-width: 60rem) {
+    .keys {
+      display: none;
+    }
   }
   .recent {
     display: flex;
@@ -579,6 +602,18 @@
     padding-block: 1.5rem 2rem;
     color: var(--muted);
     font-size: 0.875rem;
+  }
+  .update {
+    margin: 0.5rem 0;
+  }
+  button.link {
+    background: none;
+    border: none;
+    padding: 0;
+    min-height: 0;
+    text-decoration: underline;
+    color: inherit;
+    font-size: inherit;
   }
   .app-footer dl {
     display: flex;

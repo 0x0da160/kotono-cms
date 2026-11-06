@@ -220,8 +220,8 @@
         </p>
         <UnlockForm
           busy={places.busy}
-          passphrase={true}
-          passkey={places.vault?.passkey != null}
+          passphrase={places.pendingSealed.passphrase}
+          passkey={places.pendingSealed.passkey && places.vault?.passkey != null}
           onunlock={(m) => places.unsealImport(m)}
         />
         <button type="button" onclick={() => places.cancelImport()}>取り消す</button>
