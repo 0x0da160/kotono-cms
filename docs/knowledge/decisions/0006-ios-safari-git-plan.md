@@ -197,7 +197,7 @@ IndexedDB
 2. **isomorphic-git を退けた理由のうち、iOS で消えるのは 1 つだけ。** ADR-0004 の理由 1（`init` が `.git/hooks`・`.git/config` を作り、Chromium が禁止する）は、isomorphic-git 1.44.11 の `_init` が `hooks` を含むフォルダを作り `config` を書くことを再確認した[^isomorphic-git]。OPFS・LightningFS ではこの禁止がないので、iOS では理由にならない。一方、理由 2（`readObjectPacked` が `.idx` から見つけた `.pack` を丸ごと読む）と理由 3（`Buffer` の代替の同梱と約 270 KB の増加）は保存先に関係なく残る。
 3. **LightningFS は書いた直後の中断に弱い。** 4.10.5 のソースでは、ファイルの中身は書くたびに IndexedDB へ入るが、ディレクトリの木（superblock）は 500 ms の debounce の後にまとめて保存する（`DefaultBackend.js` の `saveSuperblock`）[^lightning-fs]。`mkdir`・`rename`・`stat` はメモリ上の操作で、保存されるまでの間にタブが閉じられると、中身はあるのに木から見えないファイルや、ref の更新が失われた状態になりうる。`flush()` を毎回呼べば狭められるが、第31.2節の「close 前後の中断で誤成功を起こさない」を満たすことは別途の試験が要る。OPFS は `createWritable` の `close()` でファイルごとに反映されるので、現在の実フォルダと同じ説明（原子性は保証しないが、close 後は反映済み）で済む見込み。
 4. **LightningFS の `rename` はメモリ上で原子的だが、自前の Git 層は rename を使っていない。** ADR-0004 の書き込み順（object → index → tree・commit → ref と読み直し）は rename なしで設計してあるので、LightningFS の rename は利点にならない。
-5. **二つの実装を持つ費用。** iOS だけ isomorphic-git にすると、ネイティブ Git との相互運用試験（`tests/unit/git.test.ts`）・対応構成の判定（`inspect`）・上限（第34章）を二重に持つことになる。
+5. （決定済み：第6.1節。回復コードと任意のパスフレーズ）
 
 **push・pull のためにも isomorphic-git は要らない。** isomorphic-git の送受信は Git の HTTP 通信を使うため、ブラウザからは CORS プロキシが要る（github.com はこの通信に `Access-Control-Allow-Origin` を返さないことを確認した[^github-smart-http]）。GitHub に限れば、CORS に対応した REST API で同じことができる（第8章）。
 
@@ -236,6 +236,7 @@ IndexedDB
 | 暗号化の範囲 | ファイルの中身に加えて、ファイル名・フォルダ名も暗号化する[^request-2026-11-05-ios-decisions-2] | 第7.4節。段階 2 が増える |
 | 仕様上の扱い | iOS を仕様 3.2 の正式な対応環境とする（2026-11-06、決定カードで選択） | 第3章の変更を仕様の改訂版として書く。ゲート（第2.2節）の iOS の記録は最初から必須 |
 | iOS の最低版 | iOS・iPadOS 26 以降（2026-11-06、決定カードで選択） | 保存先は OPFS だけにする。LightningFS の代替は作らない |
+| パスキー以外の解錠 | 回復コード（必須）と、任意で設定できるパスフレーズ（2026-11-06、決定カードで選択） | 第7.2節の表のとおり。パスフレーズの鍵も DK を包む |
 
 ## 6.2 未決事項（0x0da160 が決める）
 
