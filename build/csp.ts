@@ -37,7 +37,10 @@ export function buildCsp(html: string): string {
     "img-src": ["blob:", "data:"],
     // 解析層の Worker は file:// 起動のため blob: URL から生成する（仕様 16.1.1, TG08）
     "worker-src": ["blob:"],
-    "connect-src": ["'none'"],
+    // GitHub との同期（仕様 3.2 第40.2節）：通信先は api.github.com だけ
+    "connect-src": ["https://api.github.com"],
+    // ホーム画面に追加したときのマニフェスト（https 配信のみ：38.5）
+    "manifest-src": ["'self'"],
     "font-src": ["'none'"],
     // プレビューは srcdoc の iframe（about:srcdoc）。外部の文書は読み込まない。
     "frame-src": ["'none'"],

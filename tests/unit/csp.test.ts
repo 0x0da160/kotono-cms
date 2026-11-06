@@ -12,7 +12,7 @@ describe("buildCsp", () => {
     expect(csp).toContain(`script-src ${hash("console.log(1)")}`);
     expect(csp).toContain(`style-src ${hash("body{}")} ${hash(PREVIEW_CSS)}`);
     expect(csp).toContain("default-src 'none'");
-    expect(csp).toContain("connect-src 'none'");
+    expect(csp).toContain("connect-src https://api.github.com;");
     expect(csp).not.toContain("unsafe-inline");
     expect(csp).not.toContain("unsafe-eval");
   });

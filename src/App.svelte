@@ -9,6 +9,8 @@
   import RecoveryPanel from "./components/RecoveryPanel.svelte";
   import PlacesPanel from "./components/PlacesPanel.svelte";
   import PlaceBar from "./components/PlaceBar.svelte";
+  import SyncPanel from "./components/SyncPanel.svelte";
+  import { SyncController } from "./lib/app/sync.svelte";
   import { PlacesController, browserDeliver } from "./lib/app/places.svelte";
   import { Vault } from "./lib/crypto/vault";
   import { browserPasskey } from "./lib/crypto/passkey";
@@ -53,17 +55,24 @@
         sealed: sealedDrafts,
       })
     : null;
+  const sync = new SyncController(ws, git, places);
   // フォルダを開いたとき・一覧を読み直したときに Git 状態を取り直す（23.2：自動監視はしない）
   let gitRoot: unknown = null;
   $effect(() => {
     const root = ws.root;
     const scannedAt = ws.scan?.scannedAt;
     untrack(() => {
-      if (root !== gitRoot) {
+      const opened = root !== gitRoot;
+      if (opened) {
         gitRoot = root;
         git.reset();
+        sync.reset();
       }
-      if (root && scannedAt !== undefined) void git.refresh();
+      if (root && scannedAt !== undefined)
+        void git.refresh().then(() => {
+          // 同期先は開いたときに一度だけ読む（.git/config の origin・作業場所に保存した設定）
+          if (opened) void sync.load();
+        });
     });
   });
   /** 狭い画面での単一ペイン切替（14.1） */
@@ -191,7 +200,8 @@
             開いたフォルダは、次回すぐ開けるようこのブラウザ内に記憶します（フォルダ名とアクセス用の情報だけで、記事の内容は保存しません）。開くときにブラウザがアクセスの許可を求めることがあります。
           </p>
           <p class="muted small">
-            記事は手動で保存します。Git を使う場合は、記事単位でコミットできます（push・pull は行いません）。
+            記事は手動で保存します。Git を使う場合は、記事単位でコミットでき、GitHub
+            と送る・取得する（push・pull）ができます。
           </p>
         {:else}
           <p>
@@ -278,6 +288,7 @@
         <div class="pane list-pane">
           <ArticleList {ws} {git} onopen={() => (pane = "editor")} />
           <GitPanel {ws} {git} />
+          {#if git.repo}<SyncPanel {sync} />{/if}
         </div>
         <div class="pane editor-pane">
           {#if ws.session}
