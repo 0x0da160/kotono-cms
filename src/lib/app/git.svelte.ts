@@ -415,6 +415,7 @@ export class GitController {
           details: out.reflog ? [] : ["reflog は更新していません（ファイルがない、または上限を超えています）。"],
         };
         this.ws.announce(this.notice.text);
+        this.ws.noteDiskChange();
         if (this.history) void this.loadHistory(this.history.scope, this.history.articleId);
         break;
       case "stopped":

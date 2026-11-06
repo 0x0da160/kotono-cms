@@ -16,6 +16,11 @@ import {
 import { exportZip, extractZip, planZip, type ZipPlan } from "../workspaces/zip";
 import { Vault, type Unlocked, type UnlockMethod } from "../crypto/vault";
 import type { KeySlot } from "../workspaces/store";
+import { SEALED_WS_PREFIX, type SealedDraftStore } from "../drafts/sealed";
+
+export const DEFAULT_LOCK_MINUTES = 15;
+export const HIDDEN_GRACE_MINUTES = 5;
+export const LOCK_MINUTE_CHOICES = [5, 15, 30, 60, 0] as const;
 
 export type PersistState = "unknown" | "persisted" | "not-persisted" | "unsupported";
 
@@ -35,6 +40,7 @@ export interface StorageHost {
 }
 
 export interface PlaceView {
+  readonly id: string;
   readonly entry: WorkspaceEntry;
   /** 表示名（暗号化した作業場所はロック中「ロック中の作業場所」） */
   readonly label: string;
@@ -68,14 +74,26 @@ export class PlacesController {
   /** 作成直後に一度だけ表示する回復コード（39.2） */
   recoveryToShow = $state<{ id: string; code: string } | null>(null);
 
+  readonly vault: Vault | null;
+  private readonly sealed: SealedDraftStore | null;
+  private readonly now: () => Date;
+
   constructor(
     private readonly ws: Workspace,
     private readonly host: StorageHost,
     private readonly deliver: Deliver,
-    readonly vault: Vault | null = null,
+    opts: { vault?: Vault | null; sealed?: SealedDraftStore | null; now?: () => Date } = {},
+  ) {
+    this.vault = opts.vault ?? null;
+    this.sealed = opts.sealed ?? null;
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- 時刻を得るだけで、状態として持たない
-    private readonly now: () => Date = () => new Date(),
-  ) {}
+    this.now = opts.now ?? (() => new Date());
+  }
+
+  /** 自動ロックまでの無操作時間（分、0 は自動ロックしない：39.3） */
+  lockMinutes = $state(DEFAULT_LOCK_MINUTES);
+  private lastActive = 0;
+  private hiddenAt: number | null = null;
 
   /** 開発版の配信元（他のページと保存領域を共有する：38.5）なら true */
   get sharedOrigin(): boolean {
@@ -111,11 +129,11 @@ export class PlacesController {
 
   views(): PlaceView[] {
     return this.entries.map((entry) => {
-      if (entry.state !== "ok") return { entry, label: `不完全な作業場所（${entry.id}）`, locked: false };
+      if (entry.state !== "ok") return { id: entry.id, entry, label: `不完全な作業場所（${entry.id}）`, locked: false };
       const m = entry.meta;
-      if (!m.keyring) return { entry, label: m.name, locked: false };
+      if (!m.keyring) return { id: m.id, entry, label: m.name, locked: false };
       const n = this.names[m.id];
-      return { entry, label: n ?? "ロック中の作業場所", locked: n === undefined };
+      return { id: m.id, entry, label: n ?? "ロック中の作業場所", locked: n === undefined };
     });
   }
 
@@ -160,8 +178,18 @@ export class PlacesController {
     this.busy = true;
     this.error = null;
     try {
-      const keyring = encrypted && this.vault ? await this.vault.prepareNew(name) : null;
-      const meta = await this.store.create({ name, keyring: keyring?.record ?? null });
+      const vault = this.vault;
+      const keyring = encrypted && vault ? await vault.prepareNew(name) : null;
+      const meta = await this.store.create({
+        name,
+        keyring: keyring?.record ?? null,
+        // 記事の置き場所を用意しておく（初回フォルダ準備を省く：3.1）
+        fill: async (dir, id) => {
+          const t = keyring && vault ? await vault.wrapDir(dir, id, keyring.key) : dir;
+          const c = await t.getDirectoryHandle("content", { create: true });
+          await c.getDirectoryHandle("articles", { create: true });
+        },
+      });
       if (keyring) {
         this.vault?.adopt(meta.id, keyring.key);
         this.names = { ...this.names, [meta.id]: name.trim() };
@@ -313,20 +341,33 @@ export class PlacesController {
     }
   }
 
-  /** ロックする（鍵を捨てる）。開いていれば閉じる。未保存の編集は呼び出し側で退避する（39.3） */
-  lock(id: string): void {
+  /**
+   * ロックする（鍵を捨てる）。開いていれば閉じる（39.3）。
+   * 未保存の編集は、ロックの前に暗号化した復旧ドラフトとして退避する（ドラフトが有効な場合）。
+   * 戻り値は、未保存の編集を退避できなかった（ドラフトが無効・失敗）なら false。
+   */
+  async lock(id: string): Promise<boolean> {
+    let kept = true;
     if (this.current?.id === id) {
+      const s = this.ws.session;
+      if (s?.dirty && s.readOnlyReason === null) {
+        await this.ws.drafts?.flush(s).catch(() => undefined);
+        kept = s.draft.kind === "saved" && s.draft.revision === s.revision;
+      }
       this.ws.close();
       this.current = null;
     }
+    this.sealed?.unregister(SEALED_WS_PREFIX + id);
     this.vault?.lock(id);
     const { [id]: _drop, ...rest } = this.names;
     void _drop;
     this.names = rest;
+    if (!kept) this.info = "ロックしました。未保存の編集は退避できませんでした（復旧ドラフトが無効です）。";
+    return kept;
   }
 
-  lockAll(): void {
-    for (const id of Object.keys(this.names)) this.lock(id);
+  async lockAll(): Promise<void> {
+    for (const id of Object.keys(this.names)) await this.lock(id);
   }
 
   /** パスフレーズ・パスキーを加える（39.2） */
@@ -376,8 +417,10 @@ export class PlacesController {
     }
     const store = this.store;
     this.current = meta;
+    if (meta.keyring && this.vault) this.sealed?.register(SEALED_WS_PREFIX + meta.id, this.vault.draftSealer(meta.id));
     await this.ws.openRoot(root, {
       displayName: meta.keyring ? (this.names[meta.id] ?? "作業場所") : meta.name,
+      draftsId: meta.keyring ? SEALED_WS_PREFIX + meta.id : `p:${meta.id}`,
       backupRoot: async () => {
         const b = await store.backupRoot(meta.id);
         return meta.keyring && this.vault ? this.vault.wrapBackup(b, meta.id) : b;
@@ -451,8 +494,53 @@ export class PlacesController {
     }
   }
 
+  // -------------------------------------------------------------------------
+  // 自動ロック（39.3）
+
+  get anyUnlocked(): boolean {
+    return Object.keys(this.names).length > 0;
+  }
+
+  activity(): void {
+    this.lastActive = this.now().getTime();
+  }
+
+  /** 定期的に呼ぶ。無操作が続いたらロックする */
+  async tick(): Promise<void> {
+    if (this.lockMinutes <= 0 || !this.anyUnlocked || this.busy) return;
+    if (this.lastActive === 0) this.activity();
+    if (this.now().getTime() - this.lastActive >= this.lockMinutes * 60_000) await this.autoLock();
+  }
+
+  /**
+   * ページの表示・非表示。非表示の間はタイマーが止まることがある（iOS）ので、戻ったときに経過時間で判断する。
+   * 共有シート・ファイル選択で一時的に隠れることがあるため、非表示の猶予は無操作時間と HIDDEN_GRACE_MINUTES の短い方。
+   */
+  async visibility(hidden: boolean): Promise<void> {
+    const t = this.now().getTime();
+    if (hidden) {
+      this.hiddenAt = t;
+      return;
+    }
+    const at = this.hiddenAt;
+    this.hiddenAt = null;
+    if (at === null || this.lockMinutes <= 0 || !this.anyUnlocked) return;
+    const grace = Math.min(this.lockMinutes, HIDDEN_GRACE_MINUTES) * 60_000;
+    if (t - at >= grace) await this.autoLock();
+    else this.activity();
+  }
+
+  private async autoLock(): Promise<void> {
+    await this.lockAll();
+    this.info ??= "しばらく操作がなかったのでロックしました。";
+  }
+
   async remove(id: string): Promise<void> {
     if (!this.store || this.busy) return;
+    if (this.current?.id === id) {
+      this.ws.close();
+      this.current = null;
+    }
     this.busy = true;
     this.error = null;
     try {

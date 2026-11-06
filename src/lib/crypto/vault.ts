@@ -7,7 +7,8 @@
  *   DK から作った書き出し用の鍵で暗号化した zip からなる。別の端末では回復コード等で開ける。
  */
 import type { DirHandleLike } from "../fs/types";
-import type { KeyringRecord, KeySlot } from "../workspaces/store";
+import { validKeyring, type KeyringRecord, type KeySlot } from "../workspaces/store";
+import type { Sealer } from "../drafts/sealed";
 import { encryptedRoot, type EncContext } from "./encfs";
 import {
   PBKDF2_ITERATIONS,
@@ -16,6 +17,7 @@ import {
   b64u,
   deriveDataKeys,
   fromB64u,
+  hmac,
   keyFromPrf,
   keyFromSecret,
   newRecoveryCode,
@@ -31,6 +33,7 @@ const te = new TextEncoder();
 const td = new TextDecoder("utf-8", { fatal: true });
 const NAME_AAD = te.encode("kotono-cms/meta/name");
 const TOKEN_AAD = te.encode("kotono-cms/meta/token");
+const DRAFT_AAD = te.encode("kotono-cms/draft");
 const EXPORT_MAGIC = te.encode("KOTONO-EXPORT/1\n");
 export const PASSPHRASE_MIN = 10;
 
@@ -216,6 +219,29 @@ export class Vault {
   }
 
   // -------------------------------------------------------------------------
+  // 復旧ドラフト（39.1）
+
+  /** ドラフトを暗号化する道具。鍵はロックまで保持する（ロック後は使えない） */
+  draftSealer(id: string): Sealer {
+    const k = this.need(id);
+    const aad = new Uint8Array([...DRAFT_AAD, 0, ...te.encode(id)]);
+    return {
+      tag: async (v) => b64u((await hmac(k.keys.nameLong, te.encode(`draft\0${id}\0${v}`))).slice(0, 24)),
+      seal: async (plain) => b64u(await aesEncrypt(k.keys.meta, te.encode(plain), aad)),
+      open: async (sealed) => {
+        const b = fromB64u(sealed);
+        const p = b ? await aesDecrypt(k.keys.meta, b, aad) : null;
+        if (!p) return null;
+        try {
+          return td.decode(p);
+        } catch {
+          return null;
+        }
+      },
+    };
+  }
+
+  // -------------------------------------------------------------------------
   // GitHub のトークン（40.2）
 
   async sealToken(id: string, token: string): Promise<string> {
@@ -263,7 +289,8 @@ export class Vault {
       return null;
     }
     const r = v as { v?: unknown; slots?: unknown };
-    if (r.v !== 1 || !Array.isArray(r.slots) || r.slots.length === 0 || r.slots.length > 16) return null;
+    // 枠の形式は meta と同じ規則で検査する（未信頼入力：38.2）
+    if (r.v !== 1 || !validKeyring({ v: 1, name: "", slots: r.slots })) return null;
     return { header: { v: 1, slots: r.slots as KeySlot[] }, raw, body: bytes.slice(EXPORT_MAGIC.length + 4 + len) };
   }
 

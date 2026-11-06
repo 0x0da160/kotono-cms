@@ -142,7 +142,7 @@ export function parseMeta(bytes: Uint8Array, expectedId: string): WorkspaceMeta 
 
 const B64URL = /^[A-Za-z0-9_-]{0,8192}$/;
 
-function validKeyring(v: unknown): boolean {
+export function validKeyring(v: unknown): boolean {
   if (typeof v !== "object" || v === null) return false;
   const k = v as Record<string, unknown>;
   if (k["v"] !== 1 || typeof k["name"] !== "string" || !B64URL.test(k["name"])) return false;

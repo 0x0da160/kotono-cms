@@ -7,25 +7,34 @@
   import DraftSettings from "./components/DraftSettings.svelte";
   import Editor from "./components/Editor.svelte";
   import RecoveryPanel from "./components/RecoveryPanel.svelte";
+  import PlacesPanel from "./components/PlacesPanel.svelte";
+  import PlaceBar from "./components/PlaceBar.svelte";
+  import { PlacesController, browserDeliver } from "./lib/app/places.svelte";
+  import { Vault } from "./lib/crypto/vault";
+  import { browserPasskey } from "./lib/crypto/passkey";
+  import { SealedDraftStore } from "./lib/drafts/sealed";
+  import { opfsRoot } from "./lib/workspaces/store";
   import { DraftController } from "./lib/app/drafts.svelte";
   import { GitController } from "./lib/app/git.svelte";
   import { Workspace } from "./lib/app/workspace.svelte";
   import { IdbDraftStore } from "./lib/drafts/store";
   import { IdbRecentFolderStore } from "./lib/app/recent-folder";
   import { WorkerMdService } from "./lib/parse/md-worker-service";
-  import { detectCapabilities, isSupported } from "./lib/capabilities";
+  import { detectCapabilities, supportedMode, unusedIn } from "./lib/capabilities";
   import { ARTICLES_PATH } from "./lib/fs/repo";
   import { probeWorker } from "./lib/worker-probe";
 
   const appVersion = __APP_VERSION__;
   const specVersion = __SPEC_VERSION__;
   const results = detectCapabilities(globalThis as unknown as Record<string, unknown>);
-  const supported = isSupported(results);
+  // 実フォルダを選べる環境では実フォルダを使う。`?storage=workspace` でブラウザ内の作業場所を選べる（2.1・38.1）
+  const prefer = new URLSearchParams(location.search).get("storage") === "workspace" ? "workspace" : null;
+  const mode = supportedMode(results, prefer);
+  const supported = mode !== null;
+  const inPlaces = mode === "workspace";
 
-  const drafts = new DraftController(
-    typeof indexedDB === "undefined" ? null : new IdbDraftStore(indexedDB),
-    appVersion,
-  );
+  const sealedDrafts = typeof indexedDB === "undefined" ? null : new SealedDraftStore(new IdbDraftStore(indexedDB));
+  const drafts = new DraftController(sealedDrafts, appVersion);
   const ws = new Workspace(globalThis as unknown as ConstructorParameters<typeof Workspace>[0], {
     drafts,
     appVersion,
@@ -36,6 +45,14 @@
   const workbench = $derived(ws.root !== null && ws.articles !== null && !ws.missingArticles);
   const git = new GitController(ws);
   ws.git = git.hooks;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ブラウザの大域を各層の最小の型へ渡す
+  const host = globalThis as any;
+  const places = inPlaces
+    ? new PlacesController(ws, host, browserDeliver(host), {
+        vault: new Vault(browserPasskey(host)),
+        sealed: sealedDrafts,
+      })
+    : null;
   // フォルダを開いたとき・一覧を読み直したときに Git 状態を取り直す（23.2：自動監視はしない）
   let gitRoot: unknown = null;
   $effect(() => {
@@ -57,8 +74,26 @@
     void probeWorker().then((ok) => (workerProbe = ok ? "ok" : "failed"));
     if (supported) void drafts.init();
     // 前回のフォルダ：権限が残っていればそのまま開く。残っていなければ「前回のフォルダを開く」を示す（ADR-0005）
-    if (supported) void ws.loadRecent();
+    if (mode === "folder") void ws.loadRecent();
+    if (places) {
+      void opfsRoot(host).then(async (root) => {
+        if (root) await places.init(root);
+        else places.error = "ブラウザ内の保存領域（OPFS）を開けません。";
+      });
+      // 自動ロック（39.3）：無操作の時間を数える。非表示の間はタイマーが止まることがあるので、戻ったときにも調べる
+      const t = setInterval(() => void places.tick(), 30_000);
+      const onVis = () => void places.visibility(document.visibilityState === "hidden");
+      document.addEventListener("visibilitychange", onVis);
+      return () => {
+        clearInterval(t);
+        document.removeEventListener("visibilitychange", onVis);
+      };
+    }
   });
+
+  function onActivity() {
+    places?.activity();
+  }
 
   function onKeydown(e: KeyboardEvent) {
     const mod = e.ctrlKey || e.metaKey;
@@ -88,7 +123,14 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} onbeforeunload={onBeforeUnload} />
+<svelte:window
+  onkeydown={(e) => {
+    onActivity();
+    onKeydown(e);
+  }}
+  onpointerdown={onActivity}
+  onbeforeunload={onBeforeUnload}
+/>
 
 <a class="skip" href="#main">本文へ移動</a>
 <header class="app-header">
@@ -96,7 +138,13 @@
     <h1>Kotono CMS</h1>
     <p class="tagline">手元のMarkdownで記事をつくる、ローカルCMS。</p>
   </div>
-  {#if supported}
+  {#if places}
+    {#if ws.root}
+      <div class="folder">
+        <span class="folder-name" data-testid="folder-name">作業場所：{ws.rootName}</span>
+      </div>
+    {/if}
+  {:else if supported}
     <div class="folder">
       {#if ws.root}
         <span class="folder-name" data-testid="folder-name">作業フォルダ：{ws.rootName}</span>
@@ -116,36 +164,42 @@
 
 <main id="main" tabindex="-1" class:wide={ws.root !== null} class:workbench>
   {#if supported && drafts.mode === "undecided" && !workbench}<DraftSettings {ws} dc={drafts} />{/if}
+  {#if places && ws.root === null}
+    <PlacesPanel {places} {ws} />
+  {/if}
   {#if !supported || ws.root === null}
-    <section aria-labelledby="start-heading" class="card">
-      <h2 id="start-heading">はじめに</h2>
-      {#if supported}
-        <p>
-          記事を保存しているリポジトリのフォルダ（<code>content/articles/</code> を含むフォルダ）を選んでください。フォルダへのアクセスはこのタブを閉じるまで有効です。
-        </p>
-        {#if ws.recent}
-          <div class="recent" data-testid="recent-folder">
-            <button
-              type="button"
-              class="primary"
-              onclick={() => ws.reopenRecent()}
-              disabled={ws.busy}
-              data-testid="reopen-recent">前回のフォルダ「{ws.recent.name}」を開く</button
-            >
-            <button type="button" onclick={() => ws.forgetRecent()} data-testid="forget-recent">記憶を消す</button>
-          </div>
-          {#if ws.folderError}<p class="banner" role="alert" data-testid="folder-error">{ws.folderError}</p>{/if}
+    {#if !places}<section aria-labelledby="start-heading" class="card">
+        <h2 id="start-heading">はじめに</h2>
+        {#if supported}
+          <p>
+            記事を保存しているリポジトリのフォルダ（<code>content/articles/</code> を含むフォルダ）を選んでください。フォルダへのアクセスはこのタブを閉じるまで有効です。
+          </p>
+          {#if ws.recent}
+            <div class="recent" data-testid="recent-folder">
+              <button
+                type="button"
+                class="primary"
+                onclick={() => ws.reopenRecent()}
+                disabled={ws.busy}
+                data-testid="reopen-recent">前回のフォルダ「{ws.recent.name}」を開く</button
+              >
+              <button type="button" onclick={() => ws.forgetRecent()} data-testid="forget-recent">記憶を消す</button>
+            </div>
+            {#if ws.folderError}<p class="banner" role="alert" data-testid="folder-error">{ws.folderError}</p>{/if}
+          {/if}
+          <p class="muted small">
+            開いたフォルダは、次回すぐ開けるようこのブラウザ内に記憶します（フォルダ名とアクセス用の情報だけで、記事の内容は保存しません）。開くときにブラウザがアクセスの許可を求めることがあります。
+          </p>
+          <p class="muted small">
+            記事は手動で保存します。Git を使う場合は、記事単位でコミットできます（push・pull は行いません）。
+          </p>
+        {:else}
+          <p>
+            このブラウザでは編集を開始できません。デスクトップ版の Chrome・Edge、または iOS・iPadOS 26 以降の Safari
+            で開いてください。
+          </p>
         {/if}
-        <p class="muted small">
-          開いたフォルダは、次回すぐ開けるようこのブラウザ内に記憶します（フォルダ名とアクセス用の情報だけで、記事の内容は保存しません）。開くときにブラウザがアクセスの許可を求めることがあります。
-        </p>
-        <p class="muted small">
-          記事は手動で保存します。Git を使う場合は、記事単位でコミットできます（push・pull は行いません）。
-        </p>
-      {:else}
-        <p>このブラウザでは編集を開始できません。デスクトップ版の Chrome または Edge で開いてください。</p>
-      {/if}
-    </section>
+      </section>{/if}
 
     <section aria-labelledby="env-heading" class="card">
       <h2 id="env-heading">対応環境の確認</h2>
@@ -153,7 +207,8 @@
         {#if supported}
           このブラウザは必要なAPIを備えています（実機検証の代替ではありません）。
         {:else}
-          このブラウザでは一部の必要なAPIが利用できません。デスクトップ版の Chrome または Edge で開いてください。
+          このブラウザでは一部の必要なAPIが利用できません。デスクトップ版の Chrome・Edge、または iOS・iPadOS 26 以降の
+          Safari で開いてください。
         {/if}
       </p>
       <ul class="capabilities">
@@ -161,8 +216,10 @@
           <li data-capability={r.id} data-ok={r.ok}>
             <span class="mark" aria-hidden="true">{r.ok ? "✓" : "✕"}</span>
             <span class="label">{r.label}</span>
-            <span class="state">{r.ok ? "利用可能" : "利用不可"}</span>
-            {#if !r.ok}
+            <span class="state"
+              >{r.ok ? "利用可能" : mode && unusedIn(mode, r.id) ? "この環境では不要" : "利用不可"}</span
+            >
+            {#if !r.ok && !(mode && unusedIn(mode, r.id))}
               <span class="impact">{r.impact}</span>
             {/if}
           </li>
@@ -180,6 +237,9 @@
       </p>
     </section>
   {:else}
+    {#if places?.current}
+      <PlaceBar {places} {ws} {git} meta={places.current} />
+    {/if}
     {#if ws.folderError}
       <p class="banner" role="alert" data-testid="folder-error">{ws.folderError}</p>
     {/if}

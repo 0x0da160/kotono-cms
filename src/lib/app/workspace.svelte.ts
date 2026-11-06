@@ -132,6 +132,8 @@ export interface OpenPlace {
   readonly displayName: string;
   readonly backupRoot: () => Promise<DirHandleLike>;
   readonly onDiskChange?: () => void;
+  /** 復旧ドラフトの作業フォルダ識別（作業場所の ID から決める。暗号化した作業場所は `e:` で始まる：39.1） */
+  readonly draftsId?: string;
 }
 
 export interface MediaState {
@@ -356,7 +358,7 @@ export class Workspace {
     this.missingArticles = false;
     this.scan = null;
     this.config = await readConfig(root);
-    await this.drafts?.attach(root);
+    await this.drafts?.attach(root, place?.draftsId ?? null);
     const st = await openArticlesDir(root);
     if (st.kind === "ok") {
       this.articles = st.dir;
@@ -953,6 +955,11 @@ export class Workspace {
   /** ディスク上の記事が変わった（保存・複製・削除・画像の取り込み・コミット）。作業場所の「端末の外にない変更」に使う */
   noteDiskChange(): void {
     this.place?.onDiskChange?.();
+  }
+
+  /** 復旧ドラフトを有効にした後などに、開いているフォルダ・作業場所へ結び付け直す */
+  async attachDrafts(): Promise<void> {
+    if (this.root) await this.drafts?.attach(this.root, this.place?.draftsId ?? null);
   }
 
   /** 作業場所を閉じる（ロック・削除の前：第39.3節） */
