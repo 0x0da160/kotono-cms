@@ -16,6 +16,7 @@ function supportedHost(): Record<string, unknown> {
     crypto: globalThis.crypto,
     indexedDB: {},
     TextDecoder,
+    navigator: { storage: { getDirectory: () => undefined } },
   };
 }
 
@@ -33,9 +34,10 @@ describe("detectCapabilities", () => {
     expect(isSupported(results)).toBe(false);
   });
 
-  it("フォルダ選択APIがなければ非対応とする（Firefox・Safari 等）", () => {
+  it("フォルダ選択APIも OPFS もなければ非対応とする（Firefox 等）", () => {
     const host = supportedHost();
     delete host["showDirectoryPicker"];
+    delete host["navigator"];
     const results = detectCapabilities(host);
     expect(results.find((r) => r.id === "directory-picker")?.ok).toBe(false);
     expect(isSupported(results)).toBe(false);

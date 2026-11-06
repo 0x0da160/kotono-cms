@@ -1,0 +1,90 @@
+/**
+ * パスキー（WebAuthn）の PRF 拡張で、端末内の鍵を開くための 32 バイトを得る（仕様 3.2 第39.2節）。
+ *
+ * - サーバーへのログインではない。チャレンジは端末内で作り、署名は検証しない（使うのは PRF の出力だけ）。
+ * - RP ID は配信元のホスト名。配信元を移すと使えなくなるので、登録し直す（39.2）。
+ * - PRF の対応は iOS 18.4 以降で安定とされる。端末間で同じ出力になるかは TG14 で確かめる。
+ */
+import { randomBytes } from "./keys";
+
+export interface PasskeyApi {
+  /** 登録し、PRF の出力を得る（登録時に出力が返らなければ、続けて認証して得る） */
+  register(label: string, prfSalt: Uint8Array): Promise<{ credentialId: Uint8Array; prf: Uint8Array }>;
+  /** 登録済みのいずれかで認証し、そのパスキーの PRF の出力を得る */
+  authenticate(
+    allowed: readonly { credentialId: Uint8Array; prfSalt: Uint8Array }[],
+  ): Promise<{ credentialId: Uint8Array; prf: Uint8Array }>;
+}
+
+interface PrfResults {
+  prf?: { enabled?: boolean; results?: { first?: ArrayBuffer } };
+}
+
+type CredentialsHost = {
+  navigator?: { credentials?: CredentialsContainer };
+  location?: { hostname?: string };
+  PublicKeyCredential?: unknown;
+};
+
+export function browserPasskey(host: CredentialsHost): PasskeyApi | null {
+  const creds = host.navigator?.credentials;
+  const rpId = host.location?.hostname;
+  if (!creds || typeof host.PublicKeyCredential !== "function" || !rpId) return null;
+  // file:// ではホスト名がなく、パスキーを使えない
+  if (rpId === "") return null;
+
+  const authenticate: PasskeyApi["authenticate"] = async (allowed) => {
+    if (allowed.length === 0) throw new Error("登録済みのパスキーがありません。");
+    const evalByCredential: Record<string, { first: Uint8Array<ArrayBuffer> }> = {};
+    for (const a of allowed) evalByCredential[b64(a.credentialId)] = { first: a.prfSalt as Uint8Array<ArrayBuffer> };
+    const cred = (await creds.get({
+      publicKey: {
+        challenge: randomBytes(32),
+        rpId,
+        userVerification: "required",
+        allowCredentials: allowed.map((a) => ({ type: "public-key", id: a.credentialId as Uint8Array<ArrayBuffer> })),
+        extensions: { prf: { evalByCredential } } as AuthenticationExtensionsClientInputs,
+      },
+    })) as PublicKeyCredential | null;
+    if (!cred) throw new Error("パスキーでの認証が取り消されました。");
+    const prf = (cred.getClientExtensionResults() as PrfResults).prf?.results?.first;
+    if (!prf)
+      throw new Error("このパスキーは鍵の導出（PRF）に対応していません。回復コードかパスフレーズで開いてください。");
+    return { credentialId: new Uint8Array(cred.rawId), prf: new Uint8Array(prf) };
+  };
+
+  return {
+    async register(label, prfSalt) {
+      const cred = (await creds.create({
+        publicKey: {
+          challenge: randomBytes(32),
+          rp: { id: rpId, name: "Kotono CMS" },
+          user: { id: randomBytes(16), name: label, displayName: label },
+          pubKeyCredParams: [
+            { type: "public-key", alg: -7 },
+            { type: "public-key", alg: -257 },
+          ],
+          authenticatorSelection: { residentKey: "required", userVerification: "required" },
+          extensions: {
+            prf: { eval: { first: prfSalt as Uint8Array<ArrayBuffer> } },
+          } as AuthenticationExtensionsClientInputs,
+        },
+      })) as PublicKeyCredential | null;
+      if (!cred) throw new Error("パスキーの登録が取り消されました。");
+      const id = new Uint8Array(cred.rawId);
+      const ext = cred.getClientExtensionResults() as PrfResults;
+      const first = ext.prf?.results?.first;
+      if (first) return { credentialId: id, prf: new Uint8Array(first) };
+      if (ext.prf?.enabled === false) throw new Error("このパスキーは鍵の導出（PRF）に対応していません。");
+      // 登録時に出力を返さない実装（Safari など）では、続けて認証して得る
+      return authenticate([{ credentialId: id, prfSalt }]);
+    },
+    authenticate,
+  };
+}
+
+function b64(bytes: Uint8Array): string {
+  let s = "";
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+}
