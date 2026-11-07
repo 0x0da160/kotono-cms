@@ -1,0 +1,149 @@
+<script lang="ts">
+  /** 画面に常に出していた長めの説明をまとめたヘルプ。フッターの「ヘルプ」から開く */
+  import CircleQuestionMark from "@lucide/svelte/icons/circle-question-mark";
+  import X from "@lucide/svelte/icons/x";
+
+  let el: HTMLDialogElement | undefined = $state();
+  let opener: HTMLElement | null = null;
+
+  function show() {
+    opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    el?.showModal();
+  }
+
+  function onClose() {
+    opener?.focus();
+    opener = null;
+  }
+</script>
+
+<button type="button" class="link help-open" onclick={show} data-testid="help-open"
+  ><CircleQuestionMark aria-hidden="true" />ヘルプ</button
+>
+
+<dialog bind:this={el} onclose={onClose} aria-labelledby="help-title" class="help" data-testid="help-dialog">
+  <div class="top">
+    <h2 id="help-title">ヘルプ</h2>
+    <button type="button" onclick={() => el?.close()} aria-label="ヘルプを閉じる"><X aria-hidden="true" />閉じる</button
+    >
+  </div>
+
+  <section>
+    <h3>保存とキーボード</h3>
+    <p>
+      記事は手動で保存します（自動では保存しません）。Git を使う場合は、記事単位でコミットでき、GitHub
+      と送る・取得する（push・pull）ができます。
+    </p>
+    <ul>
+      <li>Ctrl/⌘+S：保存</li>
+      <li>Ctrl/⌘+Z：元に戻す</li>
+      <li>Ctrl/⌘+Shift+Z または Ctrl+Y：やり直す</li>
+    </ul>
+    <p>日本語の変換中（IME）は保存しません。変換を確定してから保存してください。</p>
+  </section>
+
+  <section>
+    <h3>フォルダを開いて使う</h3>
+    <p>
+      記事を保存しているリポジトリのフォルダ（<code>content/articles/</code> を含むフォルダ）を選びます。フォルダへのアクセスはタブを閉じるまで有効です。
+    </p>
+    <p>
+      開いたフォルダは、次回すぐ開けるようこのブラウザ内に記憶します（フォルダ名とアクセス用の情報だけで、記事の内容は保存しません）。開くときにブラウザがアクセスの許可を求めることがあります。
+    </p>
+  </section>
+
+  <section>
+    <h3>ブラウザ内の作業場所</h3>
+    <p>記事・画像・Git の履歴を、このブラウザの中に保存します。作業場所ごとに別のリポジトリとして扱います。</p>
+    <p>
+      ブラウザは保存領域を消去することがあります。こまめに書き出すか、GitHub と同期してください。iPhone・iPad
+      では、共有メニューの「ホーム画面に追加」から開くと、保存領域が消されにくくなります。
+    </p>
+  </section>
+
+  <section>
+    <h3>復旧ドラフト</h3>
+    <p>
+      未保存の編集を、ブラウザの中に自動で退避します。タブを閉じたりブラウザが落ちたりしても、次回の起動で戻せます。ディスクへは自動で書き込みません。設定はフッターの「復旧ドラフト」から変えられます。
+    </p>
+  </section>
+
+  <section>
+    <h3>本文と記事情報</h3>
+    <p>
+      本文は「見たまま」「Markdown」「原文」で編集できます。表・生
+      HTML・参照形式のリンクなどは、見たままでは灰色の枠で表示します。その部分は「Markdown」か「原文」で編集してください。
+    </p>
+    <p>記事ID・作成日時・更新日時は CMS が管理します。記事情報の欄にない項目は「原文」で編集してください。</p>
+  </section>
+
+  <p class="more">各欄の横の <CircleQuestionMark aria-hidden="true" /> を押すと、その欄の説明を表示します。</p>
+</dialog>
+
+<style>
+  .help-open {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .help-open :global(svg),
+  .more :global(svg) {
+    width: 1em;
+    height: 1em;
+    vertical-align: -0.125em;
+  }
+  .help {
+    width: min(40rem, calc(100vw - 2rem));
+    max-height: calc(100dvh - 2rem);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    padding: 1rem 1.25rem 1.25rem;
+    font-size: 0.875rem;
+    line-height: 1.7;
+  }
+  .help::backdrop {
+    background: rgb(0 0 0 / 0.4);
+  }
+  .top {
+    position: sticky;
+    top: -1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin: -1rem -1.25rem 0.5rem;
+    padding: 0.75rem 1.25rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .top button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .top button :global(svg) {
+    width: 1em;
+    height: 1em;
+  }
+  h2 {
+    margin: 0;
+    font-size: 1.125rem;
+  }
+  h3 {
+    margin: 1rem 0 0.25rem;
+    font-size: 0.9375rem;
+  }
+  p,
+  ul {
+    margin: 0.25rem 0;
+  }
+  ul {
+    padding-inline-start: 1.25rem;
+  }
+  .more {
+    margin-top: 1rem;
+    color: var(--muted);
+  }
+</style>

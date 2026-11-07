@@ -5,6 +5,7 @@
   import { IMAGE_MAX_BYTES } from "../lib/core/budgets";
   import { listVariants, loadDisplayImage } from "../lib/fs/media";
   import { ORIGINAL_MAX_BYTES, ORIGINAL_MAX_PIXELS, ORIGINAL_MAX_SIDE, VARIANT_WIDTHS } from "../lib/fs/optimize";
+  import HelpTip from "./HelpTip.svelte";
 
   let { ws, session }: { ws: Workspace; session: EditorSession } = $props();
 
@@ -70,7 +71,19 @@
 
 <section class="media" aria-labelledby="media-heading" data-testid="media-panel">
   <div class="head">
-    <h3 id="media-heading">画像（media/）</h3>
+    <h3>
+      <span id="media-heading">画像（media/）</span><HelpTip label="画像"
+        ><span class="tip-p"
+          >JPEG・PNG・GIF・WebP・AVIF を取り込めます。取り込むときに、縦横 {ORIGINAL_MAX_SIDE}px・{ORIGINAL_MAX_PIXELS /
+            10_000}万画素・{ORIGINAL_MAX_BYTES / 1_048_576} MiB 以内に収め、撮影情報・位置情報などのメタデータを削除したものを原本として保存します。表示には幅
+          {VARIANT_WIDTHS.join("・")}px の派生画像（WebP
+          など、media/variants/）を使います。アニメーション画像は加工せずに保存します。</span
+        ><span class="tip-p">取り込んだ画像は、編集を破棄しても削除されません。</span><span class="tip-p"
+          >「参照あり／なし」の確認範囲は、この記事の保存済み本文と cover
+          だけです。別の記事や独自の項目からの参照は確認しません。</span
+        ></HelpTip
+      >
+    </h3>
     <div class="actions">
       <input
         bind:this={input}
@@ -92,13 +105,6 @@
       <button type="button" onclick={() => ws.refreshMedia()} disabled={ws.busy}>一覧を更新</button>
     </div>
   </div>
-  <p class="muted small">
-    JPEG・PNG・GIF・WebP・AVIF を取り込めます。取り込むときに、縦横 {ORIGINAL_MAX_SIDE}px・{ORIGINAL_MAX_PIXELS /
-      10_000}万画素・{ORIGINAL_MAX_BYTES / 1_048_576} MiB 以内に収め、撮影情報・位置情報などのメタデータを削除したものを原本として保存します。表示には幅
-    {VARIANT_WIDTHS.join("・")}px の派生画像（WebP
-    など、media/variants/）を使います。アニメーション画像は加工せずに保存します。
-    取り込んだ画像は、編集を破棄しても削除されません。
-  </p>
 
   {#if ws.importJobs.length > 0}
     <ul class="jobs" aria-label="取り込みの状況">
@@ -146,9 +152,6 @@
         </ul>
       </details>
     {/if}
-    <p class="muted small">
-      参照の確認範囲はこの記事の保存済み本文と cover だけです。別の記事や独自の項目からの参照は確認しません。
-    </p>
     <ul class="files">
       {#each media.files as f (f.name)}
         <li data-testid="media-file">

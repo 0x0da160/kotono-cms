@@ -307,8 +307,12 @@ test("初回の復旧ドラフトの設定は編集側の列に出し、決め�
   if (!listBox || !consentBox) throw new Error("領域の位置を取得できません");
   expect(consentBox.x).toBeGreaterThanOrEqual(listBox.x + listBox.width);
   expect(consentBox.y).toBeLessThan(listBox.y + 40);
-  // 説明はすべて表示したまま
-  await expect(consent.locator("li")).toHaveCount(7);
+  // 共有の端末についての注意は表示したまま、ほかの説明は「?」で開く（説明の文字を減らす）
+  await expect(consent).toContainText("共有の端末では有効にしないでください");
+  await expect(consent.locator(".tip-p")).toHaveCount(6);
+  await expect(consent.locator(".tip-p").first()).toBeHidden();
+  await consent.getByRole("button", { name: "復旧ドラフトの保存内容と期間の説明" }).click();
+  await expect(consent.locator(".tip-p").first()).toBeVisible();
   await consent.getByRole("button", { name: "今は有効にしない" }).focus();
   await page.keyboard.press("Enter");
   await expect(consent).toHaveCount(0);
@@ -378,4 +382,35 @@ test("一覧の絞り込み・並び順は折り畳んでも今の条件を見�
   await page.getByLabel("方向").selectOption("asc");
   await cond.locator("summary").click();
   await expect(page.getByTestId("list-conditions-summary")).toHaveText("状態：下書き・更新日時の昇順");
+});
+
+test("説明は「?」で開いて Esc で閉じ、長い説明はフッターの「ヘルプ」にまとめる", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await launch(page);
+  await page.getByRole("button", { name: "今は有効にしない" }).click();
+  // 一覧のキーワード：説明は閉じているが、入力欄の説明としては読める
+  const kw = page.getByPlaceholder("キーワードで検索");
+  await expect(kw).toHaveAccessibleDescription(/部分一致/);
+  const tip = page.getByRole("button", { name: "キーワードの説明" });
+  await expect(page.locator("#kw-hint")).toBeHidden();
+  await tip.click();
+  await expect(tip).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator("#kw-hint")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#kw-hint")).toBeHidden();
+  await expect(tip).toBeFocused();
+  // 外側を押しても閉じる
+  await tip.click();
+  await page.locator("main").click({ position: { x: 5, y: 5 } });
+  await expect(page.locator("#kw-hint")).toBeHidden();
+
+  // ヘルプ：キーボードの説明はここにある
+  const open = page.getByTestId("help-open");
+  await open.click();
+  const dialog = page.getByTestId("help-dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("Ctrl/⌘+S");
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(open).toBeFocused();
 });

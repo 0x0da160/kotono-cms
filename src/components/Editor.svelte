@@ -28,6 +28,7 @@
   import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
   import Undo2 from "@lucide/svelte/icons/undo-2";
   import X from "@lucide/svelte/icons/x";
+  import HelpTip from "./HelpTip.svelte";
 
   let { ws, session, git = null }: { ws: Workspace; session: EditorSession; git?: GitController | null } = $props();
 
@@ -535,7 +536,12 @@
         <div class="form-layout">
           <div class="src body">
             <div class="body-head">
-              <span id="body-label">本文</span>
+              <span class="body-name"
+                ><span id="body-label">本文</span><HelpTip label="本文の編集方法"
+                  >「見たまま」は書式を表示したまま編集します。表・生
+                  HTML・参照形式のリンクなどは灰色の枠で表示します。その部分は「Markdown」または「原文」で編集してください。</HelpTip
+                ></span
+              >
               <div class="seg" role="group" aria-label="本文の編集方法">
                 <button
                   type="button"
@@ -699,6 +705,10 @@
     .form-layout :global(.form .grid > *) {
       grid-column: 1 / -1;
     }
+  }
+  .body-name {
+    display: inline-flex;
+    align-items: center;
   }
   .body-head {
     display: flex;

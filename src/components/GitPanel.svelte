@@ -1,4 +1,5 @@
 <script lang="ts">
+  import HelpTip from "./HelpTip.svelte";
   import { commitDate, UNOBSERVABLE_NOTE, type GitController } from "../lib/app/git.svelte";
   import type { Workspace } from "../lib/app/workspace.svelte";
   import { tick } from "svelte";
@@ -46,7 +47,13 @@
 
 <section class="git card" aria-labelledby="git-heading" data-testid="git-panel">
   <div class="head">
-    <h2 id="git-heading">Git</h2>
+    <h2>
+      <span id="git-heading">Git</span><HelpTip label="Git"
+        ><span class="tip-p"
+          >Git の状態は自動では監視しません。外部で変更したときは「Git 状態を再読み込み」を押してください。</span
+        ><span class="tip-p">{UNOBSERVABLE_NOTE}</span></HelpTip
+      >
+    </h2>
     <button type="button" onclick={() => git.refresh()} disabled={git.loading || git.busy} data-testid="git-refresh"
       >Git 状態を再読み込み</button
     >
@@ -55,7 +62,7 @@
     {#if git.loading}
       Git の状態を取得しています…
     {:else if loadedAt}
-      最終読み込み：{loadedAt}（自動では監視しません）
+      最終読み込み：{loadedAt}
     {:else}
       未取得
     {/if}
@@ -105,7 +112,6 @@
       </p>
     {/if}
     {#each repo.notes as n, i (i)}<p class="small muted">{n}</p>{/each}
-    <p class="small muted">{UNOBSERVABLE_NOTE}</p>
 
     {#if git.staged.length > 0}
       <h3>開始前からステージされている変更（{git.staged.length} 件）</h3>

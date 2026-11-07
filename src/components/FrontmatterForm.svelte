@@ -1,4 +1,5 @@
 <script lang="ts">
+  import HelpTip from "./HelpTip.svelte";
   import type { EditorSession } from "../lib/app/session.svelte";
   import { formatForDisplay, formatLocalDateTime, publishTiming } from "../lib/core/datetime";
   import type { StandardKey } from "../lib/core/schema";
@@ -68,8 +69,12 @@
   const visibleSpaces = (s: string) => s.replace(/^\s+|\s+$/g, (m) => "␣".repeat(m.length));
 </script>
 
-<fieldset class="form" disabled={readOnly}>
-  <legend>記事情報（frontmatter）</legend>
+<fieldset class="form" disabled={readOnly} aria-labelledby="fm-legend">
+  <legend
+    ><span id="fm-legend">記事情報（frontmatter）</span><HelpTip label="記事情報"
+      >記事ID・作成日時・更新日時は CMS が管理します。この欄にない項目は「原文」で編集してください。</HelpTip
+    ></legend
+  >
 
   <div class="grid">
     <div class="field wide">
@@ -85,7 +90,11 @@
     </div>
 
     <div class="field">
-      <label for="f-slug">slug</label>
+      <div class="lab">
+        <label for="f-slug">slug</label><HelpTip label="slug" id="f-slug-hint"
+          >半角英小文字・数字とハイフン。下書きは空でも保存できます。自動生成しません。</HelpTip
+        >
+      </div>
       <input
         id="f-slug"
         type="text"
@@ -95,7 +104,6 @@
         oninput={(e) => apply("slug", e.currentTarget.value, e.currentTarget)}
         aria-describedby="f-slug-hint"
       />
-      <p class="hint" id="f-slug-hint">半角英小文字・数字とハイフン。下書きは空でも保存できます。自動生成しません。</p>
       {#each errorsFor("slug") as m, i (i)}<p class="err">{m}</p>{/each}
     </div>
 
@@ -138,7 +146,11 @@
     </div>
 
     <div class="field wide">
-      <span class="label" id="f-tags-label">タグ</span>
+      <div class="lab">
+        <span id="f-tags-label">タグ</span><HelpTip label="タグ"
+          >大文字小文字を区別して保存します。自動で統合・トリムしません。</HelpTip
+        >
+      </div>
       {#if (values.tags ?? []).length > 0}
         <ul class="chips" aria-labelledby="f-tags-label">
           {#each values.tags ?? [] as t, i (i)}
@@ -173,7 +185,6 @@
       {#if tagDraftHasEdgeSpace}<p class="warn">
           前後に空白があります：「{visibleSpaces(tagDraft)}」（自動では取り除きません）
         </p>{/if}
-      <p class="hint">大文字小文字を区別して保存します。自動で統合・トリムしません。</p>
       {#each errorsFor("tags") as m, i (i)}<p class="err">{m}</p>{/each}
     </div>
 
@@ -226,7 +237,6 @@
   {#each [...errorsFor("id"), ...errorsFor("createdAt"), ...errorsFor("updatedAt")] as m, i (i)}<p class="err">
       {m}
     </p>{/each}
-  <p class="hint">記事ID・作成日時・更新日時は CMS が管理します。未知の項目は原文モードで編集してください。</p>
 </fieldset>
 
 <style>
@@ -256,9 +266,14 @@
     min-width: 0;
   }
   .field > label,
-  .label {
+  .label,
+  .lab {
     font-weight: 600;
     font-size: 0.875rem;
+  }
+  .lab {
+    display: flex;
+    align-items: center;
   }
   .inline {
     display: flex;

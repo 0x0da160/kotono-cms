@@ -1,4 +1,5 @@
 <script lang="ts">
+  import HelpTip from "./HelpTip.svelte";
   import type { PlacesController, PlaceView } from "../lib/app/places.svelte";
   import type { Workspace } from "../lib/app/workspace.svelte";
   import type { WorkspaceMeta } from "../lib/workspaces/store";
@@ -127,10 +128,11 @@
 </script>
 
 <section class="card" aria-labelledby="places-heading" data-testid="places">
-  <h2 id="places-heading">作業場所</h2>
-  <p class="small">
-    記事・画像・Git の履歴は、このブラウザ内の作業場所に保存します。作業場所ごとに別のリポジトリとして扱います。
-  </p>
+  <h2>
+    <span id="places-heading">作業場所</span><HelpTip label="作業場所"
+      >記事・画像・Git の履歴は、このブラウザ内の作業場所に保存します。作業場所ごとに別のリポジトリとして扱います。</HelpTip
+    >
+  </h2>
 
   <StorageNotice {places} />
 
@@ -287,11 +289,12 @@
         </div>
       </form>
       <div class="sub">
-        <h3>取り込む</h3>
-        <p class="small muted">
-          リポジトリのフォルダを zip にしたもの、または Kotono CMS
-          で暗号化して書き出したファイル（.kotono）を選びます。既存の作業場所へは上書きしません。
-        </p>
+        <h3>
+          取り込む<HelpTip label="取り込み"
+            >リポジトリのフォルダを zip にしたもの、または Kotono CMS
+            で暗号化して書き出したファイル（.kotono）を選びます。既存の作業場所へは上書きしません。</HelpTip
+          >
+        </h3>
         <input
           bind:this={fileInput}
           type="file"
