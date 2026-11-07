@@ -10,6 +10,24 @@
   import MediaPanel from "./MediaPanel.svelte";
   import Preview from "./Preview.svelte";
   import VisualEditor from "./VisualEditor.svelte";
+  import Check from "@lucide/svelte/icons/check";
+  import CircleDot from "@lucide/svelte/icons/circle-dot";
+  import ClipboardList from "@lucide/svelte/icons/clipboard-list";
+  import Code from "@lucide/svelte/icons/code";
+  import Copy from "@lucide/svelte/icons/copy";
+  import CopyPlus from "@lucide/svelte/icons/copy-plus";
+  import Download from "@lucide/svelte/icons/download";
+  import Eye from "@lucide/svelte/icons/eye";
+  import GitCommitHorizontal from "@lucide/svelte/icons/git-commit-horizontal";
+  import LoaderCircle from "@lucide/svelte/icons/loader-circle";
+  import Lock from "@lucide/svelte/icons/lock";
+  import Redo2 from "@lucide/svelte/icons/redo-2";
+  import RefreshCw from "@lucide/svelte/icons/refresh-cw";
+  import Save from "@lucide/svelte/icons/save";
+  import Trash from "@lucide/svelte/icons/trash";
+  import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
+  import Undo2 from "@lucide/svelte/icons/undo-2";
+  import X from "@lucide/svelte/icons/x";
 
   let { ws, session, git = null }: { ws: Workspace; session: EditorSession; git?: GitController | null } = $props();
 
@@ -278,8 +296,12 @@
       <ul class="axes" aria-label="状態">
         <li>
           <span class="axis">保存</span>
-          <span class="badge {session.status}" data-testid="save-status">{statusLabel}</span>
-          {#if saveIssue}<span class="badge err" data-testid="save-issue">{saveIssue}</span>{/if}
+          <span class="badge {session.status}" data-testid="save-status"
+            >{#if readOnly}<Lock />{:else if session.status === "saved"}<Check
+              />{:else if session.status === "saving"}<LoaderCircle
+              />{:else if session.status === "unknown"}<TriangleAlert />{:else}<CircleDot />{/if}{statusLabel}</span
+          >
+          {#if saveIssue}<span class="badge err" data-testid="save-issue"><TriangleAlert />{saveIssue}</span>{/if}
         </li>
         <li>
           <span class="axis">原稿</span>
@@ -313,40 +335,40 @@
         aria-keyshortcuts="Control+S Meta+S"
         data-testid="save-button"
       >
-        {session.saving ? "保存中…" : session.isNew ? "保存（作成）" : "保存"}
+        <Save />{session.saving ? "保存中…" : session.isNew ? "保存（作成）" : "保存"}
       </button>
       <button
         type="button"
         class="group-start"
         onclick={() => session.undo()}
         disabled={!session.canUndo || readOnly || locked}
-        aria-keyshortcuts="Control+Z">元に戻す</button
+        aria-keyshortcuts="Control+Z"><Undo2 />元に戻す</button
       >
       <button
         type="button"
         onclick={() => session.redo()}
         disabled={!session.canRedo || readOnly || locked}
-        aria-keyshortcuts="Control+Shift+Z Control+Y">やり直す</button
+        aria-keyshortcuts="Control+Shift+Z Control+Y"><Redo2 />やり直す</button
       >
       <!-- 使う頻度の低い操作はまとめる（UI刷新 反復3：操作列の折り返しを減らす）。ホバーでは開かない -->
       <details class="more group-start" bind:open={moreOpen} onkeydown={onMoreKeydown}>
         <summary bind:this={moreSummary} data-testid="more-actions">原文の退避・その他</summary>
         <div class="more-menu" role="group" aria-label="原文の退避・その他">
           <button type="button" onclick={() => fromMore(() => copy(session.text))} disabled={session.text === ""}
-            >原文をコピー</button
+            ><Copy />原文をコピー</button
           >
           <button type="button" onclick={() => fromMore(() => download(session.text))} disabled={session.text === ""}
-            >原文をダウンロード</button
+            ><Download />原文をダウンロード</button
           >
           {#if !session.isNew}
             <button type="button" onclick={() => fromMore(() => ws.reloadCurrent())} disabled={ws.busy || locked}
-              >ディスクから再読み込み</button
+              ><RefreshCw />ディスクから再読み込み</button
             >
             <button
               type="button"
               onclick={() => fromMore(() => ws.duplicateCurrent())}
               disabled={ws.busy || readOnly || locked}
-              data-testid="duplicate-button">複製…</button
+              data-testid="duplicate-button"><CopyPlus />複製…</button
             >
           {/if}
         </div>
@@ -358,7 +380,7 @@
             onclick={() => git.commitArticle(session.id)}
             disabled={ws.busy || git.busy || locked || session.dirty || !git.writable}
             title={session.dirty ? "保存してからコミットしてください" : ""}
-            data-testid="commit-button">コミット…</button
+            data-testid="commit-button"><GitCommitHorizontal />コミット…</button
           >
         {/if}
         <button
@@ -366,10 +388,10 @@
           class="danger group-start"
           onclick={() => ws.deleteCurrent()}
           disabled={ws.busy || locked}
-          data-testid="delete-button">削除…</button
+          data-testid="delete-button"><Trash />削除…</button
         >
       {/if}
-      <button type="button" class="close" onclick={() => ws.closeArticle()} disabled={ws.busy}>閉じる</button>
+      <button type="button" class="close" onclick={() => ws.closeArticle()} disabled={ws.busy}><X />閉じる</button>
     </div>
   </div>
 
@@ -484,7 +506,7 @@
         id="tab-form"
         aria-selected={mode === "form"}
         aria-controls="panel-edit"
-        onclick={() => switchMode("form")}>フォーム</button
+        onclick={() => switchMode("form")}><ClipboardList />フォーム</button
       >
       <button
         type="button"
@@ -492,7 +514,7 @@
         id="tab-source"
         aria-selected={mode === "source"}
         aria-controls="panel-edit"
-        onclick={() => switchMode("source")}>原文</button
+        onclick={() => switchMode("source")}><Code />原文</button
       >
       <button
         type="button"
@@ -501,7 +523,7 @@
         aria-selected={mode === "preview"}
         aria-controls="panel-edit"
         onclick={() => switchMode("preview")}
-        data-testid="tab-preview">プレビュー</button
+        data-testid="tab-preview"><Eye />プレビュー</button
       >
     </div>
     {#if modeError}<p class="err" role="alert">{modeError}</p>{/if}

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Download from "@lucide/svelte/icons/download";
+  import Lock from "@lucide/svelte/icons/lock";
   import { LOCK_MINUTE_CHOICES, type PlacesController } from "../lib/app/places.svelte";
   import type { Workspace } from "../lib/app/workspace.svelte";
   import type { GitController } from "../lib/app/git.svelte";
@@ -79,10 +81,10 @@
   <div class="actions">
     <button type="button" onclick={() => places.leave()} data-testid="place-leave">作業場所の一覧</button>
     <button type="button" onclick={exportNow} disabled={places.busy || ws.busy} data-testid="place-export-open"
-      >書き出す</button
+      ><Download />書き出す</button
     >
     {#if encrypted}
-      <button type="button" onclick={() => places.lock(meta.id)} data-testid="place-lock-open">ロック</button>
+      <button type="button" onclick={() => places.lock(meta.id)} data-testid="place-lock-open"><Lock />ロック</button>
     {/if}
   </div>
   {#if places.error}<p class="banner" role="alert">{places.error}</p>{/if}

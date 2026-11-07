@@ -1,4 +1,7 @@
 <script lang="ts">
+  import Plus from "@lucide/svelte/icons/plus";
+  import RefreshCw from "@lucide/svelte/icons/refresh-cw";
+  import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
   import type { GitController } from "../lib/app/git.svelte";
   import type { Workspace } from "../lib/app/workspace.svelte";
   import { LIST_PAGE_SIZE } from "../lib/core/budgets";
@@ -99,8 +102,10 @@
   <div class="list-head">
     <h2 id="list-heading">記事一覧</h2>
     <div class="actions">
-      <button type="button" class="primary" onclick={createNew} disabled={ws.busy || !ws.articles}>新規作成</button>
-      <button type="button" onclick={() => ws.refreshList()} disabled={ws.busy}>一覧を再読み込み</button>
+      <button type="button" class="primary" onclick={createNew} disabled={ws.busy || !ws.articles}
+        ><Plus />新規作成</button
+      >
+      <button type="button" onclick={() => ws.refreshList()} disabled={ws.busy}><RefreshCw />一覧を再読み込み</button>
     </div>
   </div>
 
@@ -218,7 +223,7 @@
             <span class="id">{it.id}</span>
             {#if e.values.status === "published"}<span class="badge pub">公開対象</span
               >{:else if e.values.status === "draft"}<span class="badge">下書き</span>{/if}
-            {#if label}<span class="badge err" title={e.problems.join("\n")}>{label}</span>{/if}
+            {#if label}<span class="badge err" title={e.problems.join("\n")}><TriangleAlert />{label}</span>{/if}
             {#if git?.label(it.id)}<span class="badge git" data-testid="git-badge">{git.label(it.id)}</span>{/if}
           </span>
           <span class="dates">

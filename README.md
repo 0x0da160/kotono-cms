@@ -84,7 +84,7 @@ E2E の初回は `pnpm exec playwright install chromium` でブラウザを入�
 - **安全側の既定値。** ビルド時にインラインの script・style の SHA-256 ハッシュから CSP を生成し、`default-src 'none'`・`connect-src 'none'` で通信を禁止します。`{@html}` と `eval` 系は ESLint でエラーにします。
 - **安定版を選ぶ。** TypeScript 7（ネイティブ版）は svelte-check・typescript-eslint が未対応のため、6.0 系を使います。
 
-YAML は `yaml`（Document API）、記事IDは `nanoid` を固定版で採用しました（[ADR-0002](docs/knowledge/decisions/0002-p1-editing-and-save.md)）。Markdown は micromark / mdast 系を固定版で採用し、終了可能な Worker の中で解析します（[ADR-0003](docs/knowledge/decisions/0003-p1-preview-media-drafts.md)）。Git は外部プロセスを使わない自前の実装で、書き込みを `.git/` の内側に限っています（isomorphic-git を採用しなかった理由は [ADR-0004](docs/knowledge/decisions/0004-p1-git-and-remaining.md)）。.gitignore の判定に `ignore`、コードハイライトに `lowlight`（`highlight.js`）を固定版で使います。代替案と要検証点は [ADR-0001 技術スタックの選定](docs/knowledge/decisions/0001-tech-stack.md) にまとめています。
+YAML は `yaml`（Document API）、記事IDは `nanoid` を固定版で採用しました（[ADR-0002](docs/knowledge/decisions/0002-p1-editing-and-save.md)）。Markdown は micromark / mdast 系を固定版で採用し、終了可能な Worker の中で解析します（[ADR-0003](docs/knowledge/decisions/0003-p1-preview-media-drafts.md)）。Git は外部プロセスを使わない自前の実装で、書き込みを `.git/` の内側に限っています（isomorphic-git を採用しなかった理由は [ADR-0004](docs/knowledge/decisions/0004-p1-git-and-remaining.md)）。.gitignore の判定に `ignore`、コードハイライトに `lowlight`（`highlight.js`）を固定版で使います。操作・状態のアイコンは `@lucide/svelte`（ISC）を固定版で使い、アイコンごとに読み込んで使うものだけを同梱します（アイコンは飾りで、意味は常に文字で示します）。代替案と要検証点は [ADR-0001 技術スタックの選定](docs/knowledge/decisions/0001-tech-stack.md) にまとめています。
 
 ## ディレクトリ構成
 
