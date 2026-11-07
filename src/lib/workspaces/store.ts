@@ -39,7 +39,14 @@ export interface KeyringRecord {
 export type KeySlot =
   | { readonly kind: "recovery"; readonly salt: string; readonly iterations: number; readonly wrapped: string }
   | { readonly kind: "passphrase"; readonly salt: string; readonly iterations: number; readonly wrapped: string }
-  | { readonly kind: "passkey"; readonly credentialId: string; readonly prfSalt: string; readonly wrapped: string };
+  | {
+      readonly kind: "passkey";
+      readonly credentialId: string;
+      readonly prfSalt: string;
+      readonly wrapped: string;
+      /** 登録した配信元のホスト名（RP ID）。古い枠にはない */
+      readonly rpId?: string;
+    };
 
 export interface WorkspaceMeta {
   readonly v: 1;
@@ -166,7 +173,8 @@ export function validKeyring(v: unknown): boolean {
         typeof o["credentialId"] === "string" &&
         B64URL.test(o["credentialId"]) &&
         typeof o["prfSalt"] === "string" &&
-        B64URL.test(o["prfSalt"])
+        B64URL.test(o["prfSalt"]) &&
+        (o["rpId"] === undefined || (typeof o["rpId"] === "string" && o["rpId"].length <= 253))
       );
     return false;
   });

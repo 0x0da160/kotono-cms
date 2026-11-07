@@ -3,6 +3,7 @@ import { MemFs, type MemDir, type MemFile } from "./support/memory-fs";
 import { deriveDataKeys, newRecoveryCode, normalizeRecoveryCode, base32, fromBase32 } from "../../src/lib/crypto/keys";
 import { encryptedRoot, CONTENT_OVERHEAD, type EncContext } from "../../src/lib/crypto/encfs";
 import { Vault } from "../../src/lib/crypto/vault";
+import { browserPasskey } from "../../src/lib/crypto/passkey";
 import { writeNewFile, enumerateTree, readAllBytes } from "../../src/lib/fs/tree";
 import { checkBackupTarget } from "../../src/lib/fs/backup";
 import { WorkspaceStore } from "../../src/lib/workspaces/store";
@@ -182,6 +183,46 @@ describe("Vault（39.2・39.4）", () => {
     const rec = await v.withPasskey(id, k.record, "x");
     v.lock(id);
     expect(await v.unlock(id, rec, { kind: "passkey" })).toBe("x");
+  });
+
+  it("登録した配信元を記録し、別の配信元ではパスキーを求めずに理由を示す", async () => {
+    const prf = crypto.getRandomValues(new Uint8Array(32));
+    const credentialId = new Uint8Array([1, 2, 3]);
+    let asked = 0;
+    const api = (rpId: string) => ({
+      rpId,
+      register: async () => ({ credentialId, prf }),
+      authenticate: async () => {
+        asked++;
+        return { credentialId, prf };
+      },
+    });
+    const v = new Vault(api("a.example"), ITER);
+    const k = await v.prepareNew("x");
+    const id = "d".repeat(16);
+    v.adopt(id, k.key);
+    const rec = await v.withPasskey(id, k.record, "x");
+    expect(rec.slots.find((s) => s.kind === "passkey")).toMatchObject({ rpId: "a.example" });
+    v.lock(id);
+    const other = new Vault(api("b.example"), ITER);
+    await expect(other.unlock(id, rec, { kind: "passkey" })).rejects.toThrow("「a.example」で登録した");
+    expect(asked).toBe(0);
+    expect(await v.unlock(id, rec, { kind: "passkey" })).toBe("x");
+  });
+
+  it("パスキーの NotAllowedError を、次にできることが分かる言葉に置き換える", async () => {
+    const notAllowed = () => Promise.reject(new DOMException("The request is not allowed", "NotAllowedError"));
+    const pk = browserPasskey({
+      navigator: { credentials: { get: notAllowed, create: notAllowed } as unknown as CredentialsContainer },
+      location: { hostname: "a.example" },
+      PublicKeyCredential: function () {},
+    });
+    if (!pk) throw new Error("パスキーを使えるはず");
+    expect(pk.rpId).toBe("a.example");
+    await expect(pk.authenticate([{ credentialId: new Uint8Array([1]), prfSalt: new Uint8Array(32) }])).rejects.toThrow(
+      "回復コードで開けます",
+    );
+    await expect(pk.register("x", new Uint8Array(32))).rejects.toThrow("パスキーを登録できませんでした");
   });
 
   it("トークンを暗号化して保存できる（40.2）", async () => {

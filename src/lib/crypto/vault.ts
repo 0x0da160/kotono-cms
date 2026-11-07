@@ -144,6 +144,7 @@ export class Vault {
       credentialId: b64u(cred.credentialId),
       prfSalt: b64u(prfSalt),
       wrapped: b64u(await wrapDk(w, k.dk)),
+      ...(this.passkey.rpId ? { rpId: this.passkey.rpId } : {}),
     };
     return { ...record, slots: [...record.slots, slot] };
   }
@@ -155,13 +156,20 @@ export class Vault {
       if (!this.passkey) throw new Error("この環境ではパスキーを使えません。");
       const pk = slots.filter((s): s is Extract<KeySlot, { kind: "passkey" }> => s.kind === "passkey");
       if (pk.length === 0) throw new Error("この作業場所にはパスキーが登録されていません。");
+      // 配信元（RP ID）が違うパスキーはこの配信元では使えない（39.2）。記録のない古い枠は試す
+      const here = this.passkey.rpId;
+      const usable = pk.filter((s) => s.rpId === undefined || here === undefined || s.rpId === here);
+      if (usable.length === 0)
+        throw new Error(
+          `この作業場所のパスキーは「${pk[0]?.rpId ?? ""}」で登録したもので、ここ（${here ?? ""}）では使えません。回復コードで開き、パスキーを登録し直してください。`,
+        );
       const got = await this.passkey.authenticate(
-        pk.map((s) => ({
+        usable.map((s) => ({
           credentialId: fromB64u(s.credentialId) ?? new Uint8Array(),
           prfSalt: fromB64u(s.prfSalt) ?? new Uint8Array(),
         })),
       );
-      const slot = pk.find((s) => s.credentialId === b64u(got.credentialId));
+      const slot = usable.find((s) => s.credentialId === b64u(got.credentialId));
       const wrapped = slot ? fromB64u(slot.wrapped) : null;
       if (wrapped) dk = await unwrapDk(await keyFromPrf(got.prf), wrapped);
     } else {
