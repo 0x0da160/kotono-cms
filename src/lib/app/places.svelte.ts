@@ -15,6 +15,7 @@ import {
 } from "../workspaces/store";
 import { exportZip, extractZip, planZip, type ZipPlan } from "../workspaces/zip";
 import { Vault, type Unlocked, type UnlockMethod } from "../crypto/vault";
+import { accountName } from "../crypto/passkey";
 import type { KeySlot } from "../workspaces/store";
 import { SEALED_WS_PREFIX, type SealedDraftStore } from "../drafts/sealed";
 
@@ -403,7 +404,7 @@ export class PlacesController {
       const rec =
         add.kind === "passphrase"
           ? await this.vault.withPassphrase(meta.id, meta.keyring, add.passphrase)
-          : await this.vault.withPasskey(meta.id, meta.keyring, this.names[meta.id] ?? "Kotono CMS");
+          : await this.vault.withPasskey(meta.id, meta.keyring, accountName(meta.id));
       const m = await this.store.update(meta.id, { keyring: rec });
       if (this.current?.id === meta.id) this.current = m;
       await this.refresh();

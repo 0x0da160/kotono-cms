@@ -3,6 +3,7 @@
   import type { Workspace } from "../lib/app/workspace.svelte";
   import type { WorkspaceMeta } from "../lib/workspaces/store";
   import type { UnlockMethod } from "../lib/crypto/vault";
+  import { accountName } from "../lib/crypto/passkey";
   import RecoveryCodeNotice from "./RecoveryCodeNotice.svelte";
   import UnlockForm from "./UnlockForm.svelte";
   import StorageNotice from "./StorageNotice.svelte";
@@ -107,7 +108,7 @@
 
   /** パスワード管理での回復コードのユーザー名。ロック中でも分かる ID から作る */
   function recoveryAccount(id: string): string {
-    return `kotono-${id.slice(0, 8)}`;
+    return accountName(id);
   }
 
   async function addPasskeyTo(id: string): Promise<boolean> {
