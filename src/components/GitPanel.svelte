@@ -80,7 +80,9 @@
   {/if}
 
   {#if git.info?.kind === "none"}
-    <p data-testid="git-none">このフォルダは Git で管理されていません。記事の編集はそのまま使えます。</p>
+    <p data-testid="git-none">
+      Git で管理されていません。記事の編集はこのまま使えます。初期化すると、記事ごとにコミットして履歴を残せます。
+    </p>
     <button type="button" onclick={() => git.init()} disabled={git.busy} data-testid="git-init">Git を初期化する</button
     >
   {:else if git.info?.kind === "unsupported"}

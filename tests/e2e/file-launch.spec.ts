@@ -28,6 +28,9 @@ test("単一HTMLを file:// で起動できる（仕様 2.1・A01）", async ({ 
   await expect(page.getByTestId("spec-version")).toHaveText("3.2");
   // file:// でも安全なコンテキストとして扱われること
   await expect(page.locator('[data-capability="secure-context"]')).toHaveAttribute("data-ok", "true");
+  // すべて使えるときは、項目の一覧を畳んで要約だけを見せる
+  await expect(page.getByTestId("env-summary")).toContainText("このブラウザで使えます");
+  await expect(page.locator('[data-capability="secure-context"]')).toBeHidden();
 
   // インラインWorkerが file:// と CSP の下で起動する（仕様 16.1.1）
   await expect(page.getByTestId("worker-probe")).toHaveAttribute("data-state", "ok");
