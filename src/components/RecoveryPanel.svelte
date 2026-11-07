@@ -1,4 +1,5 @@
 <script lang="ts">
+  import HelpTip from "./HelpTip.svelte";
   import type { Workspace } from "../lib/app/workspace.svelte";
   import { encodeUtf8, sha256Hex } from "../lib/core/bytes";
   import type { DraftRecord } from "../lib/drafts/store";
@@ -102,10 +103,11 @@
 
 {#if dc && dc.mode !== "unavailable" && latest.length + older.length + others.length > 0}
   <section class="card recovery" aria-labelledby="recovery-heading" data-testid="recovery-panel">
-    <h2 id="recovery-heading">復旧ドラフト</h2>
-    <p class="muted small">
-      ブラウザ内に退避した未保存の編集です。ディスクへは自動で書き込みません。退避できたのは、実際に退避に成功した内容までです。
-    </p>
+    <h2>
+      <span id="recovery-heading">復旧ドラフト</span><HelpTip label="復旧ドラフト"
+        >ブラウザ内に退避した未保存の編集です。ディスクへは自動で書き込みません。戻せるのは、実際に退避に成功した内容までです。</HelpTip
+      >
+    </h2>
     {#if latest.length > 0}
       <ul class="list">
         {#each latest as r (k(r))}{@render row(r, true)}{/each}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import HelpTip from "./HelpTip.svelte";
   import { tick } from "svelte";
   import type { DraftController } from "../lib/app/drafts.svelte";
   import type { Workspace } from "../lib/app/workspace.svelte";
@@ -70,21 +71,21 @@
 </script>
 
 {#snippet explanation()}
-  <ul class="small">
-    <li>保存先はこのブラウザの内部（IndexedDB）です。リポジトリのフォルダには書き込みません。</li>
-    <li>
-      保存する内容：編集中の原文、記事ID、編集の番号、元ファイルのハッシュ、退避時刻。画像やリポジトリ全体は保存しません。
-    </li>
-    <li>
-      次回同じフォルダを開いたときに見分けるため、選んだフォルダの参照（ハンドル）も保存します。これは次回の書き込み許可ではありません。
-    </li>
-    <li>保持期間は最終退避から7日間が目安です。期限後、次に起動したときに整理します。ここからいつでも削除できます。</li>
-    <li>
-      暗号化はしません。このブラウザのプロファイルにアクセスできる人は読める可能性があります。共有の端末では有効にしないでください。
-    </li>
-    <li>file:// で開いたローカルの HTML どうしでは、保存領域が共有されることがあります。</li>
-    <li>外部への送信・同期はしません。復旧できるのは、実際に退避に成功した内容までです。</li>
-  </ul>
+  <p class="small">
+    暗号化はしません。このブラウザのプロファイルにアクセスできる人は読める可能性があります。共有の端末では有効にしないでください。<HelpTip
+      label="復旧ドラフトの保存内容と期間"
+      ><span class="tip-p">保存先はこのブラウザの内部（IndexedDB）です。リポジトリのフォルダには書き込みません。</span
+      ><span class="tip-p"
+        >保存する内容：編集中の原文、記事ID、編集の番号、元ファイルのハッシュ、退避時刻。画像やリポジトリ全体は保存しません。</span
+      ><span class="tip-p"
+        >次回同じフォルダを開いたときに見分けるため、選んだフォルダの参照（ハンドル）も保存します。これは次回の書き込み許可ではありません。</span
+      ><span class="tip-p"
+        >保持期間は最終退避から7日間が目安です。期限後、次に起動したときに整理します。フッターの「復旧ドラフト」からいつでも削除できます。</span
+      ><span class="tip-p">file:// で開いたローカルの HTML どうしでは、保存領域が共有されることがあります。</span><span
+        class="tip-p">外部への送信・同期はしません。復旧できるのは、実際に退避に成功した内容までです。</span
+      ></HelpTip
+    >
+  </p>
 {/snippet}
 
 {#if dc.mode === "undecided"}
@@ -143,10 +144,6 @@
   .small {
     font-size: 0.8125rem;
     color: var(--muted);
-  }
-  ul.small {
-    margin: 0.25rem 0 0.5rem;
-    padding-inline-start: 1.25rem;
   }
   .buttons {
     display: flex;

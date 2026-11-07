@@ -4,6 +4,8 @@
   import ArticleList from "./components/ArticleList.svelte";
   import CommitDialog from "./components/CommitDialog.svelte";
   import GitPanel from "./components/GitPanel.svelte";
+  import HelpDialog from "./components/HelpDialog.svelte";
+  import HelpTip from "./components/HelpTip.svelte";
   import ConfirmDialog from "./components/ConfirmDialog.svelte";
   import DraftSettings from "./components/DraftSettings.svelte";
   import Editor from "./components/Editor.svelte";
@@ -193,7 +195,10 @@
         <h2 id="start-heading">はじめに</h2>
         {#if supported}
           <p>
-            記事を保存しているリポジトリのフォルダ（<code>content/articles/</code> を含むフォルダ）を選んでください。フォルダへのアクセスはこのタブを閉じるまで有効です。
+            記事を保存しているリポジトリのフォルダ（<code>content/articles/</code>
+            を含むフォルダ）を選んでください。<HelpTip label="フォルダの選択"
+              >フォルダへのアクセスは、このタブを閉じるまで有効です。開いたフォルダは、次回すぐ開けるようこのブラウザ内に記憶します（フォルダ名とアクセス用の情報だけで、記事の内容は保存しません）。開くときにブラウザがアクセスの許可を求めることがあります。</HelpTip
+            >
           </p>
           {#if ws.recent}
             <div class="recent" data-testid="recent-folder">
@@ -208,13 +213,6 @@
             </div>
             {#if ws.folderError}<p class="banner" role="alert" data-testid="folder-error">{ws.folderError}</p>{/if}
           {/if}
-          <p class="muted small">
-            開いたフォルダは、次回すぐ開けるようこのブラウザ内に記憶します（フォルダ名とアクセス用の情報だけで、記事の内容は保存しません）。開くときにブラウザがアクセスの許可を求めることがあります。
-          </p>
-          <p class="muted small">
-            記事は手動で保存します。Git を使う場合は、記事単位でコミットでき、GitHub
-            と送る・取得する（push・pull）ができます。
-          </p>
         {:else}
           <p>
             このブラウザでは編集を開始できません。デスクトップ版の Chrome・Edge、または iOS・iPadOS 26 以降の Safari
@@ -321,9 +319,7 @@
 
 <footer class="app-footer" class:wide={ws.root !== null} class:workbench>
   {#if supported && drafts.mode !== "undecided"}<DraftSettings {ws} dc={drafts} />{/if}
-  <p class="keys small">
-    キーボード：Ctrl/⌘+S 保存、Ctrl/⌘+Z 元に戻す、Ctrl/⌘+Shift+Z または Ctrl+Y やり直す。IME 変換中は保存しません。
-  </p>
+  <p class="keys small"><HelpDialog /></p>
   {#if pwa.updateReady}
     <p class="update" role="status" data-testid="update-ready">
       新しい版を取得しました。
@@ -363,12 +359,6 @@
   }
   .keys {
     margin: 0.5rem 0;
-  }
-  /* 指で操作する画面ではキーボードの案内を出さない（iPhone・iPad） */
-  @media (pointer: coarse) and (max-width: 60rem) {
-    .keys {
-      display: none;
-    }
   }
   .recent {
     display: flex;

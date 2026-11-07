@@ -1,4 +1,5 @@
 <script lang="ts">
+  import HelpTip from "./HelpTip.svelte";
   import Download from "@lucide/svelte/icons/download";
   import Lock from "@lucide/svelte/icons/lock";
   import { LOCK_MINUTE_CHOICES, type PlacesController } from "../lib/app/places.svelte";
@@ -154,9 +155,9 @@
             >登録済みのパスキーを外す</button
           >
         {/if}
-        <p class="small muted">
-          パスキーは、この配信元（{location.hostname}）でだけ使えます。配信元を移したら登録し直してください。
-        </p>
+        <HelpTip label="パスキー"
+          >パスキーは、この配信元（{location.hostname}）でだけ使えます。配信元を移したら登録し直してください。</HelpTip
+        >
       {/if}
       <label class="row"
         >自動ロック

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import HelpTip from "./HelpTip.svelte";
   import type { SyncController } from "../lib/app/sync.svelte";
   import type { ConflictItem } from "../lib/sync/sync";
 
@@ -109,21 +110,24 @@
         /></label
       >
       <label>ブランチ <input bind:value={branch} required autocapitalize="off" spellcheck="false" /></label>
-      <label
-        >トークン（fine-grained personal access token）
+      <div class="field">
+        <span class="lab"
+          ><label for="sync-token">トークン（fine-grained personal access token）</label><HelpTip
+            label="トークンの作り方"
+            >GitHub の Settings → Developer settings → Fine-grained tokens で、このリポジトリだけを選び、「Contents」を
+            Read and write、有効期限つきで作ってください。通信先は api.github.com だけです。</HelpTip
+          ></span
+        >
         <input
+          id="sync-token"
           type="password"
           bind:value={token}
           autocomplete="off"
           autocapitalize="off"
           spellcheck="false"
           data-testid="sync-token"
-        /></label
-      >
-      <p class="small muted">
-        GitHub の Settings → Developer settings → Fine-grained tokens で、このリポジトリだけを選び、「Contents」を Read
-        and write、有効期限つきで作ってください。通信先は api.github.com だけです。
-      </p>
+        />
+      </div>
       {#if sync.canSaveToken}
         <label class="check"
           ><input type="checkbox" bind:checked={save} /> トークンを作業場所の鍵で暗号化して保存する</label
@@ -247,6 +251,20 @@
     gap: 0.25rem;
     font-size: 0.875rem;
     margin-block: 0.375rem;
+  }
+  .config .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.875rem;
+    margin-block: 0.375rem;
+  }
+  .config .lab {
+    display: flex;
+    align-items: center;
+  }
+  .config .lab label {
+    margin: 0;
   }
   .config label.check {
     flex-direction: row;
