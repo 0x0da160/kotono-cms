@@ -24,7 +24,8 @@ export function serviceWorkerSource(version: string): string {
 const CACHE = ${JSON.stringify(`kotono-${version}`)};
 const FILES = ${JSON.stringify(SW_FILES)};
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)));
+  // HTTP キャッシュ（GitHub Pages は max-age=600）を通さずに取る。通すと新しい版の名前で古い HTML を保存してしまう
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: "reload" })))));
 });
 self.addEventListener("activate", (e) => {
   e.waitUntil(
