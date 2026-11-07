@@ -354,8 +354,8 @@ test("広い画面の作業台レイアウトの上書きが効いている（UI
   await expect(body).toHaveCSS("resize", "none");
   // 一覧の絞り込み欄の入力値は 14px（段階4）
   await expect(page.getByPlaceholder("キーワードで検索")).toHaveCSS("font-size", "14px");
-  // 入力欄の枠は 3:1 以上の色を使う（WCAG 1.4.11、段階4）
-  await expect(body).toHaveCSS("border-top-color", "rgb(133, 133, 127)");
+  // 入力欄の枠は 3:1 以上の色を使う（WCAG 1.4.11、段階4）。--color-field-border（ライト：neutral-60 = #80807d）
+  await expect(body).toHaveCSS("border-top-color", "rgb(128, 128, 125)");
   await expect(page.locator("#editor-heading")).toHaveCSS("font-size", "18px");
   await expect(page.getByRole("toolbar", { name: "記事の操作" })).toHaveCSS("column-gap", "6px");
   // 961〜1200px では操作列をさらに詰める（反復4）

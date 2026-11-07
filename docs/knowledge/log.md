@@ -1,5 +1,9 @@
 # Directory Update Log
 
+## 2026-11-07
+* **Addition**: [ADR-0007 デザインシステムの再構築と Oklab のカラーパレット](/decisions/0007-design-system-oklab.md) を追加。
+* **Addition**: [Kotono CMS のデザインシステム](/product/design-system.md) を追加。
+
 ## 2026-11-05
 * **Addition**: [ADR-0006（案）iOS Safari で記事と Git を扱うための計画](/decisions/0006-ios-safari-git-plan.md) を追加（計画・未決定）。
 * **Addition**: [ADR-0005 見たまま編集・画像の最適化と派生画像・前回のフォルダの記憶](/decisions/0005-wysiwyg-images-recent-folder.md) を追加。

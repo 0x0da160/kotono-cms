@@ -17,6 +17,7 @@
     "typecheck": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
     "test": "vitest run",
     "test:watch": "vitest",
+    "tokens": "UPDATE_TOKENS=1 vitest run tests/unit/design-tokens.test.ts",
     "test:e2e": "playwright test",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e"
   },

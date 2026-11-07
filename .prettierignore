@@ -8,3 +8,5 @@ docs/spec/
 docs/knowledge/
 # 保持フィクスチャはバイト単位の原文として扱う
 tests/fixtures/
+# 生成物（pnpm tokens で書き直す）
+src/styles/tokens.css
