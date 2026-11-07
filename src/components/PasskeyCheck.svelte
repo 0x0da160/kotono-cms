@@ -49,48 +49,59 @@
   }
   void env();
 
-  async function register() {
+  type RegKind = "jp-prf" | "ascii-prf" | "ascii-plain";
+  const regs: { k: RegKind; label: string }[] = [
+    { k: "jp-prf", label: "1. 登録（日本語の名前・PRF あり）" },
+    { k: "ascii-prf", label: "2. 登録（英字の名前・PRF あり）" },
+    { k: "ascii-plain", label: "3. 登録（英字の名前・PRF なし）" },
+  ];
+
+  async function register(kind: RegKind, label: string) {
     busy = true;
+    const name = kind === "jp-prf" ? "Kotono 確認用" : "kotono-check";
     try {
       const cred = (await navigator.credentials.create({
         publicKey: {
           challenge: crypto.getRandomValues(new Uint8Array(32)),
           rp: { id: host, name: "Kotono CMS" },
-          user: { id: crypto.getRandomValues(new Uint8Array(16)), name: "Kotono 確認用", displayName: "Kotono 確認用" },
+          user: { id: crypto.getRandomValues(new Uint8Array(16)), name, displayName: name },
           pubKeyCredParams: [
             { type: "public-key", alg: -7 },
             { type: "public-key", alg: -257 },
           ],
           authenticatorSelection: { residentKey: "required", userVerification: "required" },
-          extensions: { prf: { eval: { first: salt } } } as AuthenticationExtensionsClientInputs,
+          ...(kind === "ascii-plain"
+            ? {}
+            : { extensions: { prf: { eval: { first: salt } } } as AuthenticationExtensionsClientInputs }),
         },
       })) as PublicKeyCredential | null;
-      if (!cred) return log("登録：取り消し");
+      if (!cred) return log(`${label}：取り消し`);
       credId = new Uint8Array(cred.rawId);
       const ext = cred.getClientExtensionResults() as PrfOut;
       regPrf = hex(ext.prf?.results?.first);
       const att = (cred as unknown as { authenticatorAttachment?: string }).authenticatorAttachment;
       log(
-        `登録：成功 id=${b64u(credId).slice(0, 12)}… 接続=${att ?? "?"} prf.enabled=${String(ext.prf?.enabled)} 登録時のPRF=${regPrf ? "あり" : "なし"}`,
+        `${label}：成功 id=${b64u(credId).slice(0, 12)}… 接続=${att ?? "?"} prf.enabled=${String(ext.prf?.enabled)} 登録時のPRF=${regPrf ? "あり" : "なし"}`,
       );
     } catch (e) {
-      log(`登録：失敗 ${err(e)}`);
+      log(`${label}：失敗 ${err(e)}`);
     } finally {
       busy = false;
     }
   }
 
-  type Variant = "none" | "eval" | "byCred" | "discover" | "preferred";
+  type Variant = "none" | "eval" | "byCred" | "discover" | "preferred" | "plain";
   const variants: { v: Variant; label: string }[] = [
     { v: "none", label: "A. 拡張なし" },
     { v: "eval", label: "B. PRF（eval）" },
     { v: "byCred", label: "C. PRF（evalByCredential）" },
     { v: "discover", label: "D. PRF（eval）・パスキーを指定しない" },
     { v: "preferred", label: "E. PRF（eval）・本人確認は可能なら" },
+    { v: "plain", label: "F. 最小（拡張なし・RP ID 省略・指定なし・本人確認は可能なら）" },
   ];
 
   async function get(v: Variant, label: string) {
-    if (!credId && v !== "discover") return log(`${label}：先にテスト用パスキーを登録してください`);
+    if (!credId && v !== "discover" && v !== "plain") return log(`${label}：先にテスト用パスキーを登録してください`);
     busy = true;
     try {
       let extensions: Record<string, unknown> | undefined;
@@ -99,9 +110,11 @@
       const cred = (await navigator.credentials.get({
         publicKey: {
           challenge: crypto.getRandomValues(new Uint8Array(32)),
-          rpId: host,
-          userVerification: v === "preferred" ? "preferred" : "required",
-          allowCredentials: v === "discover" || !credId ? [] : [{ type: "public-key", id: credId }],
+          ...(v === "plain" ? {} : { rpId: host }),
+          userVerification: v === "preferred" || v === "plain" ? "preferred" : "required",
+          ...(v === "plain"
+            ? {}
+            : { allowCredentials: v === "discover" || !credId ? [] : [{ type: "public-key" as const, id: credId }] }),
           ...(extensions ? { extensions: extensions as AuthenticationExtensionsClientInputs } : {}),
         },
       })) as PublicKeyCredential | null;
@@ -133,17 +146,26 @@
     など）で、どの要求の形なら通るかを確かめます。作業場所には触れません。
   </p>
   <ol class="small">
-    <li>「テスト用パスキーを登録」を押し、確かめたいアプリ（例：1Password）に保存します。</li>
-    <li>A〜E を順に押し、同じアプリのパスキーで認証します。</li>
+    <li>1〜3 のどれかで登録し、確かめたいアプリ（例：1Password）に保存します。</li>
+    <li>
+      A〜F を順に押し、同じアプリのパスキーで認証します。1〜3 を変えて繰り返します（最後に登録したものを使います）。
+    </li>
     <li>「結果をコピー」を押して、結果を送ってください。</li>
   </ol>
   <p class="small muted">
-    テスト用パスキーは「Kotono 確認用」という名前で保存されます。確認が済んだら、アプリから削除してください。
+    テスト用パスキーは「Kotono
+    確認用」または「kotono-check」という名前で保存されます。確認が済んだら、アプリから削除してください。
   </p>
   <div class="buttons">
-    <button type="button" class="primary" disabled={busy} onclick={register} data-testid="pkc-register"
-      >テスト用パスキーを登録</button
-    >
+    {#each regs as r (r.k)}
+      <button
+        type="button"
+        class="primary"
+        disabled={busy}
+        onclick={() => register(r.k, r.label)}
+        data-testid={`pkc-register-${r.k}`}>{r.label}</button
+      >
+    {/each}
     {#each variants as x (x.v)}
       <button type="button" disabled={busy} onclick={() => get(x.v, x.label)}>{x.label}</button>
     {/each}
