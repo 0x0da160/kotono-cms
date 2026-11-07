@@ -103,6 +103,16 @@
     return Number.isNaN(d.getTime()) ? iso : d.toLocaleString("ja-JP");
   }
 
+  /** パスワード管理での回復コードのユーザー名。ロック中でも分かる ID から作る */
+  function recoveryAccount(id: string): string {
+    return `kotono-${id.slice(0, 8)}`;
+  }
+
+  async function addPasskeyTo(id: string): Promise<boolean> {
+    const e = places.entries.find((x) => x.state === "ok" && x.meta.id === id);
+    return e?.state === "ok" ? places.addUnlock(e.meta, { kind: "passkey" }) : false;
+  }
+
   function hasSlot(meta: WorkspaceMeta, kind: "passphrase" | "passkey"): boolean {
     return meta.keyring?.slots.some((s) => s.kind === kind) ?? false;
   }
@@ -125,8 +135,11 @@
   {#if places.info}<p class="banner info" role="status" data-testid="places-info">{places.info}</p>{/if}
 
   {#if places.recoveryToShow}
+    {@const rid = places.recoveryToShow.id}
     <RecoveryCodeNotice
       code={places.recoveryToShow.code}
+      account={recoveryAccount(rid)}
+      passkey={places.vault?.passkey ? () => addPasskeyTo(rid) : null}
       ondone={async () => {
         const id = places.recoveryToShow?.id;
         places.recoveryToShow = null;
@@ -194,6 +207,7 @@
               {#if v.locked && unlocking === v.id}
                 <UnlockForm
                   busy={places.busy}
+                  account={recoveryAccount(e.meta.id)}
                   passphrase={hasSlot(e.meta, "passphrase")}
                   passkey={hasSlot(e.meta, "passkey") && places.vault?.passkey != null}
                   onunlock={(m) => unlockAndOpen(e.meta, m)}
