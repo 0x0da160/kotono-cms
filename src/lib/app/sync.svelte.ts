@@ -243,15 +243,19 @@ export class SyncController {
           if (saved && saved.localHead === r.plan.localHead && saved.remoteHead === r.plan.remoteHead)
             for (const [k, v] of saved.choices) choices[k] = v;
           this.merge = { plan: r.plan, choices };
+          const lead =
+            r.plan.base === null
+              ? "手元と GitHub の履歴は別々に始まっています（共通の祖先がありません）。両方のファイルを 1 つに合わせます。"
+              : "手元と GitHub の両方に変更があります。";
           this.notice =
             r.plan.conflicts.length === 0
               ? {
-                  kind: "ok",
-                  text: "手元と GitHub の両方に変更があります。自動で合わせられます。内容を確かめて「合わせて送る」を押してください。",
+                  kind: r.plan.base === null ? "warn" : "ok",
+                  text: `${lead}自動で合わせられます。内容を確かめて「合わせて送る」を押してください。`,
                 }
               : {
                   kind: "warn",
-                  text: `手元と GitHub の両方に変更があります。${r.plan.conflicts.length} 件のファイルは、どちらを採るか選んでください。`,
+                  text: `${lead}${r.plan.conflicts.length} 件のファイルは、どちらを採るか選んでください。`,
                 };
           break;
         }

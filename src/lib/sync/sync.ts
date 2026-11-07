@@ -71,7 +71,8 @@ export interface ConflictItem {
 export interface MergePlan {
   readonly localHead: string;
   readonly remoteHead: string;
-  readonly base: string;
+  /** 共通の祖先。null は関係のない履歴（GitHub で README などを付けて作ったリポジトリなど）で、空の状態を祖先として合わせる */
+  readonly base: string | null;
   /** 自動で決まったパス（パス → 採る item、null は削除） */
   readonly resolved: ReadonlyMap<string, TreeItem | null>;
   /** 自動マージで新しく作った内容（パス → blob の内容） */
@@ -624,11 +625,13 @@ export class GitHubSync {
   // 分岐時の簡易マージ
 
   async planMerge(localHead: string, remoteHead: string): Promise<MergePlan> {
+    // 共通の祖先がなければ（関係のない履歴）、ネイティブ Git の --allow-unrelated-histories と同じく空の tree を祖先とする。
+    // 片側にだけあるファイルはそのまま採り、両側で内容の違うファイルは競合として選ばせる
     const base = await this.mergeBase(localHead, remoteHead);
-    if (!base) throw new GitError("共通の祖先が見つかりません（関係のない履歴）。外部の Git で合わせてください。");
-    const [bt, lt, rt] = await Promise.all(
-      [base, localHead, remoteHead].map(async (c) => this.flatten((await this.repo.readCommit(c)).tree)),
-    );
+    const [bt, lt, rt] = await Promise.all([
+      base ? this.flatten((await this.repo.readCommit(base)).tree) : new Map<string, TreeItem>(),
+      ...[localHead, remoteHead].map(async (c) => this.flatten((await this.repo.readCommit(c)).tree)),
+    ]);
     const B = bt as Map<string, TreeItem>;
     const L = lt as Map<string, TreeItem>;
     const R = rt as Map<string, TreeItem>;
