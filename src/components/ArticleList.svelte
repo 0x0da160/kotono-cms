@@ -1,4 +1,5 @@
 <script lang="ts">
+  import HelpTip from "./HelpTip.svelte";
   import Plus from "@lucide/svelte/icons/plus";
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
@@ -110,13 +111,20 @@
   </div>
 
   <div class="filters" role="search">
-    <label class="kw">
-      <span
-        >キーワード <span class="hint" id="kw-hint">タイトル・slug・ID・タグの部分一致。英字の大小は区別しない</span
+    <div class="kw">
+      <span class="kw-head"
+        ><label for="kw-input">キーワード</label><HelpTip label="キーワード" id="kw-hint"
+          >タイトル・slug・ID・タグの部分一致で探します。英字の大小は区別しません。</HelpTip
         ></span
       >
-      <input type="search" bind:value={keyword} placeholder="キーワードで検索" aria-describedby="kw-hint" />
-    </label>
+      <input
+        id="kw-input"
+        type="search"
+        bind:value={keyword}
+        placeholder="キーワードで検索"
+        aria-describedby="kw-hint"
+      />
+    </div>
     <details class="cond" bind:open={filtersOpen} data-testid="list-conditions">
       <summary
         ><span class="cond-name">絞り込み・並び順</span>
@@ -303,9 +311,16 @@
     font-size: 0.875rem;
     color: var(--text);
   }
-  .hint {
-    display: block;
+  .kw {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+  .kw-head {
+    display: flex;
+    align-items: center;
     font-size: 0.75rem;
+    color: var(--muted);
   }
   .cond > summary {
     cursor: pointer;

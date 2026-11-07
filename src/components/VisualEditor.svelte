@@ -478,9 +478,6 @@
     data-testid="visual-editor"
     data-body-focus
   ></div>
-  <p class="muted small">
-    表・生 HTML・参照形式のリンクなどは灰色の枠で表示します。その部分は「Markdown」または「原文」で編集してください。
-  </p>
 </div>
 
 <style>
@@ -632,10 +629,5 @@
   .err {
     margin: 0;
     color: var(--ng);
-  }
-  .small {
-    font-size: 0.8125rem;
-    margin: 0;
-    font-weight: 400;
   }
 </style>

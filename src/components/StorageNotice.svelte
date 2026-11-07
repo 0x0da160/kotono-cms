@@ -1,4 +1,5 @@
 <script lang="ts">
+  import HelpTip from "./HelpTip.svelte";
   import type { PlacesController } from "../lib/app/places.svelte";
 
   let { places }: { places: PlacesController } = $props();
@@ -25,19 +26,30 @@
       <span class="muted">使用量 {mb(places.usage.usage)} ／ 上限の目安 {mb(places.usage.quota)}</span>
     {/if}
   </p>
-  {#if places.persist === "not-persisted"}
-    <button type="button" onclick={() => places.checkPersist(true)} data-testid="persist-ask"
-      >保存領域を消さないよう求める</button
-    >
-  {/if}
-  {#if !places.standalone}
-    <p class="note muted small" data-testid="homescreen-tip">
-      iPhone・iPad では、共有メニューの「ホーム画面に追加」から開くと、保存領域が消されにくくなります。
-    </p>
+  {#if places.persist === "not-persisted" || !places.standalone}
+    <div class="row">
+      {#if places.persist === "not-persisted"}
+        <button type="button" onclick={() => places.checkPersist(true)} data-testid="persist-ask"
+          >保存領域を消さないよう求める</button
+        >
+      {/if}
+      {#if !places.standalone}
+        <span data-testid="homescreen-tip"
+          ><HelpTip label="保存領域"
+            >iPhone・iPad では、共有メニューの「ホーム画面に追加」から開くと、保存領域が消されにくくなります。</HelpTip
+          ></span
+        >
+      {/if}
+    </div>
   {/if}
 </div>
 
 <style>
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
   .notices {
     margin-block: 0.5rem 0.75rem;
   }
@@ -51,8 +63,5 @@
   }
   .note .muted {
     display: block;
-  }
-  .small {
-    font-size: 0.8125rem;
   }
 </style>
