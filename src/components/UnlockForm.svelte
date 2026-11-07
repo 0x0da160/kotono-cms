@@ -1,4 +1,5 @@
 <script lang="ts">
+  import FingerprintPattern from "@lucide/svelte/icons/fingerprint-pattern";
   import type { UnlockMethod } from "../lib/crypto/vault";
 
   let {
@@ -40,7 +41,7 @@
       class="primary"
       disabled={busy}
       onclick={() => onunlock({ kind: "passkey" })}
-      data-testid="unlock-passkey">パスキーで解錠</button
+      data-testid="unlock-passkey"><FingerprintPattern />パスキーで解錠</button
     >
   {/if}
   {#if account && kind === "recovery"}

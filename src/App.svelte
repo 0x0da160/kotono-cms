@@ -1,4 +1,5 @@
 <script lang="ts">
+  import FolderOpen from "@lucide/svelte/icons/folder-open";
   import { onMount, untrack } from "svelte";
   import ArticleList from "./components/ArticleList.svelte";
   import CommitDialog from "./components/CommitDialog.svelte";
@@ -174,7 +175,7 @@
         disabled={ws.busy}
         data-testid="choose-folder"
       >
-        {ws.root ? "別のフォルダを開く" : "フォルダを選択"}
+        <FolderOpen />{ws.root ? "別のフォルダを開く" : "フォルダを選択"}
       </button>
     </div>
   {/if}

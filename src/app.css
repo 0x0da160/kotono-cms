@@ -130,6 +130,25 @@ code,
   color: var(--ok);
 }
 
+/*
+ * アイコン（Lucide）。文字の前に添えて見分けやすくするだけで、意味は常に文字で伝える（14.1）。
+ * aria-hidden で読み上げから外れ、ボタン・バッジのアクセシブルな名前は変わらない。
+ */
+svg.lucide-icon {
+  flex: none;
+  width: 1.125em;
+  height: 1.125em;
+  margin-inline-end: 0.375em;
+  vertical-align: -0.2em;
+}
+
+.badge svg.lucide-icon {
+  width: 1em;
+  height: 1em;
+  margin-inline-end: 0.25em;
+  vertical-align: -0.15em;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
