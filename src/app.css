@@ -1,42 +1,27 @@
-/* 外部フォントは使用しない（仕様 2.1 / 16.3）。OS標準の日本語フォントを使う。 */
-:root {
-  color-scheme: light dark;
-  --bg: #f3f3f1;
-  --surface: #ffffff;
-  --text: #1d1d1b;
-  --muted: #5c5c57;
-  --border: #dcdcd7;
-  /* 入力欄の枠。部品を見分けるための境界なので、背景・面の両方に 3:1 以上（WCAG 1.4.11、UI刷新 段階4） */
-  --field-border: #85857f;
-  --ok: #1a7f37;
-  --ng: #b42318;
-  --focus: #0b57d0;
-  --on-accent: #ffffff;
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    "Hiragino Sans",
-    "Hiragino Kaku Gothic ProN",
-    "Yu Gothic UI",
-    Meiryo,
-    sans-serif;
-  line-height: 1.6;
-}
+/*
+ * 全体の基本スタイル。トークンの値は src/styles/tokens.css（生成物）にあり、ここでは名前で参照する。
+ * 規則：docs/knowledge/product/design-system.md
+ */
+@import "./styles/tokens.css";
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #141413;
-    --surface: #1d1d1b;
-    --text: #ececea;
-    --muted: #a8a8a2;
-    --border: #383835;
-    --field-border: #73736e;
-    --ok: #4ac26b;
-    --ng: #ff7b72;
-    --focus: #8ab4f8;
-    --on-accent: #10203a;
-  }
+:root {
+  font-family: var(--font-sans);
+  line-height: var(--line-height-body);
+
+  /*
+   * 旧い短い名前（移行中）。部品の CSS を --color-* に置き換えたら消す。
+   * 新しく書く CSS では使わない。
+   */
+  --bg: var(--color-bg);
+  --surface: var(--color-surface);
+  --text: var(--color-text);
+  --muted: var(--color-muted);
+  --border: var(--color-border);
+  --field-border: var(--color-field-border);
+  --ok: var(--color-ok);
+  --ng: var(--color-ng);
+  --focus: var(--color-focus);
+  --on-accent: var(--color-on-accent);
 }
 
 *,
@@ -47,22 +32,22 @@
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--text);
+  background: var(--color-bg);
+  color: var(--color-text);
 }
 
 :focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 button {
   font: inherit;
   color: inherit;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.375rem 0.75rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-6) var(--space-12);
   cursor: pointer;
 }
 
@@ -72,15 +57,15 @@ button:disabled {
 }
 
 button.primary {
-  background: var(--focus);
-  border-color: var(--focus);
-  color: var(--on-accent);
-  font-weight: 600;
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-on-accent);
+  font-weight: var(--font-weight-strong);
 }
 
 button.danger {
-  border-color: var(--ng);
-  color: var(--ng);
+  border-color: var(--color-ng);
+  color: var(--color-ng);
 }
 
 input,
@@ -88,46 +73,46 @@ select,
 textarea {
   font: inherit;
   color: inherit;
-  background: var(--surface);
-  border: 1px solid var(--field-border);
-  border-radius: 6px;
-  padding: 0.375rem 0.5rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-6) var(--space-8);
 }
 
 code,
 .mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 0.9em;
   overflow-wrap: anywhere;
 }
 
 .muted {
-  color: var(--muted);
+  color: var(--color-muted);
 }
 
 /* 状態は色だけで伝えない（14.1）：バッジは常に文字を持つ */
 .badge {
   display: inline-block;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0 0.5rem;
-  font-size: 0.75rem;
-  line-height: 1.6;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-8);
+  font-size: var(--font-size-12);
+  line-height: var(--line-height-body);
   white-space: nowrap;
 }
 
 .badge.unsaved,
 .badge.unknown,
 .badge.err {
-  border-color: var(--ng);
-  color: var(--ng);
-  font-weight: 600;
+  border-color: var(--color-ng);
+  color: var(--color-ng);
+  font-weight: var(--font-weight-strong);
 }
 
 .badge.saved,
 .badge.pub {
-  border-color: var(--ok);
-  color: var(--ok);
+  border-color: var(--color-ok);
+  color: var(--color-ok);
 }
 
 /*

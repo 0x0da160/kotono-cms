@@ -1,0 +1,152 @@
+/*
+ * デザイントークン（生成物。手で直さない）。
+ * 正本：src/lib/design/tokens.ts・palette.ts。書き直し：pnpm tokens
+ * 規則：docs/knowledge/product/design-system.md
+ */
+:root {
+  color-scheme: light dark;
+
+  /* パレット：neutral（Oklab。色相 107°、目標の彩度 0.005、明度 0.04 ごと） */
+  --neutral-100: #ffffff; /* L 1.00 C 0.000 */
+  --neutral-96: #f2f2ee; /* L 0.96 C 0.005 */
+  --neutral-92: #e5e5e1; /* L 0.92 C 0.005 */
+  --neutral-88: #d8d8d4; /* L 0.88 C 0.005 */
+  --neutral-84: #cbcbc7; /* L 0.84 C 0.005 */
+  --neutral-80: #bebeba; /* L 0.80 C 0.005 */
+  --neutral-76: #b1b1ae; /* L 0.76 C 0.005 */
+  --neutral-72: #a5a5a1; /* L 0.72 C 0.005 */
+  --neutral-68: #989895; /* L 0.68 C 0.005 */
+  --neutral-64: #8c8c89; /* L 0.64 C 0.005 */
+  --neutral-60: #80807d; /* L 0.60 C 0.005 */
+  --neutral-56: #757571; /* L 0.56 C 0.005 */
+  --neutral-52: #696966; /* L 0.52 C 0.005 */
+  --neutral-48: #5e5e5b; /* L 0.48 C 0.005 */
+  --neutral-44: #535350; /* L 0.44 C 0.005 */
+  --neutral-40: #484845; /* L 0.40 C 0.005 */
+  --neutral-36: #3d3d3a; /* L 0.36 C 0.005 */
+  --neutral-32: #333330; /* L 0.32 C 0.005 */
+  --neutral-28: #292926; /* L 0.28 C 0.005 */
+  --neutral-24: #1f1f1d; /* L 0.24 C 0.005 */
+  --neutral-20: #161614; /* L 0.20 C 0.005 */
+  --neutral-16: #0d0d0b; /* L 0.16 C 0.005 */
+
+  /* パレット：accent（Oklab。色相 261°、目標の彩度 0.2、明度 0.08 ごと） */
+  --accent-96: #ebf2ff; /* L 0.96 C 0.019 */
+  --accent-88: #c2d9ff; /* L 0.88 C 0.059 */
+  --accent-80: #99bfff; /* L 0.80 C 0.101 */
+  --accent-72: #6fa3ff; /* L 0.72 C 0.145 */
+  --accent-64: #4386ff; /* L 0.64 C 0.193 */
+  --accent-56: #266be7; /* L 0.56 C 0.200 */
+  --accent-48: #0852cb; /* L 0.48 C 0.200 */
+  --accent-40: #003da2; /* L 0.40 C 0.173 */
+  --accent-32: #002b77; /* L 0.32 C 0.138 */
+  --accent-24: #001a4f; /* L 0.24 C 0.104 */
+  --accent-16: #000a2a; /* L 0.16 C 0.069 */
+
+  /* パレット：success（Oklab。色相 148°、目標の彩度 0.15、明度 0.08 ごと） */
+  --success-96: #d4ffd9; /* L 0.96 C 0.067 */
+  --success-88: #8ef29e; /* L 0.88 C 0.150 */
+  --success-80: #73d885; /* L 0.80 C 0.150 */
+  --success-72: #59be6c; /* L 0.72 C 0.150 */
+  --success-64: #3da454; /* L 0.64 C 0.150 */
+  --success-56: #1d8b3d; /* L 0.56 C 0.150 */
+  --success-48: #00722a; /* L 0.48 C 0.139 */
+  --success-40: #00581f; /* L 0.40 C 0.116 */
+  --success-32: #003f14; /* L 0.32 C 0.093 */
+  --success-24: #00280a; /* L 0.24 C 0.069 */
+  --success-16: #001203; /* L 0.16 C 0.046 */
+
+  /* パレット：danger（Oklab。色相 28°、目標の彩度 0.19、明度 0.08 ごと） */
+  --danger-96: #ffedea; /* L 0.96 C 0.020 */
+  --danger-88: #ffc8c0; /* L 0.88 C 0.064 */
+  --danger-80: #ffa194; /* L 0.80 C 0.115 */
+  --danger-72: #ff7264; /* L 0.72 C 0.174 */
+  --danger-64: #e95145; /* L 0.64 C 0.190 */
+  --danger-56: #cc342d; /* L 0.56 C 0.190 */
+  --danger-48: #b00d10; /* L 0.48 C 0.190 */
+  --danger-40: #8b0006; /* L 0.40 C 0.163 */
+  --danger-32: #660003; /* L 0.32 C 0.131 */
+  --danger-24: #430001; /* L 0.24 C 0.098 */
+  --danger-16: #230000; /* L 0.16 C 0.065 */
+
+  /* 意味の色（ライト） */
+  --color-bg: var(--neutral-96); /* 画面の背景 */
+  --color-surface: var(--neutral-100); /* 面（パネル・入力欄・ボタン・選択中の行） */
+  --color-text: var(--neutral-24); /* 本文の文字 */
+  --color-muted: var(--neutral-48); /* 補助の文字 */
+  --color-border: var(--neutral-88); /* 領域の区切り・ボタンの枠（装飾） */
+  --color-field-border: var(--neutral-60); /* 入力欄の枠（部品の境界、3:1 以上） */
+  --color-accent: var(--accent-48); /* 主な操作の面・選択・リンク */
+  --color-on-accent: var(--neutral-100); /* accent の面に載せる文字 */
+  --color-focus: var(--accent-48); /* フォーカスの輪 */
+  --color-ok: var(--success-48); /* 成功・保存済み・公開対象 */
+  --color-ng: var(--danger-48); /* エラー・未保存・削除・警告 */
+
+  /* 文字 */
+  --font-sans: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, sans-serif; /* 外部フォントは使わない（仕様 2.1・16.3） */
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-size-12: 0.75rem;
+  --font-size-13: 0.8125rem;
+  --font-size-14: 0.875rem;
+  --font-size-15: 0.9375rem;
+  --font-size-16: 1rem;
+  --font-size-18: 1.125rem;
+  --font-size-20: 1.25rem;
+  --font-size-24: 1.5rem;
+  --line-height-body: 1.6; /* 基本の行間 */
+  --line-height-tight: 1.5; /* 一覧のタイトルなど、行を詰める所 */
+  --line-height-prose: 1.75; /* 本文の見たまま編集とプレビュー */
+  --font-weight-regular: 400;
+  --font-weight-strong: 600;
+
+  /* 余白・間隔 */
+  --space-2: 0.125rem;
+  --space-4: 0.25rem;
+  --space-6: 0.375rem;
+  --space-8: 0.5rem;
+  --space-10: 0.625rem;
+  --space-12: 0.75rem;
+  --space-16: 1rem;
+  --space-20: 1.25rem;
+  --space-24: 1.5rem;
+  --space-32: 2rem;
+
+  /* 角丸 */
+  --radius-sm: 4px; /* 小さな部品（等幅の囲み・つまみ） */
+  --radius-md: 6px; /* ボタン・入力欄・パネル */
+  --radius-lg: 8px; /* ダイアログ・まとめのメニュー・トースト */
+  --radius-pill: 999px; /* バッジ */
+
+  /* 影（重なり） */
+  --shadow-1: 0 4px 12px rgb(0 0 0 / 0.12); /* 画面の上に浮く通知（トースト） */
+  --shadow-2: 0 4px 16px rgb(0 0 0 / 0.16); /* メニュー・ポップオーバー */
+  --color-overlay: rgb(0 0 0 / 0.4); /* ダイアログの背後の暗幕 */
+
+  /* フォーカスの輪 */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --focus-ring: var(--focus-ring-width) solid var(--color-focus);
+
+  /* 重なり順 */
+  --z-sticky: 3; /* 編集の固定領域 */
+  --z-raised: 4; /* 固定領域の上に出る部品 */
+  --z-popover: 10; /* メニュー・ポップオーバー */
+  --z-toast: 20; /* 通知（トースト） */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* 意味の色（ダーク） */
+    --color-bg: var(--neutral-20);
+    --color-surface: var(--neutral-24);
+    --color-text: var(--neutral-92);
+    --color-muted: var(--neutral-72);
+    --color-border: var(--neutral-36);
+    --color-field-border: var(--neutral-56);
+    --color-accent: var(--accent-72);
+    --color-on-accent: var(--accent-16);
+    --color-focus: var(--accent-72);
+    --color-ok: var(--success-72);
+    --color-ng: var(--danger-72);
+  }
+}
