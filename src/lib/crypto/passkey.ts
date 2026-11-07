@@ -63,7 +63,8 @@ export function browserPasskey(host: CredentialsHost): PasskeyApi | null {
 
   return {
     rpId,
-    async register(label, prfSalt) {
+    async register(rawLabel, prfSalt) {
+      const label = asciiLabel(rawLabel);
       const cred = (await call(
         () =>
           creds.create({
@@ -133,6 +134,24 @@ export function prfInputs(
 
 function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
   return a.length === b.length && a.every((x, i) => x === b[i]);
+}
+
+/**
+ * パスキーと回復コードの保存名（ユーザー名）。ロック中でも分かる作業場所 ID から作る英字の名前。
+ * 日本語の名前で登録したパスキーは、iOS の 1Password が認証を拒否する（確認ページで確かめた）。
+ */
+export function accountName(workspaceId: string): string {
+  return `kotono-${workspaceId.slice(0, 8)}`;
+}
+
+/** パスキーに渡す名前を、印字できる ASCII だけにする（それ以外は除く。空なら "kotono"） */
+export function asciiLabel(label: string): string {
+  const s = label
+    .replace(/[^\x20-\x7e]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 64);
+  return s === "" ? "kotono" : s;
 }
 
 function b64(bytes: Uint8Array): string {

@@ -3,7 +3,7 @@ import { MemFs, type MemDir, type MemFile } from "./support/memory-fs";
 import { deriveDataKeys, newRecoveryCode, normalizeRecoveryCode, base32, fromBase32 } from "../../src/lib/crypto/keys";
 import { encryptedRoot, CONTENT_OVERHEAD, type EncContext } from "../../src/lib/crypto/encfs";
 import { Vault } from "../../src/lib/crypto/vault";
-import { browserPasskey, prfInputs } from "../../src/lib/crypto/passkey";
+import { accountName, asciiLabel, browserPasskey, prfInputs } from "../../src/lib/crypto/passkey";
 import { writeNewFile, enumerateTree, readAllBytes } from "../../src/lib/fs/tree";
 import { checkBackupTarget } from "../../src/lib/fs/backup";
 import { WorkspaceStore } from "../../src/lib/workspaces/store";
@@ -257,6 +257,13 @@ describe("Vault（39.2・39.4）", () => {
     expect(pks).toHaveLength(2);
     expect(pks[0]?.kind === "passkey" && pks[1]?.kind === "passkey" && pks[0].wrapped !== pks[1].wrapped).toBe(true);
     expect(v.withoutPasskeys(r2).slots.map((s) => s.kind)).toEqual(["recovery"]);
+  });
+
+  it("パスキーの名前は英字だけにする（日本語の名前は 1Password が認証を拒否する）", () => {
+    expect(accountName("0123456789abcdef")).toBe("kotono-01234567");
+    expect(asciiLabel("Kotono 確認用")).toBe("Kotono");
+    expect(asciiLabel("ブログ")).toBe("kotono");
+    expect(asciiLabel("kotono-01234567")).toBe("kotono-01234567");
   });
 
   it("トークンを暗号化して保存できる（40.2）", async () => {
