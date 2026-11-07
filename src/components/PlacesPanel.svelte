@@ -311,62 +311,62 @@
 
 <style>
   .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1rem 1.25rem;
-    margin-block-end: 1rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-16) var(--space-20);
+    margin-block-end: var(--space-16);
   }
   h2 {
-    margin: 0 0 0.5rem;
-    font-size: 1.125rem;
+    margin: 0 0 var(--space-8);
+    font-size: var(--font-size-18);
   }
   h3 {
-    margin: 0 0 0.5rem;
-    font-size: 1rem;
+    margin: 0 0 var(--space-8);
+    font-size: var(--font-size-16);
   }
   .places {
     list-style: none;
-    margin: 0 0 1rem;
+    margin: 0 0 var(--space-16);
     padding: 0;
   }
   .places li {
-    border-top: 1px solid var(--border);
-    padding-block: 0.625rem;
+    border-top: 1px solid var(--color-border);
+    padding-block: var(--space-10);
   }
   .head {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-8);
     flex-wrap: wrap;
   }
   .name {
-    font-weight: 600;
+    font-weight: var(--font-weight-strong);
     overflow-wrap: anywhere;
   }
   .meta {
-    margin: 0.25rem 0;
+    margin: var(--space-4) 0;
   }
   .warn {
-    color: var(--ng);
-    font-weight: 600;
+    color: var(--color-ng);
+    font-weight: var(--font-weight-strong);
   }
   .actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
+    gap: var(--space-8);
+    margin-top: var(--space-8);
   }
   .sub {
-    border-top: 1px solid var(--border);
-    padding-top: 0.75rem;
-    margin-top: 0.75rem;
+    border-top: 1px solid var(--color-border);
+    padding-top: var(--space-12);
+    margin-top: var(--space-12);
   }
   label {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
-    margin-block: 0.5rem;
+    gap: var(--space-4);
+    margin-block: var(--space-8);
   }
   label.check {
     flex-direction: row;
@@ -374,23 +374,23 @@
   }
   input:not([type="checkbox"]) {
     font: inherit;
-    padding: 0.5rem;
+    padding: var(--space-8);
     min-height: 2.75rem;
-    border: 1px solid var(--border);
-    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
     background: var(--bg, transparent);
     color: inherit;
   }
   .banner {
-    border: 1px solid var(--ng);
-    border-radius: 6px;
-    padding: 0.5rem 0.75rem;
-    margin: 0 0 0.75rem;
+    border: 1px solid var(--color-ng);
+    border-radius: var(--radius-md);
+    padding: var(--space-8) var(--space-12);
+    margin: 0 0 var(--space-12);
   }
   .banner.info {
-    border-color: var(--border);
+    border-color: var(--color-border);
   }
   .small {
-    font-size: 0.875rem;
+    font-size: var(--font-size-14);
   }
 </style>

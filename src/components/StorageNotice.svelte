@@ -48,18 +48,18 @@
   .row {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: var(--space-4);
   }
   .notices {
-    margin-block: 0.5rem 0.75rem;
+    margin-block: var(--space-8) var(--space-12);
   }
   .note {
-    margin: 0 0 0.5rem;
-    font-size: 0.875rem;
+    margin: 0 0 var(--space-8);
+    font-size: var(--font-size-14);
   }
   .note.warn {
-    border-inline-start: 3px solid var(--ng);
-    padding-inline-start: 0.5rem;
+    border-inline-start: 3px solid var(--color-ng);
+    padding-inline-start: var(--space-8);
   }
   .note .muted {
     display: block;

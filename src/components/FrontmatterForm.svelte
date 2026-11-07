@@ -241,20 +241,20 @@
 
 <style>
   .form {
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0.75rem 1rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-12) var(--space-16) var(--space-16);
     margin: 0;
     min-width: 0;
   }
   legend {
-    font-weight: 600;
-    padding-inline: 0.25rem;
+    font-weight: var(--font-weight-strong);
+    padding-inline: var(--space-4);
   }
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-    gap: 0.75rem 1rem;
+    gap: var(--space-12) var(--space-16);
   }
   .wide {
     grid-column: 1 / -1;
@@ -262,14 +262,14 @@
   .field {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: var(--space-4);
     min-width: 0;
   }
   .field > label,
   .label,
   .lab {
-    font-weight: 600;
-    font-size: 0.875rem;
+    font-weight: var(--font-weight-strong);
+    font-size: var(--font-size-14);
   }
   .lab {
     display: flex;
@@ -277,7 +277,7 @@
   }
   .inline {
     display: flex;
-    gap: 0.5rem;
+    gap: var(--space-8);
     flex-wrap: wrap;
   }
   .inline input {
@@ -286,32 +286,32 @@
   }
   .cover {
     display: grid;
-    gap: 0.5rem;
+    gap: var(--space-8);
   }
   .cover label {
     display: flex;
     flex-direction: column;
-    font-size: 0.8125rem;
-    color: var(--muted);
+    font-size: var(--font-size-13);
+    color: var(--color-muted);
   }
   .hint {
     margin: 0;
-    color: var(--muted);
-    font-size: 0.8125rem;
+    color: var(--color-muted);
+    font-size: var(--font-size-13);
   }
   .err {
     margin: 0;
-    color: var(--ng);
-    font-size: 0.875rem;
+    color: var(--color-ng);
+    font-size: var(--font-size-14);
   }
   .err::before {
     content: "エラー：";
-    font-weight: 600;
+    font-weight: var(--font-weight-strong);
   }
   .warn {
     margin: 0;
-    color: var(--ng);
-    font-size: 0.8125rem;
+    color: var(--color-ng);
+    font-size: var(--font-size-13);
   }
   .chips {
     list-style: none;
@@ -319,14 +319,14 @@
     padding: 0;
     display: flex;
     flex-wrap: wrap;
-    gap: 0.25rem;
+    gap: var(--space-4);
   }
   .chips li {
     display: inline-flex;
     align-items: center;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding-inline-start: 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    padding-inline-start: var(--space-8);
   }
   .chip-text {
     white-space: pre;
@@ -336,17 +336,17 @@
     background: none;
     color: inherit;
     cursor: pointer;
-    padding: 0 0.5rem;
+    padding: 0 var(--space-8);
   }
   .managed {
     display: grid;
     grid-template-columns: max-content 1fr;
-    gap: 0.125rem 0.75rem;
-    margin: 0.75rem 0 0.25rem;
-    font-size: 0.875rem;
+    gap: var(--space-2) var(--space-12);
+    margin: var(--space-12) 0 var(--space-4);
+    font-size: var(--font-size-14);
   }
   .managed dt {
-    color: var(--muted);
+    color: var(--color-muted);
   }
   .managed dd {
     margin: 0;

@@ -86,35 +86,35 @@
   .unlock {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
+    gap: var(--space-8);
+    margin-top: var(--space-8);
     max-width: 28rem;
   }
   .kinds {
     display: flex;
-    gap: 1rem;
+    gap: var(--space-16);
   }
   .field {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
-    font-size: 0.875rem;
+    gap: var(--space-4);
+    font-size: var(--font-size-14);
   }
   input:not([type="radio"]) {
     font: inherit;
-    font-size: 1rem;
-    padding: 0.5rem;
+    font-size: var(--font-size-16);
+    padding: var(--space-8);
     min-height: 2.75rem;
-    border: 1px solid var(--border);
-    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
     background: transparent;
     color: inherit;
   }
   .show {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    font-size: 0.875rem;
+    gap: var(--space-8);
+    font-size: var(--font-size-14);
   }
   .vh {
     position: absolute;

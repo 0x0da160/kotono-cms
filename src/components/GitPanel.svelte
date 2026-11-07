@@ -244,63 +244,63 @@
 
 <style>
   .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0.75rem 1rem;
-    margin-block: 1rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-12) var(--space-16);
+    margin-block: var(--space-16);
   }
   .head,
   .row {
     display: flex;
-    gap: 0.5rem;
+    gap: var(--space-8);
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
   }
   h2 {
     margin: 0;
-    font-size: 1.125rem;
+    font-size: var(--font-size-18);
   }
   h3 {
-    margin: 0.75rem 0 0.25rem;
-    font-size: 1rem;
+    margin: var(--space-12) 0 var(--space-4);
+    font-size: var(--font-size-16);
   }
   .summary {
     display: grid;
     grid-template-columns: auto 1fr;
-    gap: 0.125rem 0.75rem;
-    margin: 0.5rem 0;
+    gap: var(--space-2) var(--space-12);
+    margin: var(--space-8) 0;
   }
   .summary dd {
     margin: 0;
     overflow-wrap: anywhere;
   }
   .blockers {
-    color: var(--ng);
-    margin: 0.25rem 0;
-    padding-inline-start: 1.25rem;
+    color: var(--color-ng);
+    margin: var(--space-4) 0;
+    padding-inline-start: var(--space-20);
   }
   .articles,
   .files,
   .history {
     margin: 0;
-    padding-inline-start: 1.25rem;
-    font-size: 0.875rem;
+    padding-inline-start: var(--space-20);
+    font-size: var(--font-size-14);
   }
   /* 記事ごとの行は罫線で区切る（方向B、一覧の行と同じ） */
   .articles {
     list-style: none;
     padding-inline-start: 0;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--color-border);
   }
   .articles > li {
-    padding-block: 0.25rem;
-    border-bottom: 1px solid var(--border);
+    padding-block: var(--space-4);
+    border-bottom: 1px solid var(--color-border);
   }
   .history li {
     display: flex;
-    gap: 0.5rem;
+    gap: var(--space-8);
     flex-wrap: wrap;
   }
   .history .msg {
@@ -308,52 +308,52 @@
   }
   .history .date,
   .history .who {
-    color: var(--muted);
+    color: var(--color-muted);
   }
   .pending,
   .notice {
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 0.5rem 0.75rem;
-    margin-top: 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-8) var(--space-12);
+    margin-top: var(--space-12);
   }
   .notice[data-kind="error"],
   .pending {
-    border-color: var(--ng);
+    border-color: var(--color-ng);
   }
   .notice[data-kind="ok"] {
-    border-color: var(--ok);
+    border-color: var(--color-ok);
   }
   .notice p,
   .pending p {
-    margin: 0 0 0.25rem;
+    margin: 0 0 var(--space-4);
   }
   .err {
-    color: var(--ng);
+    color: var(--color-ng);
   }
   .small {
-    font-size: 0.875rem;
+    font-size: var(--font-size-14);
   }
   .muted {
-    color: var(--muted);
+    color: var(--color-muted);
   }
   .link {
     background: none;
     border: none;
-    padding: 0.125rem 0;
-    color: var(--focus);
+    padding: var(--space-2) 0;
+    color: var(--color-focus);
     text-decoration: underline;
     cursor: pointer;
-    font-size: 0.875rem;
+    font-size: var(--font-size-14);
   }
   /* 履歴の2つの操作は1つのグループ。両端に離さない（段階4 4章：グループ内は 6px） */
   .row.actions {
     justify-content: flex-start;
-    gap: 0.375rem;
+    gap: var(--space-6);
   }
   /* 「ファイル（n）」も 24px 以上にする（段階4 7章4、WCAG 2.5.8） */
   summary {
-    padding-block: 0.125rem;
+    padding-block: var(--space-2);
     cursor: pointer;
   }
   /* ID とパスは周りの文字と同じ大きさにする。共通の 0.9em では 14px の中で 12.6px になり、段階4 3章の段階にない */
@@ -373,17 +373,17 @@
    */
   @media (min-width: 60.0625rem) {
     h2 {
-      font-size: 1rem;
+      font-size: var(--font-size-16);
     }
     h3 {
-      font-size: 0.875rem;
+      font-size: var(--font-size-14);
     }
     .summary {
-      font-size: 0.875rem;
+      font-size: var(--font-size-14);
     }
     button:not(.link) {
-      padding: 0.25rem 0.625rem;
-      font-size: 0.875rem;
+      padding: var(--space-4) var(--space-10);
+      font-size: var(--font-size-14);
     }
   }
 </style>

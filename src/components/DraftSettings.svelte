@@ -131,23 +131,23 @@
 
 <style>
   .consent {
-    border: 1px solid var(--focus);
-    border-radius: 8px;
-    padding: 0.75rem 1rem;
-    margin-bottom: 1rem;
-    background: var(--surface);
+    border: 1px solid var(--color-focus);
+    border-radius: var(--radius-lg);
+    padding: var(--space-12) var(--space-16);
+    margin-bottom: var(--space-16);
+    background: var(--color-surface);
   }
   h2 {
-    margin: 0 0 0.25rem;
-    font-size: 1.0625rem;
+    margin: 0 0 var(--space-4);
+    font-size: var(--font-size-18);
   }
   .small {
-    font-size: 0.8125rem;
-    color: var(--muted);
+    font-size: var(--font-size-13);
+    color: var(--color-muted);
   }
   .buttons {
     display: flex;
-    gap: 0.5rem;
+    gap: var(--space-8);
     flex-wrap: wrap;
   }
   /* フッターで文字を詰めても、操作できる高さは 24px 以上にする（段階4 4章、WCAG 2.5.8） */

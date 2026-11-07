@@ -181,31 +181,31 @@
   .check {
     max-width: 40rem;
     margin: 0 auto;
-    padding: 1rem;
+    padding: var(--space-16);
   }
   h1 {
-    font-size: 1.25rem;
+    font-size: var(--font-size-20);
   }
   .buttons {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.5rem;
-    margin-block: 1rem;
+    gap: var(--space-8);
+    margin-block: var(--space-16);
   }
   .log {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-    font-size: 0.8125rem;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 0.5rem;
+    font-size: var(--font-size-13);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-8);
     min-height: 6rem;
   }
   .small {
-    font-size: 0.875rem;
+    font-size: var(--font-size-14);
   }
   .muted {
-    color: var(--muted);
+    color: var(--color-muted);
   }
 </style>

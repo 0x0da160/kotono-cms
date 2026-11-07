@@ -173,73 +173,73 @@
 
 <style>
   .placebar {
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0.5rem 0.75rem;
-    margin-bottom: 0.75rem;
-    background: var(--surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-8) var(--space-12);
+    margin-bottom: var(--space-12);
+    background: var(--color-surface);
   }
   .status,
   .actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: var(--space-8);
     align-items: center;
   }
   .actions {
-    margin-top: 0.5rem;
+    margin-top: var(--space-8);
   }
   .unsynced {
-    font-size: 0.875rem;
+    font-size: var(--font-size-14);
   }
   .warn {
-    color: var(--ng);
-    font-weight: 600;
+    color: var(--color-ng);
+    font-weight: var(--font-weight-strong);
   }
   .banner {
-    border: 1px solid var(--ng);
-    border-radius: 6px;
-    padding: 0.5rem 0.75rem;
-    margin: 0.5rem 0 0;
-    font-size: 0.875rem;
+    border: 1px solid var(--color-ng);
+    border-radius: var(--radius-md);
+    padding: var(--space-8) var(--space-12);
+    margin: var(--space-8) 0 0;
+    font-size: var(--font-size-14);
   }
   .banner.info {
-    border-color: var(--border);
+    border-color: var(--color-border);
   }
   .settings {
-    margin-top: 0.5rem;
+    margin-top: var(--space-8);
   }
   .pp {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: var(--space-8);
     align-items: end;
-    margin-block: 0.5rem;
+    margin-block: var(--space-8);
   }
   label {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
-    font-size: 0.875rem;
+    gap: var(--space-4);
+    font-size: var(--font-size-14);
   }
   label.row {
     flex-direction: row;
     align-items: center;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
+    gap: var(--space-8);
+    margin-top: var(--space-8);
   }
   input,
   select {
     font: inherit;
-    font-size: 1rem;
-    padding: 0.375rem 0.5rem;
+    font-size: var(--font-size-16);
+    padding: var(--space-6) var(--space-8);
     min-height: 2.5rem;
-    border: 1px solid var(--border);
-    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
     background: transparent;
     color: inherit;
   }
   .small {
-    font-size: 0.8125rem;
+    font-size: var(--font-size-13);
   }
 </style>

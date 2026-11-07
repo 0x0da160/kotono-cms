@@ -484,7 +484,7 @@
   .visual {
     display: flex;
     flex-direction: column;
-    gap: 0.375rem;
+    gap: var(--space-6);
     min-width: 0;
   }
   .fmt {
@@ -494,41 +494,41 @@
     align-items: center;
   }
   .fmt button {
-    padding: 0.125rem 0.375rem;
-    font-size: 0.8125rem;
-    font-weight: 400;
+    padding: var(--space-2) var(--space-6);
+    font-size: var(--font-size-13);
+    font-weight: var(--font-weight-regular);
   }
   .sep {
     width: 1px;
     align-self: stretch;
-    background: var(--border);
-    margin-inline: 0.125rem;
+    background: var(--color-border);
+    margin-inline: var(--space-2);
   }
   .link-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.375rem;
+    gap: var(--space-6);
     align-items: center;
-    font-size: 0.875rem;
-    font-weight: 400;
+    font-size: var(--font-size-14);
+    font-weight: var(--font-weight-regular);
   }
   .link-row input {
     min-width: 18rem;
   }
   .surface {
-    border: 1px solid var(--field-border);
-    border-radius: 6px;
-    background: var(--surface);
-    padding: 0.75rem 1rem;
+    border: 1px solid var(--color-field-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    padding: var(--space-12) var(--space-16);
     min-height: max(20rem, calc(100dvh - 18rem));
-    font-weight: 400;
-    font-size: 1rem;
-    line-height: 1.75;
+    font-weight: var(--font-weight-regular);
+    font-size: var(--font-size-16);
+    line-height: var(--line-height-prose);
     overflow-wrap: anywhere;
     cursor: text;
   }
   .surface:focus-visible {
-    outline: 2px solid var(--focus);
+    outline: 2px solid var(--color-focus);
     outline-offset: 1px;
   }
   .surface[aria-readonly="true"] {
@@ -560,14 +560,14 @@
   }
   .surface :global(blockquote) {
     margin: 0 0 0.75em;
-    padding-left: 1rem;
-    border-left: 4px solid var(--border);
-    color: var(--muted);
+    padding-left: var(--space-16);
+    border-left: 4px solid var(--color-border);
+    color: var(--color-muted);
   }
   .surface :global(pre) {
-    background: var(--bg);
-    padding: 0.5rem 0.75rem;
-    border-radius: 6px;
+    background: var(--color-bg);
+    padding: var(--space-8) var(--space-12);
+    border-radius: var(--radius-md);
     white-space: pre-wrap;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "BIZ UDGothic", monospace;
     font-size: 0.9em;
@@ -575,12 +575,12 @@
   .surface :global(code) {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "BIZ UDGothic", monospace;
     font-size: 0.9em;
-    background: var(--bg);
-    border-radius: 3px;
+    background: var(--color-bg);
+    border-radius: var(--radius-sm);
     padding: 0 0.2em;
   }
   .surface :global(a) {
-    color: var(--focus);
+    color: var(--color-focus);
     text-decoration: underline;
     cursor: text;
   }
@@ -605,20 +605,20 @@
   .surface :global(.v-img-ph),
   .surface :global(.v-raw),
   .surface :global(.v-raw-inline) {
-    border: 1px dashed var(--border);
-    border-radius: 4px;
-    color: var(--muted);
-    background: var(--bg);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-muted);
+    background: var(--color-bg);
     font-size: 0.875em;
   }
   .surface :global(.v-img-ph) {
     display: inline-block;
-    padding: 0.25rem 0.5rem;
+    padding: var(--space-4) var(--space-8);
   }
   .surface :global(.v-raw) {
     white-space: pre-wrap;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "BIZ UDGothic", monospace;
-    padding: 0.375rem 0.625rem;
+    padding: var(--space-6) var(--space-10);
     margin: 0 0 0.75em;
     user-select: text;
   }
@@ -628,6 +628,6 @@
   }
   .err {
     margin: 0;
-    color: var(--ng);
+    color: var(--color-ng);
   }
 </style>

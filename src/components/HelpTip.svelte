@@ -121,17 +121,17 @@
     height: 1.5rem;
     min-height: 1.5rem;
     padding: 0;
-    margin: 0 0.125rem;
+    margin: 0 var(--space-2);
     border: none;
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     background: transparent;
-    color: var(--muted);
+    color: var(--color-muted);
     cursor: pointer;
   }
   .tip-btn:hover,
   .tip-btn[aria-expanded="true"] {
-    color: var(--text);
-    background: var(--border);
+    color: var(--color-text);
+    background: var(--color-border);
   }
   .tip-btn :global(svg) {
     width: 1rem;
@@ -146,19 +146,19 @@
   }
   .tip-pop {
     position: fixed;
-    z-index: 50;
+    z-index: var(--z-tooltip);
     display: block;
     width: max-content;
     max-width: min(22rem, calc(100vw - 1rem));
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--surface);
+    padding: var(--space-8) var(--space-12);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
     color: inherit;
-    box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
-    font-size: 0.8125rem;
+    box-shadow: var(--shadow-2);
+    font-size: var(--font-size-13);
     font-weight: normal;
-    line-height: 1.6;
+    line-height: var(--line-height-body);
     text-align: start;
     white-space: normal;
   }
@@ -166,7 +166,7 @@
     display: block;
   }
   .tip-pop :global(.tip-p + .tip-p) {
-    margin-top: 0.375rem;
+    margin-top: var(--space-6);
   }
   .tip-pop[hidden] {
     display: none;

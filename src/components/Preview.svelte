@@ -215,41 +215,41 @@
   .preview {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: var(--space-8);
   }
   .head {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-8);
   }
   h3 {
     margin: 0;
-    font-size: 1rem;
+    font-size: var(--font-size-16);
   }
   iframe {
     width: 100%;
     min-height: 24rem;
     height: 60vh;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
     resize: vertical;
   }
   .warn {
     margin: 0;
-    border: 1px solid var(--ng);
-    border-radius: 6px;
-    padding: 0.375rem 0.625rem;
+    border: 1px solid var(--color-ng);
+    border-radius: var(--radius-md);
+    padding: var(--space-6) var(--space-10);
   }
   .small {
-    font-size: 0.8125rem;
+    font-size: var(--font-size-13);
     margin: 0;
   }
   .links ol {
-    margin: 0.25rem 0 0;
-    padding-inline-start: 1.25rem;
-    font-size: 0.875rem;
+    margin: var(--space-4) 0 0;
+    padding-inline-start: var(--space-20);
+    font-size: var(--font-size-14);
   }
   .url {
     overflow-wrap: anywhere;

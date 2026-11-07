@@ -125,36 +125,36 @@
 
 <style>
   .recovery {
-    border: 2px solid var(--focus);
-    border-radius: 8px;
-    padding: 0.75rem 1rem;
-    margin-block: 0.75rem;
+    border: 2px solid var(--color-focus);
+    border-radius: var(--radius-lg);
+    padding: var(--space-12) var(--space-16);
+    margin-block: var(--space-12);
   }
   h3 {
-    margin: 0 0 0.5rem;
-    font-size: 1rem;
+    margin: 0 0 var(--space-8);
+    font-size: var(--font-size-16);
   }
   .code {
-    font-size: 1.25rem;
+    font-size: var(--font-size-20);
     letter-spacing: 0.05em;
     overflow-wrap: anywhere;
     user-select: all;
-    margin: 0.5rem 0;
+    margin: var(--space-8) 0;
   }
   .field {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: var(--space-4);
     max-width: 28rem;
-    margin-block: 0.5rem;
+    margin-block: var(--space-8);
   }
   .field input {
     font: inherit;
-    font-size: 1rem;
-    padding: 0.5rem;
+    font-size: var(--font-size-16);
+    padding: var(--space-8);
     min-height: 2.75rem;
-    border: 1px solid var(--border);
-    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
     background: transparent;
     color: inherit;
   }
@@ -170,21 +170,21 @@
   }
   .actions {
     display: flex;
-    gap: 0.5rem;
+    gap: var(--space-8);
   }
   .passkey {
-    margin-block: 0.75rem;
+    margin-block: var(--space-12);
   }
   .check {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    margin-block: 0.75rem;
+    gap: var(--space-8);
+    margin-block: var(--space-12);
   }
   .small {
-    font-size: 0.875rem;
+    font-size: var(--font-size-14);
   }
   .warn {
-    color: var(--ng);
+    color: var(--color-ng);
   }
 </style>

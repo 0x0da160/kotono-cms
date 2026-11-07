@@ -343,35 +343,35 @@
 <style>
   .skip {
     position: absolute;
-    left: 0.5rem;
+    left: var(--space-8);
     top: -3rem;
-    background: var(--surface);
-    padding: 0.5rem 0.75rem;
-    border: 2px solid var(--focus);
-    border-radius: 6px;
-    z-index: 10;
+    background: var(--color-surface);
+    padding: var(--space-8) var(--space-12);
+    border: 2px solid var(--color-focus);
+    border-radius: var(--radius-md);
+    z-index: var(--z-popover);
   }
   .skip:focus {
-    top: 0.5rem;
+    top: var(--space-8);
   }
   main:focus {
     outline: none;
   }
   .keys {
-    margin: 0.5rem 0;
+    margin: var(--space-8) 0;
   }
   .recent {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-block: 0.5rem;
+    gap: var(--space-8);
+    margin-block: var(--space-8);
   }
   .app-header,
   main,
   .app-footer {
     max-width: 48rem;
     margin-inline: auto;
-    padding-inline: 1rem;
+    padding-inline: var(--space-16);
   }
   main.wide,
   .app-footer.wide,
@@ -379,54 +379,54 @@
     max-width: 96rem;
   }
   .app-header {
-    padding-block: 1rem 0.75rem;
+    padding-block: var(--space-16) var(--space-12);
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 0.5rem 1rem;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 1rem;
+    gap: var(--space-8) var(--space-16);
+    border-bottom: 1px solid var(--color-border);
+    margin-bottom: var(--space-16);
   }
   h1 {
     margin: 0;
-    font-size: 1.5rem;
+    font-size: var(--font-size-24);
     letter-spacing: 0.01em;
   }
   .tagline {
     margin: 0;
-    color: var(--muted);
-    font-size: 0.875rem;
+    color: var(--color-muted);
+    font-size: var(--font-size-14);
   }
   .folder {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: var(--space-12);
     flex-wrap: wrap;
   }
   .folder-name {
-    font-size: 0.875rem;
+    font-size: var(--font-size-14);
     overflow-wrap: anywhere;
   }
   .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1rem 1.25rem;
-    margin-block-end: 1rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-16) var(--space-20);
+    margin-block-end: var(--space-16);
   }
   h2 {
-    margin: 0 0 0.5rem;
-    font-size: 1.125rem;
+    margin: 0 0 var(--space-8);
+    font-size: var(--font-size-18);
   }
   .env-details summary {
     cursor: pointer;
-    font-size: 0.875rem;
-    color: var(--muted);
+    font-size: var(--font-size-14);
+    color: var(--color-muted);
     min-height: 1.5rem;
   }
   .env-details[open] summary {
-    margin-block-end: 0.5rem;
+    margin-block-end: var(--space-8);
   }
   .capabilities {
     list-style: none;
@@ -436,9 +436,9 @@
   .capabilities li {
     display: grid;
     grid-template-columns: 1.5rem 1fr auto;
-    gap: 0.25rem 0.5rem;
-    padding-block: 0.375rem;
-    border-top: 1px solid var(--border);
+    gap: var(--space-4) var(--space-8);
+    padding-block: var(--space-6);
+    border-top: 1px solid var(--color-border);
   }
   .capabilities li:first-child {
     border-top: none;
@@ -447,31 +447,31 @@
     font-weight: 700;
   }
   li[data-ok="true"] .mark {
-    color: var(--ok);
+    color: var(--color-ok);
   }
   li[data-ok="false"] .mark {
-    color: var(--ng);
+    color: var(--color-ng);
   }
   .state {
-    color: var(--muted);
-    font-size: 0.875rem;
+    color: var(--color-muted);
+    font-size: var(--font-size-14);
   }
   .impact {
     grid-column: 2 / -1;
-    font-size: 0.875rem;
-    color: var(--muted);
+    font-size: var(--font-size-14);
+    color: var(--color-muted);
   }
   .probe {
-    margin: 0.75rem 0 0;
-    font-size: 0.875rem;
-    color: var(--muted);
+    margin: var(--space-12) 0 0;
+    font-size: var(--font-size-14);
+    color: var(--color-muted);
   }
   .banner {
-    border: 1px solid var(--ng);
-    border-radius: 6px;
-    padding: 0.5rem 0.75rem;
-    margin: 0 0 0.75rem;
-    background: var(--surface);
+    border: 1px solid var(--color-ng);
+    border-radius: var(--radius-md);
+    padding: var(--space-8) var(--space-12);
+    margin: 0 0 var(--space-12);
+    background: var(--color-surface);
   }
   .banner p {
     margin: 0;
@@ -479,17 +479,17 @@
   .panes {
     display: grid;
     grid-template-columns: minmax(18rem, 26rem) minmax(0, 1fr);
-    gap: 1.25rem;
+    gap: var(--space-20);
     align-items: start;
   }
   .pane-switch {
     display: none;
-    gap: 0.5rem;
-    margin-bottom: 0.75rem;
+    gap: var(--space-8);
+    margin-bottom: var(--space-12);
   }
   .pane-switch button[aria-pressed="true"] {
-    font-weight: 600;
-    border-color: var(--focus);
+    font-weight: var(--font-weight-strong);
+    border-color: var(--color-focus);
   }
   @media (max-width: 60rem) {
     .pane-switch {
@@ -517,18 +517,18 @@
     :global(#app:has(> main.workbench)) > .app-header {
       flex: none;
       width: 100%;
-      padding-block: 0.5rem;
-      margin-bottom: 0.5rem;
+      padding-block: var(--space-8);
+      margin-bottom: var(--space-8);
     }
     :global(#app:has(> main.workbench)) h1 {
-      font-size: 1.125rem;
+      font-size: var(--font-size-18);
     }
     /* 作業中は名前と説明を1行にして、縦の領域を空ける（UI刷新 P-10） */
     :global(#app:has(> main.workbench)) .brand {
       display: flex;
       flex-wrap: wrap;
       align-items: baseline;
-      gap: 0 0.75rem;
+      gap: 0 var(--space-12);
     }
     main.workbench {
       flex: 1 1 auto;
@@ -550,11 +550,11 @@
       overscroll-behavior: contain;
     }
     main.workbench .list-pane {
-      border-inline-end: 1px solid var(--border);
-      padding-inline-end: 0.75rem;
+      border-inline-end: 1px solid var(--color-border);
+      padding-inline-end: var(--space-12);
     }
     main.workbench .editor-pane {
-      padding-inline-start: 1rem;
+      padding-inline-start: var(--space-16);
     }
     main.workbench > .panes:has(> .consent-slot) {
       grid-template-rows: auto minmax(0, 1fr);
@@ -562,7 +562,7 @@
     main.workbench > .panes > .consent-slot {
       grid-column: 2;
       grid-row: 1;
-      padding: 0.75rem 0 0 1rem;
+      padding: var(--space-12) 0 0 var(--space-16);
     }
     main.workbench > .panes:has(> .consent-slot) > .list-pane {
       grid-column: 1;
@@ -577,17 +577,17 @@
       width: 100%;
       max-height: 40vh;
       overflow: auto;
-      padding-block: 0.25rem 0.375rem;
-      border-top: 1px solid var(--border);
+      padding-block: var(--space-4) var(--space-6);
+      border-top: 1px solid var(--color-border);
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 0 1rem;
-      font-size: 0.75rem;
+      gap: 0 var(--space-16);
+      font-size: var(--font-size-12);
     }
     .app-footer.workbench .keys {
       margin: 0;
-      font-size: 0.75rem;
+      font-size: var(--font-size-12);
     }
   }
   /* 狭い側の作業台（〜75rem）では一覧の列を最小幅にして、編集側の操作列を1行に収める（UI刷新 反復4） */
@@ -597,19 +597,19 @@
     }
   }
   .empty {
-    padding: 2rem 0;
+    padding: var(--space-32) 0;
     text-align: center;
   }
   .small {
-    font-size: 0.875rem;
+    font-size: var(--font-size-14);
   }
   .app-footer {
-    padding-block: 1.5rem 2rem;
-    color: var(--muted);
-    font-size: 0.875rem;
+    padding-block: var(--space-24) var(--space-32);
+    color: var(--color-muted);
+    font-size: var(--font-size-14);
   }
   .update {
-    margin: 0.5rem 0;
+    margin: var(--space-8) 0;
   }
   button.link {
     background: none;
@@ -622,7 +622,7 @@
   }
   .app-footer dl {
     display: flex;
-    gap: 0.25rem 0.75rem;
+    gap: var(--space-4) var(--space-12);
     flex-wrap: wrap;
     margin: 0;
   }
@@ -630,6 +630,6 @@
     content: "：";
   }
   .app-footer dd {
-    margin: 0 0.75rem 0 0;
+    margin: 0 var(--space-12) 0 0;
   }
 </style>

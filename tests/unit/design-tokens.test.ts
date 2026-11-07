@@ -70,7 +70,7 @@ describe("tokens.css", () => {
     expect(readFileSync(TOKENS_CSS, "utf8")).toBe(expected);
   });
 
-  it("部品のスタイルに色を直接書かない（16 進の色はパレットだけにある）", () => {
+  it("部品のスタイルに色を直接書かず、旧い短い変数名も使わない", () => {
     const files = [
       join(ROOT, "src/app.css"),
       join(ROOT, "src/App.svelte"),
@@ -83,7 +83,13 @@ describe("tokens.css", () => {
       const styles = f.endsWith(".css")
         ? [src]
         : [...src.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1] ?? "");
-      return styles.flatMap((css) => [...css.matchAll(/#[0-9a-fA-F]{3,8}\b/g)].map((m) => `${f}: ${m[0]}`));
+      return styles.flatMap((css) =>
+        [
+          ...css.matchAll(
+            /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|var\(--(?:bg|surface|text|muted|border|field-border|ok|ng|focus|on-accent)\)/g,
+          ),
+        ].map((m) => `${f}: ${m[0]}`),
+      );
     });
     expect(offenders).toEqual([]);
   });

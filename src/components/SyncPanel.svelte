@@ -211,53 +211,53 @@
 
 <style>
   .sync {
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0.75rem;
-    margin-top: 1rem;
-    background: var(--surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-12);
+    margin-top: var(--space-16);
+    background: var(--color-surface);
   }
   h3 {
-    margin: 0 0 0.5rem;
-    font-size: 1rem;
+    margin: 0 0 var(--space-8);
+    font-size: var(--font-size-16);
   }
   h4 {
-    margin: 0.75rem 0 0.25rem;
-    font-size: 0.9375rem;
+    margin: var(--space-12) 0 var(--space-4);
+    font-size: var(--font-size-15);
   }
   .notice {
-    font-size: 0.875rem;
-    border-inline-start: 3px solid var(--border);
-    padding-inline-start: 0.5rem;
-    margin: 0 0 0.5rem;
+    font-size: var(--font-size-14);
+    border-inline-start: 3px solid var(--color-border);
+    padding-inline-start: var(--space-8);
+    margin: 0 0 var(--space-8);
   }
   .notice[data-kind="error"],
   .notice[data-kind="warn"] {
-    border-color: var(--ng);
+    border-color: var(--color-ng);
   }
   .notice[data-kind="ok"] {
-    border-color: var(--ok);
+    border-color: var(--color-ok);
   }
   .actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: var(--space-8);
     align-items: center;
-    margin-block: 0.375rem;
+    margin-block: var(--space-6);
   }
   .config label {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
-    font-size: 0.875rem;
-    margin-block: 0.375rem;
+    gap: var(--space-4);
+    font-size: var(--font-size-14);
+    margin-block: var(--space-6);
   }
   .config .field {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
-    font-size: 0.875rem;
-    margin-block: 0.375rem;
+    gap: var(--space-4);
+    font-size: var(--font-size-14);
+    margin-block: var(--space-6);
   }
   .config .lab {
     display: flex;
@@ -272,11 +272,11 @@
   }
   input:not([type="checkbox"]):not([type="radio"]) {
     font: inherit;
-    font-size: 1rem;
-    padding: 0.375rem 0.5rem;
+    font-size: var(--font-size-16);
+    padding: var(--space-6) var(--space-8);
     min-height: 2.5rem;
-    border: 1px solid var(--border);
-    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
     background: transparent;
     color: inherit;
   }
@@ -286,23 +286,23 @@
     margin: 0;
   }
   .conflicts li {
-    border-top: 1px solid var(--border);
-    padding-block: 0.5rem;
+    border-top: 1px solid var(--color-border);
+    padding-block: var(--space-8);
   }
   .path {
     display: block;
     overflow-wrap: anywhere;
-    font-size: 0.8125rem;
+    font-size: var(--font-size-13);
   }
   pre {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-    font-size: 0.75rem;
+    font-size: var(--font-size-12);
     max-height: 16rem;
     overflow: auto;
-    margin: 0.25rem 0;
+    margin: var(--space-4) 0;
   }
   .small {
-    font-size: 0.8125rem;
+    font-size: var(--font-size-13);
   }
 </style>
