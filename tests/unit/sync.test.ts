@@ -282,6 +282,53 @@ describe("GitHub との同期（40）", () => {
     expect(remote.git("rev-parse", `${done.head}^{tree}`).trim()).toBe(nativeTree);
   });
 
+  it("関係のない履歴（GitHub で README を付けて作ったリポジトリ）は空の状態を祖先として合わせる", async () => {
+    const { remote, fs, repo, sync } = await setup();
+    // 取得する前に手元で最初のコミットを作る：GitHub 側と共通の祖先がない
+    const ours = await localCommit(repo, fs, "bbbbbbb", article("bbbbbbb", "手元の記事\n"), "手元の最初");
+    const theirs = remote.git("rev-parse", "HEAD").trim();
+    const r = await sync.pull(async () => true);
+    expect(r.kind).toBe("merge-needed");
+    if (r.kind !== "merge-needed") return;
+    expect(r.plan.base).toBeNull();
+    expect(r.plan.conflicts).toEqual([]);
+    const done = await sync.completeMerge(r.plan, new Map(), { name: "L", email: "l@example.com" }, async () => true);
+    if (!done.ok) throw new Error(done.message);
+    expect(read(fs, "content/articles/aaaaaaa/index.md")).toContain("一行目");
+    expect(read(fs, "content/articles/bbbbbbb/index.md")).toContain("手元の記事");
+    expect(read(fs, "README.md")).toBe("r\n");
+    expect((await sync.push()).kind).toBe("pushed");
+    remote.git("fsck", "--strict");
+    expect(remote.git("rev-list", "--parents", "-n", "1", done.head).trim()).toBe(`${done.head} ${ours} ${theirs}`);
+    const nativeTree = remote
+      .git("merge-tree", "--write-tree", "--allow-unrelated-histories", ours, theirs)
+      .split("\n")[0];
+    expect(remote.git("rev-parse", `${done.head}^{tree}`).trim()).toBe(nativeTree);
+  });
+
+  it("関係のない履歴で同じパスに別の内容があれば、競合として選ばせる", async () => {
+    const { remote, fs, repo, sync } = await setup();
+    await localCommit(repo, fs, "aaaaaaa", article("aaaaaaa", "手元で書いた一行目\n"), "手元の最初");
+    const r = await sync.pull(async () => true);
+    expect(r.kind).toBe("merge-needed");
+    if (r.kind !== "merge-needed") return;
+    expect(r.plan.base).toBeNull();
+    expect(r.plan.conflicts.map((c) => [c.path, c.reason, c.base])).toEqual([
+      ["content/articles/aaaaaaa/index.md", "両側で別の内容を追加", null],
+    ]);
+    const done = await sync.completeMerge(
+      r.plan,
+      new Map([["content/articles/aaaaaaa/index.md", "local"]]),
+      { name: "L", email: "l@example.com" },
+      async () => true,
+    );
+    if (!done.ok) throw new Error(done.message);
+    expect(read(fs, "content/articles/aaaaaaa/index.md")).toContain("手元で書いた一行目");
+    expect(read(fs, "README.md")).toBe("r\n");
+    expect((await sync.push()).kind).toBe("pushed");
+    remote.git("fsck", "--strict");
+  });
+
   it("同じ行の両側の変更は競合として選ばせる", async () => {
     const { remote, fs, repo, sync } = await setup();
     await sync.pull(async () => true);
