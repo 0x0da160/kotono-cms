@@ -225,11 +225,38 @@ describe("Vault（39.2・39.4）", () => {
     await expect(pk.register("x", new Uint8Array(32))).rejects.toThrow("パスキーを登録できませんでした");
   });
 
-  it("PRF の入力は 1 件なら eval、複数件なら evalByCredential で渡す", () => {
+  it("PRF の入力は塩が共通なら eval、違えば evalByCredential で渡す", () => {
     const a = { credentialId: new Uint8Array([1]), prfSalt: new Uint8Array(32).fill(1) };
     const b = { credentialId: new Uint8Array([2]), prfSalt: new Uint8Array(32).fill(2) };
     expect(prfInputs([a])).toEqual({ eval: { first: a.prfSalt } });
+    // 塩が共通なら複数件でも eval
+    expect(prfInputs([a, { ...b, prfSalt: a.prfSalt }])).toEqual({ eval: { first: a.prfSalt } });
     expect(prfInputs([a, b])).toEqual({ evalByCredential: { AQ: { first: a.prfSalt }, Ag: { first: b.prfSalt } } });
+  });
+
+  it("2 件目のパスキーは 1 件目と同じ塩で包み、外すと回復コードの枠だけ残る", async () => {
+    const salts: Uint8Array[] = [];
+    let n = 0;
+    const api = {
+      register: async (_label: string, prfSalt: Uint8Array) => {
+        salts.push(prfSalt);
+        return { credentialId: new Uint8Array([++n]), prf: crypto.getRandomValues(new Uint8Array(32)) };
+      },
+      authenticate: async () => {
+        throw new Error("使わない");
+      },
+    };
+    const v = new Vault(api, ITER);
+    const k = await v.prepareNew("x");
+    const id = "e".repeat(16);
+    v.adopt(id, k.key);
+    const r1 = await v.withPasskey(id, k.record, "x");
+    const r2 = await v.withPasskey(id, r1, "x");
+    expect(salts[1]).toEqual(salts[0]);
+    const pks = r2.slots.filter((s) => s.kind === "passkey");
+    expect(pks).toHaveLength(2);
+    expect(pks[0]?.kind === "passkey" && pks[1]?.kind === "passkey" && pks[0].wrapped !== pks[1].wrapped).toBe(true);
+    expect(v.withoutPasskeys(r2).slots.map((s) => s.kind)).toEqual(["recovery"]);
   });
 
   it("トークンを暗号化して保存できる（40.2）", async () => {

@@ -115,19 +115,24 @@ async function call<T>(f: () => Promise<T>, notAllowed: string): Promise<T> {
 }
 
 /**
- * PRF の入力。1 件だけなら `eval` で渡す（`evalByCredential` に対応しないパスキー管理アプリがあるため。
- * iOS の 1Password で失敗した件）。複数件のときは、どれが選ばれても正しい塩になるよう `evalByCredential` で渡す。
+ * PRF の入力。塩がすべて同じなら `eval` だけで渡す（`evalByCredential` に対応しないパスキー管理アプリがあるため。
+ * iOS の 1Password で失敗した件）。塩が違う枠が混ざるときは、どれが選ばれても正しい塩になるよう `evalByCredential` で渡す。
  */
 export function prfInputs(
   allowed: readonly { credentialId: Uint8Array; prfSalt: Uint8Array }[],
 ):
   | { eval: { first: Uint8Array<ArrayBuffer> } }
   | { evalByCredential: Record<string, { first: Uint8Array<ArrayBuffer> }> } {
-  const [only] = allowed;
-  if (allowed.length === 1 && only) return { eval: { first: only.prfSalt as Uint8Array<ArrayBuffer> } };
+  const [head] = allowed;
+  if (head && allowed.every((a) => sameBytes(a.prfSalt, head.prfSalt)))
+    return { eval: { first: head.prfSalt as Uint8Array<ArrayBuffer> } };
   const evalByCredential: Record<string, { first: Uint8Array<ArrayBuffer> }> = {};
   for (const a of allowed) evalByCredential[b64(a.credentialId)] = { first: a.prfSalt as Uint8Array<ArrayBuffer> };
   return { evalByCredential };
+}
+
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  return a.length === b.length && a.every((x, i) => x === b[i]);
 }
 
 function b64(bytes: Uint8Array): string {

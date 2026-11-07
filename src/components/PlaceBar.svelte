@@ -51,6 +51,23 @@
     await places.export(meta, v === "plain");
   }
 
+  async function removePasskeys() {
+    const v = await ws.ask({
+      title: "登録済みのパスキーを外します",
+      message: `この作業場所に登録したパスキー ${passkeys} 件を、解錠の方法から外します。回復コード${hasPassphrase ? "・パスフレーズ" : ""}では今まで通り開けます。外したあと、使うパスキーを登録し直してください。`,
+      details: [
+        "パスキー自体は、パスワードアプリや 1Password に残ります。不要なら、そちらで削除してください。",
+        "複数のパスキーを同時に登録し直すと、1Password などでも開けるようになります。",
+      ],
+      buttons: [
+        { label: "外す", value: "remove", variant: "danger" },
+        { label: "キャンセル", value: "cancel" },
+      ],
+      initial: "cancel",
+    });
+    if (v === "remove") await places.removePasskeys(meta);
+  }
+
   async function setPassphrase(e: SubmitEvent) {
     e.preventDefault();
     if (pass1 !== pass2) {
@@ -132,6 +149,11 @@
           disabled={places.busy}
           data-testid="add-passkey">パスキーを登録</button
         >
+        {#if passkeys > 0}
+          <button type="button" onclick={removePasskeys} disabled={places.busy} data-testid="remove-passkeys"
+            >登録済みのパスキーを外す</button
+          >
+        {/if}
         <p class="small muted">
           パスキーは、この配信元（{location.hostname}）でだけ使えます。配信元を移したら登録し直してください。
         </p>
