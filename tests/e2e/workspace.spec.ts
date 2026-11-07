@@ -61,7 +61,18 @@ test("作業場所を作り、記事を保存し、ロックと解錠、暗号�
   const code = (await page.getByTestId("recovery-code-value").textContent()) ?? "";
   expect(code).toMatch(/^[A-Z2-7]{5}(-[A-Z2-7]{5}){4}$/);
   await expect(page.getByTestId("recovery-done")).toBeDisabled();
+  // パスワード管理に保存させる欄（ユーザー名と新しいパスワード）に回復コードが入っている
+  const save = page.getByTestId("recovery-save-field");
+  await expect(save).toHaveAttribute("autocomplete", "new-password");
+  await expect(save).toHaveValue(code);
+  await expect(page.getByTestId("recovery-account")).toHaveAttribute("autocomplete", "username");
+  await expect(page.getByTestId("recovery-account")).toHaveValue(/^kotono-[0-9a-z-]{8}$/);
   await page.getByTestId("recovery-kept").check();
+  // 書き換えられた回復コードは保存させない
+  await save.fill("abc");
+  await expect(page.getByTestId("recovery-done")).toBeDisabled();
+  await save.fill(code.toLowerCase());
+  await expect(page.getByTestId("recovery-done")).toBeEnabled();
   await page.getByTestId("recovery-done").click();
   await expect(page.getByTestId("folder-name")).toHaveText("作業場所：ブログ");
 
@@ -93,6 +104,7 @@ test("作業場所を作り、記事を保存し、ロックと解錠、暗号�
   await page.getByTestId("place-lock-open").click();
   await expect(page.getByTestId("place")).toHaveAttribute("data-locked", "true");
   await page.getByTestId("place-unlock").click();
+  await expect(page.getByTestId("unlock-secret")).toHaveAttribute("autocomplete", "current-password");
   await page.getByTestId("unlock-secret").fill(code.toLowerCase());
   await page.getByTestId("unlock-run").click();
   await expect(page.getByTestId("article-row").filter({ hasText: "iPhone の記事" })).toBeVisible();
