@@ -136,7 +136,11 @@ export class Vault {
   async withPasskey(id: string, record: KeyringRecord, label: string): Promise<KeyringRecord> {
     if (!this.passkey) throw new Error("この環境ではパスキーを使えません。");
     const k = this.need(id);
-    const prfSalt = randomBytes(32);
+    // 塩はパスキーどうしで共通にする。共通なら認証時に PRF の入力を eval だけで渡せる
+    // （evalByCredential に対応しないパスキー管理アプリがある：iOS の 1Password）。
+    // PRF の出力はパスキーごとの秘密で決まるので、塩が共通でも包む鍵はパスキーごとに違う。
+    const shared = record.slots.find((s) => s.kind === "passkey");
+    const prfSalt = (shared?.kind === "passkey" ? fromB64u(shared.prfSalt) : null) ?? randomBytes(32);
     const cred = await this.passkey.register(label, prfSalt);
     const w = await keyFromPrf(cred.prf);
     const slot: KeySlot = {
@@ -147,6 +151,11 @@ export class Vault {
       ...(this.passkey.rpId ? { rpId: this.passkey.rpId } : {}),
     };
     return { ...record, slots: [...record.slots, slot] };
+  }
+
+  /** パスキーの枠をすべて外す（回復コードの枠は残る） */
+  withoutPasskeys(record: KeyringRecord): KeyringRecord {
+    return { ...record, slots: record.slots.filter((s) => s.kind !== "passkey") };
   }
 
   /** 枠のいずれかで DK を開く。開けなければ null */

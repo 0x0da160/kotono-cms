@@ -372,6 +372,25 @@ export class PlacesController {
     for (const id of Object.keys(this.names)) await this.lock(id);
   }
 
+  /** 登録済みのパスキーをすべて外す（登録し直す前に使う。回復コードの枠は残る） */
+  async removePasskeys(meta: WorkspaceMeta): Promise<boolean> {
+    if (!this.store || !this.vault || !meta.keyring || this.busy) return false;
+    this.busy = true;
+    this.error = null;
+    try {
+      const m = await this.store.update(meta.id, { keyring: this.vault.withoutPasskeys(meta.keyring) });
+      if (this.current?.id === meta.id) this.current = m;
+      await this.refresh();
+      this.info = "パスキーの登録を外しました。使うパスキーを登録し直してください。";
+      return true;
+    } catch (e) {
+      this.error = `外せませんでした：${(e as Error).message}`;
+      return false;
+    } finally {
+      this.busy = false;
+    }
+  }
+
   /** パスフレーズ・パスキーを加える（39.2） */
   async addUnlock(
     meta: WorkspaceMeta,

@@ -37,8 +37,7 @@ export function browserPasskey(host: CredentialsHost): PasskeyApi | null {
 
   const authenticate: PasskeyApi["authenticate"] = async (allowed) => {
     if (allowed.length === 0) throw new Error("登録済みのパスキーがありません。");
-    const evalByCredential: Record<string, { first: Uint8Array<ArrayBuffer> }> = {};
-    for (const a of allowed) evalByCredential[b64(a.credentialId)] = { first: a.prfSalt as Uint8Array<ArrayBuffer> };
+    const prfIn = prfInputs(allowed);
     const cred = (await call(
       () =>
         creds.get({
@@ -50,7 +49,7 @@ export function browserPasskey(host: CredentialsHost): PasskeyApi | null {
               type: "public-key",
               id: a.credentialId as Uint8Array<ArrayBuffer>,
             })),
-            extensions: { prf: { evalByCredential } } as AuthenticationExtensionsClientInputs,
+            extensions: { prf: prfIn } as AuthenticationExtensionsClientInputs,
           },
         }),
       NOT_ALLOWED_GET,
@@ -113,6 +112,27 @@ async function call<T>(f: () => Promise<T>, notAllowed: string): Promise<T> {
     if (e instanceof Error && e.name === "NotAllowedError") throw new Error(notAllowed, { cause: e });
     throw e;
   }
+}
+
+/**
+ * PRF の入力。塩がすべて同じなら `eval` だけで渡す（`evalByCredential` に対応しないパスキー管理アプリがあるため。
+ * iOS の 1Password で失敗した件）。塩が違う枠が混ざるときは、どれが選ばれても正しい塩になるよう `evalByCredential` で渡す。
+ */
+export function prfInputs(
+  allowed: readonly { credentialId: Uint8Array; prfSalt: Uint8Array }[],
+):
+  | { eval: { first: Uint8Array<ArrayBuffer> } }
+  | { evalByCredential: Record<string, { first: Uint8Array<ArrayBuffer> }> } {
+  const [head] = allowed;
+  if (head && allowed.every((a) => sameBytes(a.prfSalt, head.prfSalt)))
+    return { eval: { first: head.prfSalt as Uint8Array<ArrayBuffer> } };
+  const evalByCredential: Record<string, { first: Uint8Array<ArrayBuffer> }> = {};
+  for (const a of allowed) evalByCredential[b64(a.credentialId)] = { first: a.prfSalt as Uint8Array<ArrayBuffer> };
+  return { evalByCredential };
+}
+
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  return a.length === b.length && a.every((x, i) => x === b[i]);
 }
 
 function b64(bytes: Uint8Array): string {
