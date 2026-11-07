@@ -3,14 +3,16 @@
  * 偽の応答で代替する。日時は GitHub と同じく UTC で返し、時差の復元も確かめる。
  */
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { MemFs, type MemFile } from "./support/memory-fs";
 import { GitRepo, type RepoInfo } from "../../src/lib/git/repo";
-import { GitHubApi, parseRepoInput, type FetchLike } from "../../src/lib/sync/github-api";
-import { GitHubSync, isoDate } from "../../src/lib/sync/sync";
+import { GitHubApi, parseRepoInput, type ApiCommit, type FetchLike } from "../../src/lib/sync/github-api";
+import { GitHubSync, isoDate, rebuildCommit } from "../../src/lib/sync/sync";
+import { encodeUtf8 } from "../../src/lib/core/bytes";
+import { hashObject } from "../../src/lib/git/objects";
 import { mergeText } from "../../src/lib/sync/merge";
 
 const ENV = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
@@ -311,6 +313,40 @@ describe("GitHub との同期（40）", () => {
     expect(read(fs, "content/articles/aaaaaaa/index.md")).toContain("一行目（リモート）");
     expect(await sync.loadMergeState()).toBeNull();
     expect((await sync.push()).kind).toBe("pushed");
+  });
+});
+
+describe("署名つきコミットの復元（40）", () => {
+  it("GitHub の画面で作ったマージコミット（web-flow の署名、末尾に空の継続行）を ID どおりに復元する", async () => {
+    const c = JSON.parse(
+      readFileSync(join(__dirname, "../fixtures/github/web-flow-merge-commit.json"), "utf8"),
+    ) as ApiCommit;
+    const bytes = await rebuildCommit(c, 540);
+    expect(bytes).not.toBeNull();
+    expect(await hashObject("commit", bytes as Uint8Array)).toBe(c.sha);
+  });
+
+  it("通常の Git で署名したコミット（末尾の空行なし）も復元する", async () => {
+    const sig = "-----BEGIN PGP SIGNATURE-----\n\nAAAA\n=BBBB\n-----END PGP SIGNATURE-----\n";
+    const head =
+      "tree 1c097bcc8a3f975ee4051dee5d23a29ae66153d9\n" +
+      "author A <a@example.com> 1793959150 +0900\n" +
+      "committer A <a@example.com> 1793959150 +0900\n";
+    const body = "\nmsg\n";
+    const raw = `${head}gpgsig ${sig.replace(/\n$/, "").split("\n").join("\n ")}\n${body}`;
+    const sha = await hashObject("commit", encodeUtf8(raw));
+    const c: ApiCommit = {
+      sha,
+      tree: "1c097bcc8a3f975ee4051dee5d23a29ae66153d9",
+      parents: [],
+      author: { name: "A", email: "a@example.com", date: "2026-11-06T09:59:10Z" },
+      committer: { name: "A", email: "a@example.com", date: "2026-11-06T09:59:10Z" },
+      message: "msg\n",
+      signature: { signature: sig, payload: head + body },
+    };
+    const bytes = await rebuildCommit(c, 540);
+    expect(bytes).not.toBeNull();
+    expect(await hashObject("commit", bytes as Uint8Array)).toBe(sha);
   });
 });
 

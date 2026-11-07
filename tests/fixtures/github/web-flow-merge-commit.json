@@ -1,0 +1,23 @@
+{
+  "sha": "905647b9ccf1ce6cae7940d83dc00889f47f6edc",
+  "author": {
+    "name": "0x0da160",
+    "email": "164731635+0x0da160@users.noreply.github.com",
+    "date": "2026-11-06T09:59:10Z"
+  },
+  "committer": {
+    "name": "GitHub",
+    "email": "noreply@github.com",
+    "date": "2026-11-06T09:59:10Z"
+  },
+  "message": "Merge pull request #21 from 0x0da160/claude/project-thread-cu4fvm",
+  "tree": "1c097bcc8a3f975ee4051dee5d23a29ae66153d9",
+  "parents": [
+    "82de2bcff75263c1a3b87a97146f66a31f88b44a",
+    "8074dd6fb5e59133726d6d0270d3b72fd43aef08"
+  ],
+  "signature": {
+    "signature": "-----BEGIN PGP SIGNATURE-----\n\nwsFcBAABCAAQBQJq7aTuCRC1aQ7uu5UhlAAA+W4QAI0dBLxWvTXidiuYCQ3I57QL\nhZHC2eKL+K+J8NAQ8oeGNTjQMd41VCWv4i17F7nKCSa9Mmf9Qb2Wu/OA+ORQgVnm\ntIfCN7CgEzAbCDxzLLh96jk98pkchsLjbs71z64OwQBUMynympntPmrDUU3nf4bn\noDWh/eQ6uGa9+ytqaTicj7D9XHF2r3H4dZRpSfL0jUzedaWM/YRYnWFvlh3NsH1a\nvOyPXIA756XMb1c/vBF3DMhbNBqeqIjK3O1MRnUakP/FM9GPVJkFUBDSpUeCpYpo\ncpC3ojEvpgWk38hgKn7j0KWWma+VvPd1bJxciBCx57pKaIqzrsscYMBWCHrzYkPi\nHkr6DKUwUPynUPZduijonzR31WkiMGa7zHOvd6CCJao2I6aC/7fX6H/YQUGWfOJU\nmVoe6UoSZQvJECcP7iakOiIIVGDZPDm1sriyWTy6UZhgque31N0ra2TfHWpKgiIr\n8UPwREpHoGgzH0bsnjVDpT51hbjw77KJ4DfLjJA+h4vSHVwIB8gy+omqLoEmOz7F\nhthyOsYYgR4wVPJQ09vL1pB1NW7Ksbu+Kbz4xlELW3qkEFK31tOQAXu0v0YKzUuh\nl/CoioUTbl9UINUpFeH3vKL36F12k4EWU7pUCD3TjE7q8+o6yNOFazNmz80YDg+q\nuWBy7C0/Nmo+RqcYEqGo\n=Ytwa\n-----END PGP SIGNATURE-----\n",
+    "payload": "tree 1c097bcc8a3f975ee4051dee5d23a29ae66153d9\nparent 82de2bcff75263c1a3b87a97146f66a31f88b44a\nparent 8074dd6fb5e59133726d6d0270d3b72fd43aef08\nauthor 0x0da160 <164731635+0x0da160@users.noreply.github.com> 1793959150 +0900\ncommitter GitHub <noreply@github.com> 1793959150 +0900\n\nMerge pull request #21 from 0x0da160/claude/project-thread-cu4fvm"
+  }
+}

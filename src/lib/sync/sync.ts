@@ -124,7 +124,10 @@ function tzCandidates(first: number | null, local: number): number[] {
 export async function rebuildCommit(c: ApiCommit, localTz = 0): Promise<Uint8Array | null> {
   const msgs = c.message.endsWith("\n") ? [c.message] : [`${c.message}\n`, c.message];
   if (c.signature) {
-    const sig = `gpgsig ${c.signature.signature.replace(/\n$/, "").split("\n").join("\n ")}\n`;
+    // 署名の末尾：通常の Git は最後の改行を含めずに書くが、GitHub の画面で作ったコミット（web-flow の署名）は
+    // 末尾に空の継続行（" "）が 1 行残る。API はどちらも同じ形で返すため、両方を試して ID で確かめる
+    const raw = c.signature.signature.replace(/\n$/, "");
+    const sigs = [raw, `${raw}\n`].map((s) => `gpgsig ${s.split("\n").join("\n ")}\n`);
     const p = c.signature.payload;
     const blank = p.indexOf("\n\n");
     if (blank > 0) {
@@ -132,8 +135,11 @@ export async function rebuildCommit(c: ApiCommit, localTz = 0): Promise<Uint8Arr
       const rest = p.slice(blank + 1);
       const lines = head.split(/(?<=\n)/);
       const ci = lines.findIndex((l) => l.startsWith("committer "));
-      const variants = [head + sig + rest];
-      if (ci >= 0) variants.push(lines.slice(0, ci + 1).join("") + sig + lines.slice(ci + 1).join("") + rest);
+      const variants: string[] = [];
+      for (const sig of sigs) {
+        variants.push(head + sig + rest);
+        if (ci >= 0) variants.push(lines.slice(0, ci + 1).join("") + sig + lines.slice(ci + 1).join("") + rest);
+      }
       for (const v of variants) {
         const bytes = encodeUtf8(v);
         if ((await hashObject("commit", bytes)) === c.sha) return bytes;
