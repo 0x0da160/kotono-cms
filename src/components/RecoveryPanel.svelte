@@ -137,39 +137,39 @@
 
 <style>
   .recovery {
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0.75rem 1rem;
-    margin-bottom: 1rem;
-    background: var(--surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-12) var(--space-16);
+    margin-bottom: var(--space-16);
+    background: var(--color-surface);
   }
   h2 {
-    margin: 0 0 0.25rem;
-    font-size: 1.0625rem;
+    margin: 0 0 var(--space-4);
+    font-size: var(--font-size-18);
   }
   .list {
     list-style: none;
-    margin: 0.5rem 0 0;
+    margin: var(--space-8) 0 0;
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: var(--space-8);
   }
   .list li {
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-8);
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: var(--space-4);
   }
   .buttons {
     display: flex;
-    gap: 0.5rem;
+    gap: var(--space-8);
     flex-wrap: wrap;
   }
   .small {
-    font-size: 0.8125rem;
+    font-size: var(--font-size-13);
     margin: 0;
   }
 </style>

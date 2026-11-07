@@ -267,40 +267,40 @@
   .list {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: var(--space-8);
     min-width: 0;
   }
   .list-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.5rem;
+    gap: var(--space-8);
     flex-wrap: wrap;
   }
   h2 {
     margin: 0;
-    font-size: 1rem;
+    font-size: var(--font-size-16);
   }
   .actions {
     display: flex;
-    gap: 0.5rem;
+    gap: var(--space-8);
   }
   .filters {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: var(--space-8);
   }
   .filters label {
     display: flex;
     flex-direction: column;
-    font-size: 0.75rem;
-    color: var(--muted);
-    gap: 0.125rem;
+    font-size: var(--font-size-12);
+    color: var(--color-muted);
+    gap: var(--space-2);
   }
   .row {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
-    gap: 0.375rem 0.5rem;
+    gap: var(--space-6) var(--space-8);
   }
   .row select {
     width: 100%;
@@ -308,29 +308,29 @@
   /* 入力値はラベルの補助の文字設定を受け継がない（UI刷新 段階4：12px を入力値に使わない） */
   .filters input,
   .filters select {
-    font-size: 0.875rem;
-    color: var(--text);
+    font-size: var(--font-size-14);
+    color: var(--color-text);
   }
   .kw {
     display: flex;
     flex-direction: column;
-    gap: 0.125rem;
+    gap: var(--space-2);
   }
   .kw-head {
     display: flex;
     align-items: center;
-    font-size: 0.75rem;
-    color: var(--muted);
+    font-size: var(--font-size-12);
+    color: var(--color-muted);
   }
   .cond > summary {
     cursor: pointer;
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
-    gap: 0 0.5rem;
+    gap: 0 var(--space-8);
     min-height: 1.5rem;
-    font-size: 0.75rem;
-    color: var(--muted);
+    font-size: var(--font-size-12);
+    color: var(--color-muted);
   }
   /* display: flex にすると既定の開閉マーカーが消えるので、記号を付けて開閉できることを示す */
   .cond > summary::-webkit-details-marker {
@@ -338,17 +338,17 @@
   }
   .cond > summary::before {
     content: "▸";
-    color: var(--text);
+    color: var(--color-text);
   }
   .cond[open] > summary::before {
     content: "▾";
   }
   .cond-now {
-    color: var(--text);
-    font-size: 0.8125rem;
+    color: var(--color-text);
+    font-size: var(--font-size-13);
   }
   .cond[open] > summary {
-    margin-bottom: 0.375rem;
+    margin-bottom: var(--space-6);
   }
   .row label:last-child {
     grid-column: 1 / -1;
@@ -358,8 +358,8 @@
   }
   .summary {
     margin: 0;
-    font-size: 0.875rem;
-    color: var(--muted);
+    font-size: var(--font-size-14);
+    color: var(--color-muted);
   }
   /* 行は罫線で区切る（UI刷新 方向B：P-06）。選択中は面と左の太線で示し、色だけに頼らない */
   .rows {
@@ -368,7 +368,7 @@
     padding: 0;
     display: flex;
     flex-direction: column;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--color-border);
   }
   .row-btn {
     width: 100%;
@@ -376,50 +376,50 @@
     display: flex;
     flex-flow: row wrap;
     align-items: baseline;
-    gap: 0.0625rem 0.5rem;
-    padding: 0.375rem 0.5rem;
+    gap: 0.0625rem var(--space-8);
+    padding: var(--space-6) var(--space-8);
     background: transparent;
     border: none;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--color-border);
     border-radius: 0;
     color: inherit;
     font: inherit;
     cursor: pointer;
   }
   .row-btn.current {
-    background: var(--surface);
-    box-shadow: inset 4px 0 0 var(--focus);
+    background: var(--color-surface);
+    box-shadow: inset 4px 0 0 var(--color-focus);
   }
   .title,
   .tags {
     flex-basis: 100%;
   }
   .title {
-    font-size: 0.9375rem;
-    line-height: 1.5;
-    font-weight: 600;
+    font-size: var(--font-size-15);
+    line-height: var(--line-height-tight);
+    font-weight: var(--font-weight-strong);
     overflow-wrap: anywhere;
   }
   .untitled {
-    color: var(--muted);
-    font-weight: 400;
+    color: var(--color-muted);
+    font-weight: var(--font-weight-regular);
   }
   .meta,
   .dates,
   .tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.125rem 0.5rem;
-    font-size: 0.75rem;
-    color: var(--muted);
+    gap: var(--space-2) var(--space-8);
+    font-size: var(--font-size-12);
+    color: var(--color-muted);
   }
   .id {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-family: var(--font-mono);
   }
   .tag {
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 0 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    padding: 0 var(--space-8);
     white-space: pre;
   }
   .chips {
@@ -428,14 +428,14 @@
     padding: 0;
     display: flex;
     flex-wrap: wrap;
-    gap: 0.25rem;
+    gap: var(--space-4);
   }
   .chips li {
     display: inline-flex;
     align-items: center;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding-inline-start: 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    padding-inline-start: var(--space-8);
   }
   .chip-text {
     white-space: pre;
@@ -445,21 +445,21 @@
     background: none;
     color: inherit;
     cursor: pointer;
-    padding: 0 0.5rem;
+    padding: 0 var(--space-8);
   }
   .pager {
     display: flex;
-    gap: 0.5rem;
+    gap: var(--space-8);
     align-items: center;
     justify-content: center;
   }
   .warn {
     margin: 0;
-    color: var(--ng);
-    font-size: 0.875rem;
+    color: var(--color-ng);
+    font-size: var(--font-size-14);
   }
   .small {
-    font-size: 0.8125rem;
+    font-size: var(--font-size-13);
     margin: 0;
   }
 </style>

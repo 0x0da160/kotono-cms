@@ -84,7 +84,7 @@
   .help-open {
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: var(--space-4);
   }
   .help-open :global(svg),
   .more :global(svg) {
@@ -95,16 +95,16 @@
   .help {
     width: min(40rem, calc(100vw - 2rem));
     max-height: calc(100dvh - 2rem);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface);
-    color: var(--text);
-    padding: 1rem 1.25rem 1.25rem;
-    font-size: 0.875rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    color: var(--color-text);
+    padding: var(--space-16) var(--space-20) var(--space-20);
+    font-size: var(--font-size-14);
     line-height: 1.7;
   }
   .help::backdrop {
-    background: rgb(0 0 0 / 0.4);
+    background: var(--color-overlay);
   }
   .top {
     position: sticky;
@@ -112,16 +112,16 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 1rem;
-    margin: -1rem -1.25rem 0.5rem;
-    padding: 0.75rem 1.25rem;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
+    gap: var(--space-16);
+    margin: -1rem -1.25rem var(--space-8);
+    padding: var(--space-12) var(--space-20);
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
   }
   .top button {
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: var(--space-4);
   }
   .top button :global(svg) {
     width: 1em;
@@ -129,21 +129,21 @@
   }
   h2 {
     margin: 0;
-    font-size: 1.125rem;
+    font-size: var(--font-size-18);
   }
   h3 {
-    margin: 1rem 0 0.25rem;
-    font-size: 0.9375rem;
+    margin: var(--space-16) 0 var(--space-4);
+    font-size: var(--font-size-15);
   }
   p,
   ul {
-    margin: 0.25rem 0;
+    margin: var(--space-4) 0;
   }
   ul {
-    padding-inline-start: 1.25rem;
+    padding-inline-start: var(--space-20);
   }
   .more {
-    margin-top: 1rem;
-    color: var(--muted);
+    margin-top: var(--space-16);
+    color: var(--color-muted);
   }
 </style>

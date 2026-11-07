@@ -106,40 +106,40 @@
 <style>
   .dialog {
     max-width: min(40rem, calc(100vw - 2rem));
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface);
-    color: var(--text);
-    padding: 1.25rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    color: var(--color-text);
+    padding: var(--space-20);
   }
   .dialog::backdrop {
-    background: rgb(0 0 0 / 0.4);
+    background: var(--color-overlay);
   }
   h2 {
-    margin: 0 0 0.5rem;
-    font-size: 1.125rem;
+    margin: 0 0 var(--space-8);
+    font-size: var(--font-size-18);
   }
   h3 {
-    margin: 0.75rem 0 0.25rem;
-    font-size: 1rem;
+    margin: var(--space-12) 0 var(--space-4);
+    font-size: var(--font-size-16);
   }
   .files {
-    margin: 0 0 0.5rem;
-    padding-inline-start: 1.25rem;
-    font-size: 0.875rem;
+    margin: 0 0 var(--space-8);
+    padding-inline-start: var(--space-20);
+    font-size: var(--font-size-14);
     max-height: 12rem;
     overflow: auto;
   }
   .kind {
-    font-weight: 600;
+    font-weight: var(--font-weight-strong);
   }
   .kind[data-kind="deleted"] {
-    color: var(--ng);
+    color: var(--color-ng);
   }
   .field {
     display: grid;
-    gap: 0.25rem;
-    margin-block: 0.5rem;
+    gap: var(--space-4);
+    margin-block: var(--space-8);
   }
   textarea,
   input[type="text"] {
@@ -147,30 +147,30 @@
     box-sizing: border-box;
   }
   fieldset {
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    margin: 0.75rem 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    margin: var(--space-12) 0;
   }
   .check {
     display: flex;
-    gap: 0.5rem;
+    gap: var(--space-8);
     align-items: center;
-    font-size: 0.875rem;
+    font-size: var(--font-size-14);
   }
   .err {
-    color: var(--ng);
-    margin: 0.25rem 0;
+    color: var(--color-ng);
+    margin: var(--space-4) 0;
   }
   .small {
-    font-size: 0.875rem;
+    font-size: var(--font-size-14);
   }
   .muted {
-    color: var(--muted);
+    color: var(--color-muted);
   }
   .buttons {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: var(--space-8);
     justify-content: flex-end;
   }
 </style>

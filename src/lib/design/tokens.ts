@@ -79,6 +79,7 @@ export const STATIC_GROUPS: readonly TokenGroup[] = [
       ["z-raised", "4", "固定領域の上に出る部品"],
       ["z-popover", "10", "メニュー・ポップオーバー"],
       ["z-toast", "20", "通知（トースト）"],
+      ["z-tooltip", "50", "「?」の説明（ダイアログの中でも前に出す）"],
     ],
   },
 ];

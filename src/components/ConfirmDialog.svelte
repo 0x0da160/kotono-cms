@@ -66,29 +66,29 @@
 <style>
   .dialog {
     max-width: min(32rem, calc(100vw - 2rem));
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface);
-    color: var(--text);
-    padding: 1.25rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    color: var(--color-text);
+    padding: var(--space-20);
   }
   .dialog::backdrop {
-    background: rgb(0 0 0 / 0.4);
+    background: var(--color-overlay);
   }
   h2 {
-    margin: 0 0 0.5rem;
-    font-size: 1.125rem;
+    margin: 0 0 var(--space-8);
+    font-size: var(--font-size-18);
   }
   .details {
-    margin: 0 0 1rem;
-    padding-inline-start: 1.25rem;
-    color: var(--muted);
-    font-size: 0.875rem;
+    margin: 0 0 var(--space-16);
+    padding-inline-start: var(--space-20);
+    color: var(--color-muted);
+    font-size: var(--font-size-14);
   }
   .buttons {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: var(--space-8);
     justify-content: flex-end;
   }
 </style>

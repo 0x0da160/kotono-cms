@@ -157,15 +157,15 @@
 
 <style>
   .conflict {
-    border: 2px solid var(--ng);
-    border-radius: 8px;
-    padding: 0.75rem 1rem;
-    background: var(--surface);
+    border: 2px solid var(--color-ng);
+    border-radius: var(--radius-lg);
+    padding: var(--space-12) var(--space-16);
+    background: var(--color-surface);
   }
   h3 {
-    margin: 0 0 0.5rem;
-    color: var(--ng);
-    font-size: 1rem;
+    margin: 0 0 var(--space-8);
+    color: var(--color-ng);
+    font-size: var(--font-size-16);
   }
   /* エラーの通知と同じ記号を付ける（状態を色だけで伝えない。段階4 5章） */
   h3::before {
@@ -174,38 +174,38 @@
   table {
     border-collapse: collapse;
     width: 100%;
-    font-size: 0.8125rem;
-    margin-block: 0.5rem;
+    font-size: var(--font-size-13);
+    margin-block: var(--space-8);
   }
   th,
   td {
-    border: 1px solid var(--border);
-    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--color-border);
+    padding: var(--space-4) var(--space-8);
     text-align: start;
     vertical-align: top;
     overflow-wrap: anywhere;
   }
   tr.differs th {
-    color: var(--ng);
+    color: var(--color-ng);
   }
   .actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-block: 0.5rem;
+    gap: var(--space-8);
+    margin-block: var(--space-8);
   }
   .diff {
     max-height: 24rem;
     overflow: auto;
-    font-size: 0.8125rem;
-    background: var(--bg);
-    padding: 0.5rem;
-    border-radius: 4px;
+    font-size: var(--font-size-13);
+    background: var(--color-bg);
+    padding: var(--space-8);
+    border-radius: var(--radius-sm);
   }
   .add {
-    color: var(--ok);
+    color: var(--color-ok);
   }
   .del {
-    color: var(--ng);
+    color: var(--color-ng);
   }
 </style>

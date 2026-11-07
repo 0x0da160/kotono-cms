@@ -613,10 +613,10 @@
   .ed-sticky {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: var(--space-8);
   }
   .toolbar .group-start {
-    margin-inline-start: 0.5rem;
+    margin-inline-start: var(--space-8);
   }
   .toolbar .close {
     margin-inline-start: auto;
@@ -627,10 +627,10 @@
   .more > summary {
     list-style: none;
     cursor: pointer;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 0.375rem 0.75rem;
-    background: var(--surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-6) var(--space-12);
+    background: var(--color-surface);
     white-space: nowrap;
   }
   .more > summary::-webkit-details-marker {
@@ -645,18 +645,18 @@
   .more-menu {
     position: absolute;
     inset-inline-start: 0;
-    top: calc(100% + 0.25rem);
-    z-index: 4;
+    top: calc(100% + var(--space-4));
+    z-index: var(--z-raised);
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: 0.25rem;
+    gap: var(--space-4);
     min-width: 14rem;
-    padding: 0.375rem;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    box-shadow: 0 4px 12px rgb(0 0 0 / 0.12);
+    padding: var(--space-6);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-1);
   }
   .more-menu button {
     text-align: start;
@@ -668,7 +668,7 @@
   .form-layout {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: var(--space-12);
   }
   /*
    * DOM は本文→記事情報（Tab 順を見た目に合わせる）。広い画面では縦積みのときも本文を先に表示する（P-02）。
@@ -683,7 +683,7 @@
     .form-layout {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 19rem;
-      gap: 0 1rem;
+      gap: 0 var(--space-16);
       align-items: start;
     }
     .form-layout > .body {
@@ -695,9 +695,9 @@
       grid-row: 1;
       margin: 0;
       border: none;
-      border-inline-start: 1px solid var(--border);
+      border-inline-start: 1px solid var(--color-border);
       border-radius: 0;
-      padding: 0 0 0 0.75rem;
+      padding: 0 0 0 var(--space-12);
     }
     .form-layout :global(.form .grid) {
       grid-template-columns: minmax(0, 1fr);
@@ -715,60 +715,60 @@
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 0.25rem 0.5rem;
+    gap: var(--space-4) var(--space-8);
   }
   .seg {
     display: inline-flex;
   }
   .seg button {
-    padding: 0.125rem 0.625rem;
-    font-size: 0.8125rem;
-    font-weight: 400;
+    padding: var(--space-2) var(--space-10);
+    font-size: var(--font-size-13);
+    font-weight: var(--font-weight-regular);
     border-radius: 0;
   }
   .seg button:first-child {
-    border-radius: 6px 0 0 6px;
+    border-radius: var(--radius-md) 0 0 var(--radius-md);
   }
   .seg button:last-child {
-    border-radius: 0 6px 6px 0;
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
     margin-inline-start: -1px;
   }
   .seg button[aria-pressed="true"] {
-    font-weight: 600;
-    box-shadow: inset 0 -3px 0 var(--focus);
+    font-weight: var(--font-weight-strong);
+    box-shadow: inset 0 -3px 0 var(--color-focus);
   }
   .repairs {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
+    gap: var(--space-8);
+    margin-top: var(--space-8);
   }
   .editor {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: var(--space-12);
     min-width: 0;
   }
   .ed-head {
     display: flex;
     flex-wrap: wrap;
     justify-content: space-between;
-    gap: 0.5rem;
+    gap: var(--space-8);
   }
   h2 {
     margin: 0;
-    font-size: 1.25rem;
+    font-size: var(--font-size-20);
     overflow-wrap: anywhere;
   }
   .untitled {
-    color: var(--muted);
+    color: var(--color-muted);
   }
   .ids {
     margin: 0;
-    color: var(--muted);
-    font-size: 0.875rem;
+    color: var(--color-muted);
+    font-size: var(--font-size-14);
     display: flex;
-    gap: 0.5rem;
+    gap: var(--space-8);
   }
   .axes {
     list-style: none;
@@ -776,61 +776,61 @@
     padding: 0;
     display: flex;
     flex-wrap: wrap;
-    gap: 0.25rem 0.75rem;
-    font-size: 0.8125rem;
+    gap: var(--space-4) var(--space-12);
+    font-size: var(--font-size-13);
   }
   .axis {
-    color: var(--muted);
+    color: var(--color-muted);
   }
   .toolbar {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: var(--space-8);
   }
   .notice {
-    border-radius: 6px;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--border);
-    background: var(--surface);
+    border-radius: var(--radius-md);
+    padding: var(--space-8) var(--space-12);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
   }
   .notice p {
     margin: 0;
   }
   .notice ul {
-    margin: 0.25rem 0 0;
-    padding-inline-start: 1.25rem;
-    font-size: 0.875rem;
+    margin: var(--space-4) 0 0;
+    padding-inline-start: var(--space-20);
+    font-size: var(--font-size-14);
   }
   .notice.error {
-    border-color: var(--ng);
+    border-color: var(--color-ng);
   }
   .notice.error p::before {
     content: "⚠ ";
   }
   .notice.ok {
-    border-color: var(--ok);
+    border-color: var(--color-ok);
   }
   .notice.ok p::before {
     content: "✓ ";
   }
   .notice.warn {
-    border-color: var(--ng);
+    border-color: var(--color-ng);
   }
   .notice.warn p::before {
     content: "! ";
   }
   .toast {
     position: fixed;
-    top: 1rem;
-    inset-inline-end: 1rem;
-    z-index: 20;
+    top: var(--space-16);
+    inset-inline-end: var(--space-16);
+    z-index: var(--z-toast);
     max-width: min(26rem, calc(100vw - 2rem));
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;
-    gap: 0 0.5rem;
-    padding-inline-end: 0.375rem;
-    box-shadow: 0 4px 16px rgb(0 0 0 / 0.16);
+    gap: 0 var(--space-8);
+    padding-inline-end: var(--space-6);
+    box-shadow: var(--shadow-2);
   }
   .toast > :not(.toast-close) {
     grid-column: 1;
@@ -840,87 +840,87 @@
     grid-row: 1;
     border: none;
     background: transparent;
-    padding: 0 0.375rem;
+    padding: 0 var(--space-6);
     min-width: 1.5rem;
     min-height: 1.5rem;
     line-height: 1;
-    color: var(--muted);
+    color: var(--color-muted);
   }
   .problems {
-    border: 1px solid var(--ng);
-    border-radius: 6px;
-    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--color-ng);
+    border-radius: var(--radius-md);
+    padding: var(--space-8) var(--space-12);
   }
   .problems ul {
-    margin: 0.25rem 0 0;
-    padding-inline-start: 1.25rem;
-    font-size: 0.875rem;
+    margin: var(--space-4) 0 0;
+    padding-inline-start: var(--space-20);
+    font-size: var(--font-size-14);
   }
   .tabs {
     display: flex;
-    gap: 0.25rem;
-    border-bottom: 1px solid var(--border);
+    gap: var(--space-4);
+    border-bottom: 1px solid var(--color-border);
   }
   .tabs button {
-    border: 1px solid var(--border);
+    border: 1px solid var(--color-border);
     border-bottom: none;
-    border-radius: 6px 6px 0 0;
-    background: var(--bg);
-    padding: 0.375rem 1rem;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    background: var(--color-bg);
+    padding: var(--space-6) var(--space-16);
     color: inherit;
     font: inherit;
     cursor: pointer;
   }
   .tabs button[aria-selected="true"] {
-    background: var(--surface);
-    font-weight: 600;
-    box-shadow: inset 0 -3px 0 var(--focus);
+    background: var(--color-surface);
+    font-weight: var(--font-weight-strong);
+    box-shadow: inset 0 -3px 0 var(--color-focus);
   }
   .panel {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: var(--space-12);
   }
   .src {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
-    font-weight: 600;
-    font-size: 0.875rem;
+    gap: var(--space-4);
+    font-weight: var(--font-weight-strong);
+    font-size: var(--font-size-14);
   }
   textarea {
     width: 100%;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "BIZ UDGothic", monospace;
-    font-size: 0.9375rem;
-    line-height: 1.6;
-    font-weight: 400;
+    font-size: var(--font-size-15);
+    line-height: var(--line-height-body);
+    font-weight: var(--font-weight-regular);
     resize: vertical;
     tab-size: 4;
   }
   .readonly {
-    border: 1px solid var(--ng);
-    border-radius: 6px;
-    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--color-ng);
+    border-radius: var(--radius-md);
+    padding: var(--space-8) var(--space-12);
     margin: 0;
   }
   .err {
     margin: 0;
-    color: var(--ng);
+    color: var(--color-ng);
   }
   .op {
     margin: 0;
-    font-size: 0.875rem;
-    color: var(--muted);
+    font-size: var(--font-size-14);
+    color: var(--color-muted);
   }
   .ed-foot {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.25rem 1rem;
-    color: var(--muted);
-    font-size: 0.8125rem;
+    gap: var(--space-4) var(--space-16);
+    color: var(--color-muted);
+    font-size: var(--font-size-13);
   }
   .small {
-    font-size: 0.8125rem;
+    font-size: var(--font-size-13);
     margin: 0;
   }
   /*
@@ -934,27 +934,27 @@
     .ed-sticky {
       position: sticky;
       top: 0;
-      z-index: 3;
-      background: var(--bg);
-      padding-block: 0.25rem 0.5rem;
-      border-bottom: 1px solid var(--border);
+      z-index: var(--z-sticky);
+      background: var(--color-bg);
+      padding-block: var(--space-4) var(--space-8);
+      border-bottom: 1px solid var(--color-border);
     }
     .editor :global(*) {
-      scroll-margin-top: calc(var(--sticky-h, 0px) + 0.5rem);
+      scroll-margin-top: calc(var(--sticky-h, 0px) + var(--space-8));
     }
     h2 {
-      font-size: 1.125rem;
+      font-size: var(--font-size-18);
     }
     .axes {
-      font-size: 0.75rem;
+      font-size: var(--font-size-12);
     }
     .toolbar {
-      gap: 0.375rem;
+      gap: var(--space-6);
     }
     .toolbar button,
     .more > summary {
-      padding: 0.25rem 0.625rem;
-      font-size: 0.875rem;
+      padding: var(--space-4) var(--space-10);
+      font-size: var(--font-size-14);
     }
     .toolbar button:not(.primary):not(.danger) {
       background: transparent;
@@ -968,14 +968,14 @@
   /* 狭い側の作業台（〜75rem）では操作列の余白を詰めて1行に収める（UI刷新 反復4：OS 標準フォントでの折り返し） */
   @media (min-width: 60.0625rem) and (max-width: 75rem) {
     .toolbar {
-      gap: 0.25rem;
+      gap: var(--space-4);
     }
     .toolbar .group-start {
-      margin-inline-start: 0.25rem;
+      margin-inline-start: var(--space-4);
     }
     .toolbar button,
     .more > summary {
-      padding-inline: 0.5rem;
+      padding-inline: var(--space-8);
     }
   }
 </style>

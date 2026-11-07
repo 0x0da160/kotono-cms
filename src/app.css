@@ -7,21 +7,6 @@
 :root {
   font-family: var(--font-sans);
   line-height: var(--line-height-body);
-
-  /*
-   * 旧い短い名前（移行中）。部品の CSS を --color-* に置き換えたら消す。
-   * 新しく書く CSS では使わない。
-   */
-  --bg: var(--color-bg);
-  --surface: var(--color-surface);
-  --text: var(--color-text);
-  --muted: var(--color-muted);
-  --border: var(--color-border);
-  --field-border: var(--color-field-border);
-  --ok: var(--color-ok);
-  --ng: var(--color-ng);
-  --focus: var(--color-focus);
-  --on-accent: var(--color-on-accent);
 }
 
 *,
