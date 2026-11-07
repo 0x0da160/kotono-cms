@@ -17,6 +17,8 @@
   let fileInput: HTMLInputElement | undefined = $state();
 
   const views = $derived(places.views());
+  /** 解錠の入力欄を開いている行があるか（あれば、エラーはその欄の下に出す） */
+  const unlockOpen = $derived(views.some((v) => v.locked && v.id === unlocking) && places.recoveryToShow === null);
 
   $effect(() => {
     if (places.pendingImport) importName = places.pendingImport.name;
@@ -61,7 +63,7 @@
         m.lastExportAt ? `最後に書き出しを開始した日時：${fmt(m.lastExportAt)}` : "まだ書き出していません。",
         m.lastSyncAt ? `最後に同期した日時：${fmt(m.lastSyncAt)}` : "GitHub と同期していません。",
       );
-      if (since !== null) details.push(`端末の外にない変更があります（${since} 日前から）。`);
+      if (since !== null) details.push(`書き出し・同期していない変更があります（${since} 日前から）。`);
       if (m.keyring) details.push("暗号化した作業場所です。書き出しがなければ、削除後は誰も内容を戻せません。");
     } else details.push("作成・取り込みの途中で止まった作業場所です。");
     details.push("削除前の退避（退避領域）は残しますが、退避領域もブラウザのデータ消去から守られません。");
@@ -131,7 +133,10 @@
 
   <StorageNotice {places} />
 
-  {#if places.error}<p class="banner" role="alert" data-testid="places-error">{places.error}</p>{/if}
+  <!-- 解錠の失敗は、入力した欄のすぐ下に出す（パネルの先頭では目に入らない） -->
+  {#if places.error && !unlockOpen}<p class="banner" role="alert" data-testid="places-error">
+      {places.error}
+    </p>{/if}
   {#if places.info}<p class="banner info" role="status" data-testid="places-info">{places.info}</p>{/if}
 
   {#if places.recoveryToShow}
@@ -162,9 +167,9 @@
               {@const days = places.remindDays(e.meta)}
               <p class="muted small meta">
                 {#if days !== null}
-                  <span class:warn={places.shouldRemind(e.meta)}>端末の外にない変更あり（{days} 日）</span>
+                  <span class:warn={places.shouldRemind(e.meta)}>書き出し・同期していない変更あり（{days} 日）</span>
                 {:else if e.meta.lastExportAt || e.meta.lastSyncAt}
-                  端末の外にない変更はありません
+                  書き出し・同期していない変更はありません
                 {/if}
                 {#if e.meta.lastExportAt}・書き出し開始：{fmt(e.meta.lastExportAt)}{/if}
                 {#if e.meta.lastSyncAt}・同期：{fmt(e.meta.lastSyncAt)}{/if}
@@ -173,10 +178,10 @@
                 {#if v.locked}
                   <button
                     type="button"
-                    class="primary"
+                    class={unlocking === v.id ? "" : "primary"}
                     onclick={() => (unlocking = unlocking === v.id ? null : v.id)}
                     aria-expanded={unlocking === v.id}
-                    data-testid="place-unlock">解錠する</button
+                    data-testid="place-unlock">{unlocking === v.id ? "解錠をやめる" : "解錠する"}</button
                   >
                 {:else}
                   <button
@@ -204,6 +209,9 @@
                   data-testid="place-remove">削除</button
                 >
               </div>
+              {#if v.locked && unlocking !== v.id}
+                <p class="muted small">名前と内容は暗号化されています。解錠すると表示されます。</p>
+              {/if}
               {#if v.locked && unlocking === v.id}
                 <UnlockForm
                   busy={places.busy}
@@ -212,6 +220,7 @@
                   passkey={hasSlot(e.meta, "passkey") && places.vault?.passkey != null}
                   onunlock={(m) => unlockAndOpen(e.meta, m)}
                 />
+                {#if places.error}<p class="banner" role="alert" data-testid="places-error">{places.error}</p>{/if}
               {/if}
             {:else}
               <p class="muted small">{e.reason}</p>

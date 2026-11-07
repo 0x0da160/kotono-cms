@@ -68,10 +68,10 @@
   <div class="status">
     {#if days !== null}
       <span class="unsynced" class:warn={places.shouldRemind(meta)} data-testid="unsynced"
-        >端末の外にない変更あり（{days} 日）</span
+        >書き出し・同期していない変更あり（{days} 日）</span
       >
     {:else}
-      <span class="muted small" data-testid="unsynced-none">端末の外にない変更はありません</span>
+      <span class="muted small" data-testid="unsynced-none">書き出し・同期していない変更はありません</span>
     {/if}
     {#if places.sharedOrigin}<span class="badge err" title="他のページと保存領域を共有する配信元です">開発版</span>{/if}
     {#if places.persist !== "persisted"}<span class="badge unknown" title="ブラウザが保存領域を消去することがあります"

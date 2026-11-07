@@ -81,7 +81,7 @@ test("作業場所を作り、記事を保存し、ロックと解錠、暗号�
   await page.getByLabel("slug", { exact: true }).fill("iphone");
   await page.getByTestId("save-button").click();
   await expect(page.getByTestId("save-status")).toHaveText("保存済み");
-  await expect(page.getByTestId("unsynced")).toContainText("端末の外にない変更あり");
+  await expect(page.getByTestId("unsynced")).toContainText("書き出し・同期していない変更あり");
 
   // 保存領域に記事の名前・本文が平文で残らない
   const names = await page.evaluate(async () => {

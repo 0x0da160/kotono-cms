@@ -35,6 +35,8 @@
   const prefer = new URLSearchParams(location.search).get("storage") === "workspace" ? "workspace" : null;
   const mode = supportedMode(results, prefer);
   const supported = mode !== null;
+  /** 使えない API のうち、この環境で要るもの。なければ一覧は畳んでおく（毎回の起動で技術的な一覧を見せない） */
+  const missing = results.filter((r) => !r.ok && !(mode && unusedIn(mode, r.id))).length;
   const inPlaces = mode === "workspace";
 
   const sealedDrafts = typeof indexedDB === "undefined" ? null : new SealedDraftStore(new IdbDraftStore(indexedDB));
@@ -225,36 +227,39 @@
       <h2 id="env-heading">対応環境の確認</h2>
       <p role="status" data-testid="env-summary">
         {#if supported}
-          このブラウザは必要なAPIを備えています（実機検証の代替ではありません）。
+          このブラウザで使えます（必要なAPIを備えています）。
         {:else}
           このブラウザでは一部の必要なAPIが利用できません。デスクトップ版の Chrome・Edge、または iOS・iPadOS 26 以降の
           Safari で開いてください。
         {/if}
       </p>
-      <ul class="capabilities">
-        {#each results as r (r.id)}
-          <li data-capability={r.id} data-ok={r.ok}>
-            <span class="mark" aria-hidden="true">{r.ok ? "✓" : "✕"}</span>
-            <span class="label">{r.label}</span>
-            <span class="state"
-              >{r.ok ? "利用可能" : mode && unusedIn(mode, r.id) ? "この環境では不要" : "利用不可"}</span
-            >
-            {#if !r.ok && !(mode && unusedIn(mode, r.id))}
-              <span class="impact">{r.impact}</span>
-            {/if}
-          </li>
-        {/each}
-      </ul>
-      <p class="probe" data-testid="worker-probe" data-state={workerProbe}>
-        隔離処理の起動確認：
-        {#if workerProbe === "pending"}
-          確認中…
-        {:else if workerProbe === "ok"}
-          Worker が起動し、応答しました。
-        {:else}
-          Worker を起動できませんでした。
-        {/if}
-      </p>
+      <details class="env-details" open={!supported || missing > 0 || workerProbe === "failed"}>
+        <summary data-testid="env-details">確認した項目（{results.length} 件）</summary>
+        <ul class="capabilities">
+          {#each results as r (r.id)}
+            <li data-capability={r.id} data-ok={r.ok}>
+              <span class="mark" aria-hidden="true">{r.ok ? "✓" : "✕"}</span>
+              <span class="label">{r.label}</span>
+              <span class="state"
+                >{r.ok ? "利用可能" : mode && unusedIn(mode, r.id) ? "この環境では不要" : "利用不可"}</span
+              >
+              {#if !r.ok && !(mode && unusedIn(mode, r.id))}
+                <span class="impact">{r.impact}</span>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+        <p class="probe" data-testid="worker-probe" data-state={workerProbe}>
+          隔離処理の起動確認：
+          {#if workerProbe === "pending"}
+            確認中…
+          {:else if workerProbe === "ok"}
+            Worker が起動し、応答しました。
+          {:else}
+            Worker を起動できませんでした。
+          {/if}
+        </p>
+      </details>
     </section>
   {:else}
     {#if places?.current}
@@ -423,6 +428,15 @@
   h2 {
     margin: 0 0 0.5rem;
     font-size: 1.125rem;
+  }
+  .env-details summary {
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: var(--muted);
+    min-height: 1.5rem;
+  }
+  .env-details[open] summary {
+    margin-block-end: 0.5rem;
   }
   .capabilities {
     list-style: none;
