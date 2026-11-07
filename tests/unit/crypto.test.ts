@@ -3,7 +3,7 @@ import { MemFs, type MemDir, type MemFile } from "./support/memory-fs";
 import { deriveDataKeys, newRecoveryCode, normalizeRecoveryCode, base32, fromBase32 } from "../../src/lib/crypto/keys";
 import { encryptedRoot, CONTENT_OVERHEAD, type EncContext } from "../../src/lib/crypto/encfs";
 import { Vault } from "../../src/lib/crypto/vault";
-import { browserPasskey } from "../../src/lib/crypto/passkey";
+import { browserPasskey, prfInputs } from "../../src/lib/crypto/passkey";
 import { writeNewFile, enumerateTree, readAllBytes } from "../../src/lib/fs/tree";
 import { checkBackupTarget } from "../../src/lib/fs/backup";
 import { WorkspaceStore } from "../../src/lib/workspaces/store";
@@ -223,6 +223,13 @@ describe("Vault（39.2・39.4）", () => {
       "回復コードで開けます",
     );
     await expect(pk.register("x", new Uint8Array(32))).rejects.toThrow("パスキーを登録できませんでした");
+  });
+
+  it("PRF の入力は 1 件なら eval、複数件なら evalByCredential で渡す", () => {
+    const a = { credentialId: new Uint8Array([1]), prfSalt: new Uint8Array(32).fill(1) };
+    const b = { credentialId: new Uint8Array([2]), prfSalt: new Uint8Array(32).fill(2) };
+    expect(prfInputs([a])).toEqual({ eval: { first: a.prfSalt } });
+    expect(prfInputs([a, b])).toEqual({ evalByCredential: { AQ: { first: a.prfSalt }, Ag: { first: b.prfSalt } } });
   });
 
   it("トークンを暗号化して保存できる（40.2）", async () => {
