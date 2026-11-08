@@ -32,8 +32,11 @@ export interface KeyringRecord {
   readonly v: 1;
   /** 包んだデータ鍵（解錠方法ごと） */
   readonly slots: readonly KeySlot[];
-  /** 表示名の暗号文（base64url） */
-  readonly name: string;
+  /**
+   * 以前の版で暗号化していた表示名の暗号文（base64url）。新しい記録には置かない。
+   * 解錠したときに復号して WorkspaceMeta.name（平文）へ移し、ここからは外す
+   */
+  readonly name?: string;
 }
 
 export type KeySlot =
@@ -51,7 +54,10 @@ export type KeySlot =
 export interface WorkspaceMeta {
   readonly v: 1;
   readonly id: string;
-  /** 平文の表示名。暗号化する作業場所では空文字で、keyring.name に暗号文を置く */
+  /**
+   * 平文の表示名。暗号化する作業場所でも平文で置く（中身・トークンは暗号化する）。
+   * 以前の版で作った暗号化する作業場所では空文字で、解錠するまで keyring.name の暗号文しかない
+   */
   readonly name: string;
   readonly createdAt: string;
   /** 最後に書き出しを開始した日時（38.3：検証済みバックアップとは称さない） */
@@ -152,7 +158,8 @@ const B64URL = /^[A-Za-z0-9_-]{0,8192}$/;
 export function validKeyring(v: unknown): boolean {
   if (typeof v !== "object" || v === null) return false;
   const k = v as Record<string, unknown>;
-  if (k["v"] !== 1 || typeof k["name"] !== "string" || !B64URL.test(k["name"])) return false;
+  if (k["v"] !== 1) return false;
+  if (k["name"] !== undefined && (typeof k["name"] !== "string" || !B64URL.test(k["name"]))) return false;
   const slots = k["slots"];
   if (!Array.isArray(slots) || slots.length === 0 || slots.length > 16) return false;
   return slots.every((s: unknown) => {
@@ -353,7 +360,7 @@ export class WorkspaceStore {
     const meta: WorkspaceMeta = {
       v: 1,
       id,
-      name: keyring ? "" : opts.name.trim(),
+      name: opts.name.trim(),
       createdAt: this.now(),
       lastExportAt: null,
       lastSyncAt: null,
