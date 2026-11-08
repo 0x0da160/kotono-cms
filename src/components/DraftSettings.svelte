@@ -100,9 +100,9 @@
       ><span class="tip-p"
         >保存する内容：編集中の原文、記事ID、編集の番号、元ファイルのハッシュ、退避時刻。画像やリポジトリ全体は保存しません。</span
       ><span class="tip-p"
-        >次回同じフォルダを開いたときに見分けるため、選んだフォルダの参照（ハンドル）も保存します。これは次回の書き込み許可ではありません。</span
+        >次回同じフォルダを開いたときに見分けるため、選んだフォルダの参照（ハンドル）も保存します。この参照を保存しても、次回の書き込みが許可されるわけではありません。</span
       ><span class="tip-p"
-        >保持期間は最終退避から7日間が目安です。期限後、次に起動したときに整理します。「設定」の「復旧ドラフト」からいつでも削除できます。</span
+        >保持期間は、最後に退避してから7日間が目安です。期限を過ぎたものは、次に起動したときに整理します。「設定」の「復旧ドラフト」からいつでも削除できます。</span
       ><span class="tip-p">file:// で開いたローカルの HTML どうしでは、保存領域が共有されることがあります。</span><span
         class="tip-p">外部への送信・同期はしません。復旧できるのは、実際に退避に成功した内容までです。</span
       ></HelpTip
@@ -113,7 +113,7 @@
 {#if dc.mode === "undecided"}
   <section class="card consent" aria-labelledby="consent-heading" data-testid="draft-consent">
     <h2 id="consent-heading">ブラウザ内復旧ドラフトを有効にしますか</h2>
-    <p>未保存の編集を、ブラウザの中に自動で退避します。タブを閉じたりブラウザが落ちたりしても、次回復旧できます。</p>
+    <p>未保存の編集をブラウザの中に自動で退避します。タブを閉じたりブラウザが落ちたりしても、次回復旧できます。</p>
     {@render explanation()}
     <div class="buttons">
       <button type="button" class="primary" onclick={enableFirst} data-testid="draft-enable">有効にする（推奨）</button>

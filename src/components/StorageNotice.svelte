@@ -17,7 +17,7 @@
   {/if}
   <p class="note" class:warn={places.persist !== "persisted"} data-testid="persist-state" data-state={places.persist}>
     {#if places.persist === "persisted"}
-      このブラウザに、保存領域を消さないよう求めました（許可済み）。それでも、ブラウザのデータ消去・アプリの削除では消えます。
+      このブラウザに保存領域を消さないよう求めました（許可済み）。それでも、ブラウザのデータ消去・アプリの削除では消えます。
     {:else}
       ブラウザが保存領域を消去することがあります（作業場所・復旧ドラフト・設定を含みます）。こまめに書き出すか、GitHub
       と同期してください。

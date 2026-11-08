@@ -383,7 +383,7 @@ function replaceRange(source: string, start: number, end: number, replacement: s
 
 const REJECT_STRUCTURE = "この項目は書式を保ったまま変更できません。原文モードで編集してください。";
 const REJECT_COMMENT =
-  "この項目にはコメントがあり、フォームの変更でコメントを保持できません。原文モードで編集してください。";
+  "この項目にはコメントがあり、フォームで変更するとコメントを保持できません。原文モードで編集してください。";
 
 /**
  * トップレベル項目の値を置き換える。項目が存在しない場合は変更しない（勝手に補わない）。

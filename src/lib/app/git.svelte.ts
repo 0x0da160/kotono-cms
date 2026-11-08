@@ -199,7 +199,7 @@ export class GitController {
 
   async #describe(id: string, relPaths?: readonly string[]): Promise<string[]> {
     if (!this.#repo) return [];
-    if (this.info?.kind === "none") return ["Git 状態：Git 未使用のフォルダです。Git から復元することはできません。"];
+    if (this.info?.kind === "none") return ["Git 状態：Git 未使用のフォルダです。Git から復元できません。"];
     if (!this.repo) return ["Git 状態：未確認（対応外の Git 構成です）。Git だけで復元できるとは限りません。"];
     await this.refreshArticle(id);
     const st = this.statusOf(id);
@@ -279,12 +279,12 @@ export class GitController {
     if (this.acknowledged) return true;
     const v = await this.ws.ask({
       title: "Git への書き込みについて",
-      message: "CMS は記事フォルダ単位でステージとコミットだけを行います。次の点を確認してください。",
+      message: "CMS は記事フォルダ単位でステージしてコミットするだけです。次の点を確認してください。",
       details: [
         UNOBSERVABLE_NOTE,
-        "リポジトリ内で観測できる署名必須・フック・未対応の変換を検出した場合は、書き込みを止めます。",
+        "署名必須の設定・フック・未対応の変換をリポジトリ内で見つけた場合は、書き込みを止めます。",
         "外部の Git クライアントと同時に操作しないでください（ロックを検出したら止めます）。",
-        "push・pull・ブランチ操作は行いません。",
+        "push・pull・ブランチの操作はしません。",
       ],
       buttons: [
         { label: "理解して続ける", value: "ok", variant: "primary" },

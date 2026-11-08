@@ -307,7 +307,10 @@ export class SyncController {
         this.notice = { kind: "ok", text: "合わせて GitHub へ送りました。" };
         await this.synced();
       } else if (p.kind === "diverged")
-        this.notice = { kind: "warn", text: "合わせている間に GitHub が進みました。もう一度「取得」してください。" };
+        this.notice = {
+          kind: "warn",
+          text: "合わせている間に GitHub に新しいコミットが入りました。もう一度「取得」してください。",
+        };
       else
         this.notice = {
           kind: "error",

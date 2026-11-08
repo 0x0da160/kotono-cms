@@ -88,7 +88,7 @@
       const v = await ws.ask({
         title: "書き出しの形式",
         message:
-          "既定では暗号化して書き出します（.kotono）。回復コード・パスフレーズで、別の端末やデスクトップ版で開けます。平文の zip は誰でも中身を読めます。",
+          "既定では暗号化して書き出します（.kotono）。別の端末やデスクトップ版でも、回復コードかパスフレーズで開けます。平文の zip は誰でも中身を読めます。",
         buttons: [
           { label: "暗号化して書き出す", value: "sealed", variant: "primary" },
           { label: "平文の zip にする", value: "plain" },

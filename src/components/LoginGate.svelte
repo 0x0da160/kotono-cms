@@ -26,7 +26,7 @@
 <section class="card login" aria-labelledby="login-heading" data-testid="login-gate">
   <h2>
     <span id="login-heading">ログイン</span><HelpTip label="ログイン"
-      >作業場所の中身は、この端末の中で暗号化しています。パスキーで認証すると鍵が開き、作業場所を開けます。認証はこの端末の中だけで行い、どこにも送りません。</HelpTip
+      >作業場所の中身はこの端末の中で暗号化しています。パスキーで認証すると鍵が開き、作業場所を開けます。認証はこの端末の中だけで行い、どこにも送りません。</HelpTip
     >
   </h2>
 
