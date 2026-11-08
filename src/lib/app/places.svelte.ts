@@ -43,7 +43,7 @@ export interface StorageHost {
 export interface PlaceView {
   readonly id: string;
   readonly entry: WorkspaceEntry;
-  /** 表示名（暗号化した作業場所はロック中「ロック中の作業場所」） */
+  /** 表示名（平文）。以前の版で名前を暗号化した作業場所は、解錠するまで「ロック中の作業場所」 */
   readonly label: string;
   readonly locked: boolean;
 }
@@ -54,7 +54,7 @@ export type Deliver = (bytes: Uint8Array, fileName: string) => Promise<"shared" 
 export class PlacesController {
   store = $state<WorkspaceStore | null>(null);
   entries = $state<WorkspaceEntry[]>([]);
-  /** 解錠済みの作業場所の表示名（ID → 名前） */
+  /** 解錠済みの暗号化する作業場所（ID → 表示名） */
   names = $state<Record<string, string>>({});
   current = $state<WorkspaceMeta | null>(null);
   error = $state<string | null>(null);
@@ -134,7 +134,7 @@ export class PlacesController {
       const m = entry.meta;
       if (!m.keyring) return { id: m.id, entry, label: m.name, locked: false };
       const n = this.names[m.id];
-      return { id: m.id, entry, label: n ?? "ロック中の作業場所", locked: n === undefined };
+      return { id: m.id, entry, label: m.name || n || "ロック中の作業場所", locked: n === undefined };
     });
   }
 
@@ -180,7 +180,7 @@ export class PlacesController {
     this.error = null;
     try {
       const vault = this.vault;
-      const keyring = encrypted && vault ? await vault.prepareNew(name) : null;
+      const keyring = encrypted && vault ? await vault.prepareNew() : null;
       const meta = await this.store.create({
         name,
         keyring: keyring?.record ?? null,
@@ -289,9 +289,9 @@ export class PlacesController {
       let recoveryCode: string | null = null;
       if (vault && p.sealed) {
         key = p.sealed.key;
-        record = await vault.keyringFor(name, key, p.sealed.slots);
+        record = vault.keyringFor(p.sealed.slots);
       } else if (vault && encrypted) {
-        const k = await vault.prepareNew(name);
+        const k = await vault.prepareNew();
         key = k.key;
         record = k.record;
         recoveryCode = k.recoveryCode;
@@ -329,18 +329,37 @@ export class PlacesController {
     this.busy = true;
     this.error = null;
     try {
-      const name = await this.vault.unlock(meta.id, meta.keyring, method);
-      if (name === null) {
+      const r = await this.vault.unlock(meta.id, meta.keyring, method);
+      if (r === null) {
         this.error = "解錠できませんでした。回復コード・パスフレーズを確かめてください。";
         return false;
       }
+      const name = meta.name || r.legacyName || "";
       this.names = { ...this.names, [meta.id]: name };
+      if (r.legacyName !== null) await this.migrateLegacyName(meta, name);
       return true;
     } catch (e) {
       this.error = `解錠できませんでした：${(e as Error).message}`;
       return false;
     } finally {
       this.busy = false;
+    }
+  }
+
+  /**
+   * 以前の版で暗号化していた表示名を、平文の name へ移す（keyring からは外す）。
+   * 失敗しても解錠は続ける。次に解錠したときにもう一度試す
+   */
+  private async migrateLegacyName(meta: WorkspaceMeta, name: string): Promise<void> {
+    if (!this.store || !meta.keyring) return;
+    const { name: _legacy, ...keyring } = meta.keyring;
+    void _legacy;
+    try {
+      const m = await this.store.update(meta.id, { name: meta.name || name, keyring });
+      if (this.current?.id === meta.id) this.current = m;
+      await this.refresh();
+    } catch {
+      // 表示名は names に持っているので、この回の操作は続けられる
     }
   }
 
@@ -441,7 +460,7 @@ export class PlacesController {
     this.current = meta;
     if (meta.keyring && this.vault) this.sealed?.register(SEALED_WS_PREFIX + meta.id, this.vault.draftSealer(meta.id));
     await this.ws.openRoot(root, {
-      displayName: meta.keyring ? (this.names[meta.id] ?? "作業場所") : meta.name,
+      displayName: meta.name || this.names[meta.id] || "作業場所",
       draftsId: meta.keyring ? SEALED_WS_PREFIX + meta.id : `p:${meta.id}`,
       backupRoot: async () => {
         const b = await store.backupRoot(meta.id);
@@ -497,7 +516,7 @@ export class PlacesController {
         bytes = await this.vault.sealExport(meta.id, bytes, meta.keyring.slots);
         ext = "kotono";
       }
-      const label = (meta.keyring ? this.names[meta.id] : meta.name) ?? "workspace";
+      const label = meta.name || this.names[meta.id] || "workspace";
       const stamp = this.now().toISOString().slice(0, 10).replaceAll("-", "");
       const res = await this.deliver(bytes, `${label.replace(/[\\/:*?"<>|\s]+/g, "_")}-${stamp}.${ext}`);
       if (res === "cancelled") {

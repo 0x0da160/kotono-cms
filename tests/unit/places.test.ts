@@ -9,6 +9,7 @@ import { DraftController } from "../../src/lib/app/drafts.svelte";
 import { PlacesController, type Deliver } from "../../src/lib/app/places.svelte";
 import { Workspace } from "../../src/lib/app/workspace.svelte";
 import { encodeUtf8, sha256Hex } from "../../src/lib/core/bytes";
+import { aesEncrypt, b64u } from "../../src/lib/crypto/keys";
 import { Vault } from "../../src/lib/crypto/vault";
 import { SealedDraftStore } from "../../src/lib/drafts/sealed";
 import { DRAFT_FORMAT_VERSION, IdbDraftStore, type DraftRecord } from "../../src/lib/drafts/store";
@@ -61,7 +62,7 @@ function setup(opts: { now?: () => Date } = {}) {
 describe("暗号化した復旧ドラフト（39.1）", () => {
   it("下の保存領域には記事ID・本文・チェックサムを平文で置かない", async () => {
     const { base, sealed, vault } = setup();
-    const k = await vault.prepareNew("x");
+    const k = await vault.prepareNew();
     vault.adopt("a".repeat(16), k.key);
     const ws = `e:${"a".repeat(16)}`;
     sealed.register(ws, vault.draftSealer("a".repeat(16)));
@@ -87,8 +88,8 @@ describe("暗号化した復旧ドラフト（39.1）", () => {
     const { base, sealed, vault } = setup();
     const a = "a".repeat(16);
     const b = "b".repeat(16);
-    vault.adopt(a, (await vault.prepareNew("a")).key);
-    vault.adopt(b, (await vault.prepareNew("b")).key);
+    vault.adopt(a, (await vault.prepareNew()).key);
+    vault.adopt(b, (await vault.prepareNew()).key);
     sealed.register(`e:${a}`, vault.draftSealer(a));
     sealed.register(`e:${b}`, vault.draftSealer(b));
     await sealed.setEnabled(true);
@@ -122,10 +123,71 @@ describe("作業場所の操作（38・39.3）", () => {
 
     await places.lock(m.id);
     expect(ws.root).toBeNull();
-    expect(places.views()[0]).toMatchObject({ locked: true, label: "ロック中の作業場所" });
+    // 表示名は平文で持つので、ロック中でも分かる
+    expect(places.views()[0]).toMatchObject({ locked: true, label: "ブログ" });
     expect(await places.unlock(m, { kind: "recovery", code: "AAAAA-AAAAA-AAAAA-AAAAA-AAAAA" })).toBe(false);
     expect(await places.unlock(m, { kind: "recovery", code: code.toLowerCase() })).toBe(true);
     expect(places.views()[0]).toMatchObject({ locked: false, label: "ブログ" });
+  });
+
+  it("暗号化する作業場所でも、表示名は鍵なしで読める平文で保存する", async () => {
+    const { fs, places } = setup();
+    await places.init(fs.root);
+    const m = await places.create("ブログ", true);
+    if (!m) throw new Error(places.error ?? "create");
+    expect(m.name).toBe("ブログ");
+    expect(m.keyring).not.toHaveProperty("name");
+    // 鍵を持たない別の画面（Vault なし）で一覧を読む
+    const other = new PlacesController(
+      new Workspace(undefined, { md: inlineMdService, processor: null }),
+      {},
+      async () => "cancelled",
+    );
+    await other.init(fs.root);
+    expect(other.views()[0]).toMatchObject({ label: "ブログ", locked: true });
+  });
+
+  it("以前の版で暗号化した表示名は、解錠したときに平文へ移す（作業場所は失わない）", async () => {
+    const { fs, places, vault, ws } = setup();
+    await places.init(fs.root);
+    const store = places.store;
+    if (!store) throw new Error("store");
+    // 以前の版の形式：name は空、keyring.name に表示名の暗号文
+    const k = await vault.prepareNew();
+    const encName = await aesEncrypt(k.key.keys.meta, te.encode("旧ブログ"), te.encode("kotono-cms/meta/name"));
+    const created = await store.create({
+      name: "旧ブログ",
+      keyring: k.record,
+      fill: async (dir, id) => {
+        const t = await vault.wrapDir(dir, id, k.key);
+        await (
+          await t.getDirectoryHandle("content", { create: true })
+        ).getDirectoryHandle("articles", { create: true });
+      },
+    });
+    await store.update(created.id, { name: "", keyring: { ...k.record, name: b64u(encName) } });
+    await places.refresh();
+    const legacy = places.entries[0];
+    if (legacy?.state !== "ok") throw new Error("entry");
+    expect(legacy.meta.name).toBe("");
+    expect(places.views()[0]).toMatchObject({ locked: true, label: "ロック中の作業場所" });
+
+    expect(await places.unlock(legacy.meta, { kind: "recovery", code: "AAAAA-AAAAA-AAAAA-AAAAA-AAAAA" })).toBe(false);
+    expect(await places.unlock(legacy.meta, { kind: "recovery", code: k.recoveryCode })).toBe(true);
+    expect(places.views()[0]).toMatchObject({ locked: false, label: "旧ブログ" });
+    const migrated = await store.get(created.id);
+    if (migrated.state !== "ok") throw new Error("migrated");
+    expect(migrated.meta.name).toBe("旧ブログ");
+    expect(migrated.meta.keyring).not.toHaveProperty("name");
+    expect(migrated.meta.keyring?.slots).toEqual(k.record.slots);
+
+    // 移行後もロック中に名前が分かり、同じ回復コードで解錠して開ける
+    await places.lock(created.id);
+    expect(places.views()[0]).toMatchObject({ locked: true, label: "旧ブログ" });
+    expect(await places.unlock(migrated.meta, { kind: "recovery", code: k.recoveryCode })).toBe(true);
+    await places.open(migrated.meta);
+    expect(ws.rootName).toBe("旧ブログ");
+    expect(ws.articles).not.toBeNull();
   });
 
   it("無操作の時間・非表示の時間でロックする", async () => {

@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { MemFs, type MemDir, type MemFile } from "./support/memory-fs";
-import { deriveDataKeys, newRecoveryCode, normalizeRecoveryCode, base32, fromBase32 } from "../../src/lib/crypto/keys";
+import {
+  aesEncrypt,
+  b64u,
+  deriveDataKeys,
+  newRecoveryCode,
+  normalizeRecoveryCode,
+  base32,
+  fromBase32,
+} from "../../src/lib/crypto/keys";
 import { encryptedRoot, CONTENT_OVERHEAD, type EncContext } from "../../src/lib/crypto/encfs";
 import { Vault } from "../../src/lib/crypto/vault";
 import { accountName, asciiLabel, browserPasskey, prfInputs } from "../../src/lib/crypto/passkey";
@@ -153,20 +161,46 @@ describe("暗号化する DirHandleLike（39.4）", () => {
 describe("Vault（39.2・39.4）", () => {
   const ITER = 100_000;
 
-  it("回復コード・パスフレーズで解錠し、表示名を得る", async () => {
+  it("回復コード・パスフレーズで解錠する", async () => {
     const v = new Vault(null, ITER);
-    const k = await v.prepareNew("ブログ");
+    const k = await v.prepareNew();
     const id = "a".repeat(16);
     v.adopt(id, k.key);
     const rec = await v.withPassphrase(id, k.record, "correct horse battery");
     v.lockAll();
     expect(v.isUnlocked(id)).toBe(false);
     expect(await v.unlock(id, rec, { kind: "recovery", code: "AAAAA-AAAAA-AAAAA-AAAAA-AAAAA" })).toBeNull();
-    expect(await v.unlock(id, rec, { kind: "recovery", code: k.recoveryCode.toLowerCase() })).toBe("ブログ");
+    expect(await v.unlock(id, rec, { kind: "recovery", code: k.recoveryCode.toLowerCase() })).toEqual({
+      legacyName: null,
+    });
     v.lock(id);
     expect(await v.unlock(id, rec, { kind: "passphrase", passphrase: "wrong passphrase!" })).toBeNull();
-    expect(await v.unlock(id, rec, { kind: "passphrase", passphrase: "correct horse battery" })).toBe("ブログ");
+    expect(await v.unlock(id, rec, { kind: "passphrase", passphrase: "correct horse battery" })).toEqual({
+      legacyName: null,
+    });
     await expect(v.withPassphrase(id, rec, "short")).rejects.toThrow("10 文字以上");
+  });
+
+  it("新しい鍵の情報に表示名を置かない", async () => {
+    const v = new Vault(null, ITER);
+    const k = await v.prepareNew();
+    expect(k.record).not.toHaveProperty("name");
+    expect(v.keyringFor(k.record.slots)).not.toHaveProperty("name");
+  });
+
+  it("以前の版の暗号化した表示名は、解錠したときに復号して返す", async () => {
+    const v = new Vault(null, ITER);
+    const k = await v.prepareNew();
+    const id = "f".repeat(16);
+    const encName = await aesEncrypt(k.key.keys.meta, enc("旧ブログ"), enc("kotono-cms/meta/name"));
+    const legacy = { ...k.record, name: b64u(encName) };
+    expect(await v.unlock(id, legacy, { kind: "recovery", code: "AAAAA-AAAAA-AAAAA-AAAAA-AAAAA" })).toBeNull();
+    expect(await v.unlock(id, legacy, { kind: "recovery", code: k.recoveryCode })).toEqual({ legacyName: "旧ブログ" });
+    // 暗号文が壊れていれば正常として扱わない
+    v.lock(id);
+    const broken = { ...k.record, name: b64u(encName.map((b, i) => (i === encName.length - 1 ? b ^ 1 : b))) };
+    expect(await v.unlock(id, broken, { kind: "recovery", code: k.recoveryCode })).toBeNull();
+    expect(v.isUnlocked(id)).toBe(false);
   });
 
   it("パスキーの PRF で包んだ枠で解錠する", async () => {
@@ -177,12 +211,12 @@ describe("Vault（39.2・39.4）", () => {
       authenticate: async () => ({ credentialId, prf }),
     };
     const v = new Vault(api, ITER);
-    const k = await v.prepareNew("x");
+    const k = await v.prepareNew();
     const id = "b".repeat(16);
     v.adopt(id, k.key);
     const rec = await v.withPasskey(id, k.record, "x");
     v.lock(id);
-    expect(await v.unlock(id, rec, { kind: "passkey" })).toBe("x");
+    expect(await v.unlock(id, rec, { kind: "passkey" })).toEqual({ legacyName: null });
   });
 
   it("登録した配信元を記録し、別の配信元ではパスキーを求めずに理由を示す", async () => {
@@ -198,7 +232,7 @@ describe("Vault（39.2・39.4）", () => {
       },
     });
     const v = new Vault(api("a.example"), ITER);
-    const k = await v.prepareNew("x");
+    const k = await v.prepareNew();
     const id = "d".repeat(16);
     v.adopt(id, k.key);
     const rec = await v.withPasskey(id, k.record, "x");
@@ -207,7 +241,7 @@ describe("Vault（39.2・39.4）", () => {
     const other = new Vault(api("b.example"), ITER);
     await expect(other.unlock(id, rec, { kind: "passkey" })).rejects.toThrow("「a.example」で登録した");
     expect(asked).toBe(0);
-    expect(await v.unlock(id, rec, { kind: "passkey" })).toBe("x");
+    expect(await v.unlock(id, rec, { kind: "passkey" })).toEqual({ legacyName: null });
   });
 
   it("パスキーの NotAllowedError を、次にできることが分かる言葉に置き換える", async () => {
@@ -247,7 +281,7 @@ describe("Vault（39.2・39.4）", () => {
       },
     };
     const v = new Vault(api, ITER);
-    const k = await v.prepareNew("x");
+    const k = await v.prepareNew();
     const id = "e".repeat(16);
     v.adopt(id, k.key);
     const r1 = await v.withPasskey(id, k.record, "x");
@@ -268,7 +302,7 @@ describe("Vault（39.2・39.4）", () => {
 
   it("トークンを暗号化して保存できる（40.2）", async () => {
     const v = new Vault(null, ITER);
-    const k = await v.prepareNew("x");
+    const k = await v.prepareNew();
     const id = "c".repeat(16);
     v.adopt(id, k.key);
     const s = await v.sealToken(id, "github_pat_secret");
@@ -280,7 +314,7 @@ describe("Vault（39.2・39.4）", () => {
     const v = new Vault(null, ITER);
     const fs = new MemFs("opfs");
     const store = await WorkspaceStore.open(fs.root);
-    const k = await v.prepareNew("サイト");
+    const k = await v.prepareNew();
     const meta = await store.create({
       name: "サイト",
       keyring: k.record,

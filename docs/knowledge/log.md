@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-11-08
+* **Update**: [ADR-0006](/decisions/0006-ios-safari-git-plan.md) を更新。作業場所の表示名を暗号化せず平文で保存するよう変更。
 * **Addition**: [ADR-0008（案）ホスト版で GitHub にログインして同期するための計画](/decisions/0008-hosted-github-login-plan.md) を追加（計画・未着手）。
 * **Addition**: [Kotono CMS のアプリの外枠（シェル）](/product/app-shell.md) を追加。
 
