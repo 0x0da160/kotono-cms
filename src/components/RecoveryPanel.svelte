@@ -139,8 +139,8 @@
   .recovery {
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
-    padding: var(--space-12) var(--space-16);
-    margin-bottom: var(--space-16);
+    padding: var(--panel-pad);
+    margin-bottom: var(--space-12);
     background: var(--color-surface);
   }
   h2 {
@@ -165,7 +165,7 @@
   }
   .buttons {
     display: flex;
-    gap: var(--space-8);
+    gap: var(--control-gap);
     flex-wrap: wrap;
   }
   .small {

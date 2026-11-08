@@ -314,8 +314,8 @@
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
-    padding: var(--space-16) var(--space-20);
-    margin-block-end: var(--space-16);
+    padding: var(--panel-pad);
+    margin-block-end: var(--space-12);
   }
   h2 {
     margin: 0 0 var(--space-8);
@@ -337,7 +337,7 @@
   .head {
     display: flex;
     align-items: center;
-    gap: var(--space-8);
+    gap: var(--control-gap);
     flex-wrap: wrap;
   }
   .name {
@@ -354,7 +354,7 @@
   .actions {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-8);
+    gap: var(--control-gap);
     margin-top: var(--space-8);
   }
   .sub {
@@ -374,8 +374,8 @@
   }
   input:not([type="checkbox"]) {
     font: inherit;
-    padding: var(--space-8);
-    min-height: 2.75rem;
+    line-height: var(--control-line-height);
+    padding: var(--control-pad-y) var(--space-8);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     background: var(--bg, transparent);
@@ -384,7 +384,7 @@
   .banner {
     border: 1px solid var(--color-ng);
     border-radius: var(--radius-md);
-    padding: var(--space-8) var(--space-12);
+    padding: var(--panel-pad-sm);
     margin: 0 0 var(--space-12);
   }
   .banner.info {

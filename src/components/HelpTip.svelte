@@ -150,7 +150,7 @@
     display: block;
     width: max-content;
     max-width: min(22rem, calc(100vw - 1rem));
-    padding: var(--space-8) var(--space-12);
+    padding: var(--panel-pad-sm);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     background: var(--color-surface);

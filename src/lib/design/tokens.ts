@@ -48,6 +48,25 @@ export const STATIC_GROUPS: readonly TokenGroup[] = [
     tokens: SPACES.map((px) => [`space-${px}`, rem(px)] as const),
   },
   {
+    /*
+     * 操作部品（ボタン・入力欄・選択欄）の内側の余白と、並べたときの間隔・面の余白。
+     * 高さ＝文字 × 行間 ＋ 上下の余白 ＋ 枠：標準 16px で 34px、詰め 14px で 27px。
+     * 指で操作する画面では、見た目の余白は同じまま、押せる高さを --touch-target 以上にする（app.css）。
+     */
+    title: "操作部品の寸法",
+    tokens: [
+      ["control-line-height", "1.5", "ボタン・入力欄の行間（本文の 1.6 より詰める）"],
+      ["control-pad-y", "var(--space-4)", "標準の部品の上下"],
+      ["control-pad-x", "var(--space-10)", "標準の部品の左右"],
+      ["control-pad-y-sm", "var(--space-2)", "詰めた部品（14px）の上下"],
+      ["control-pad-x-sm", "var(--space-8)", "詰めた部品（14px）の左右"],
+      ["control-gap", "var(--space-6)", "横に並べた操作の間隔"],
+      ["panel-pad", "var(--space-12) var(--space-16)", "カード・パネルの内側"],
+      ["panel-pad-sm", "var(--space-8) var(--space-12)", "中に入れ子にした枠・お知らせの内側"],
+      ["touch-target", "2.75rem", "指で押せる最小の高さ（44px。pointer: coarse のとき）"],
+    ],
+  },
+  {
     title: "角丸",
     tokens: [
       ["radius-sm", "4px", "小さな部品（等幅の囲み・つまみ）"],

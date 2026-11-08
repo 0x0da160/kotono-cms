@@ -110,7 +110,7 @@
     border-radius: var(--radius-lg);
     background: var(--color-surface);
     color: var(--color-text);
-    padding: var(--space-20);
+    padding: var(--space-16);
   }
   .dialog::backdrop {
     background: var(--color-overlay);
@@ -170,7 +170,7 @@
   .buttons {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-8);
+    gap: var(--control-gap);
     justify-content: flex-end;
   }
 </style>

@@ -159,7 +159,7 @@
   .conflict {
     border: 2px solid var(--color-ng);
     border-radius: var(--radius-lg);
-    padding: var(--space-12) var(--space-16);
+    padding: var(--panel-pad);
     background: var(--color-surface);
   }
   h3 {
@@ -191,7 +191,7 @@
   .actions {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-8);
+    gap: var(--control-gap);
     margin-block: var(--space-8);
   }
   .diff {

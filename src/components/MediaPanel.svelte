@@ -217,11 +217,11 @@
     display: flex;
     flex-wrap: wrap;
     justify-content: space-between;
-    gap: var(--space-8);
+    gap: var(--control-gap);
   }
   .actions {
     display: flex;
-    gap: var(--space-8);
+    gap: var(--control-gap);
     flex-wrap: wrap;
   }
   h3 {

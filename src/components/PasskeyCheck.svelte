@@ -190,8 +190,8 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--space-8);
-    margin-block: var(--space-16);
+    gap: var(--control-gap);
+    margin-block: var(--space-12);
   }
   .log {
     white-space: pre-wrap;

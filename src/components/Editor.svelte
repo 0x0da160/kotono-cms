@@ -613,7 +613,7 @@
   .ed-sticky {
     display: flex;
     flex-direction: column;
-    gap: var(--space-8);
+    gap: var(--space-6);
   }
   .toolbar .group-start {
     margin-inline-start: var(--space-8);
@@ -629,7 +629,8 @@
     cursor: pointer;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
-    padding: var(--space-6) var(--space-12);
+    padding: var(--control-pad-y) var(--control-pad-x);
+    line-height: var(--control-line-height);
     background: var(--color-surface);
     white-space: nowrap;
   }
@@ -650,9 +651,9 @@
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: var(--space-4);
+    gap: var(--space-2);
     min-width: 14rem;
-    padding: var(--space-6);
+    padding: var(--space-4);
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
@@ -668,7 +669,7 @@
   .form-layout {
     display: flex;
     flex-direction: column;
-    gap: var(--space-12);
+    gap: var(--space-8);
   }
   /*
    * DOM は本文→記事情報（Tab 順を見た目に合わせる）。広い画面では縦積みのときも本文を先に表示する（P-02）。
@@ -683,7 +684,7 @@
     .form-layout {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 19rem;
-      gap: 0 var(--space-16);
+      gap: 0 var(--space-12);
       align-items: start;
     }
     .form-layout > .body {
@@ -740,13 +741,13 @@
   .repairs {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-8);
+    gap: var(--control-gap);
     margin-top: var(--space-8);
   }
   .editor {
     display: flex;
     flex-direction: column;
-    gap: var(--space-12);
+    gap: var(--space-8);
     min-width: 0;
   }
   .ed-head {
@@ -785,11 +786,11 @@
   .toolbar {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-8);
+    gap: var(--control-gap);
   }
   .notice {
     border-radius: var(--radius-md);
-    padding: var(--space-8) var(--space-12);
+    padding: var(--panel-pad-sm);
     border: 1px solid var(--color-border);
     background: var(--color-surface);
   }
@@ -849,7 +850,7 @@
   .problems {
     border: 1px solid var(--color-ng);
     border-radius: var(--radius-md);
-    padding: var(--space-8) var(--space-12);
+    padding: var(--panel-pad-sm);
   }
   .problems ul {
     margin: var(--space-4) 0 0;
@@ -866,9 +867,10 @@
     border-bottom: none;
     border-radius: var(--radius-md) var(--radius-md) 0 0;
     background: var(--color-bg);
-    padding: var(--space-6) var(--space-16);
+    padding: var(--control-pad-y) var(--space-12);
     color: inherit;
     font: inherit;
+    line-height: var(--control-line-height);
     cursor: pointer;
   }
   .tabs button[aria-selected="true"] {
@@ -879,7 +881,7 @@
   .panel {
     display: flex;
     flex-direction: column;
-    gap: var(--space-12);
+    gap: var(--space-8);
   }
   .src {
     display: flex;
@@ -900,7 +902,7 @@
   .readonly {
     border: 1px solid var(--color-ng);
     border-radius: var(--radius-md);
-    padding: var(--space-8) var(--space-12);
+    padding: var(--panel-pad-sm);
     margin: 0;
   }
   .err {
@@ -936,7 +938,7 @@
       top: 0;
       z-index: var(--z-sticky);
       background: var(--color-bg);
-      padding-block: var(--space-4) var(--space-8);
+      padding-block: var(--space-4) var(--space-6);
       border-bottom: 1px solid var(--color-border);
     }
     .editor :global(*) {
@@ -948,12 +950,9 @@
     .axes {
       font-size: var(--font-size-12);
     }
-    .toolbar {
-      gap: var(--space-6);
-    }
     .toolbar button,
     .more > summary {
-      padding: var(--space-4) var(--space-10);
+      padding: var(--control-pad-y-sm) var(--control-pad-x-sm);
       font-size: var(--font-size-14);
     }
     .toolbar button:not(.primary):not(.danger) {
@@ -975,7 +974,7 @@
     }
     .toolbar button,
     .more > summary {
-      padding-inline: var(--space-8);
+      padding-inline: var(--space-6);
     }
   }
 </style>

@@ -161,8 +161,8 @@
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
-    padding: var(--space-16) var(--space-20);
-    margin-bottom: var(--space-16);
+    padding: var(--panel-pad);
+    margin-bottom: var(--space-12);
   }
   .state {
     margin: 0 0 var(--space-4);
@@ -170,8 +170,8 @@
   .consent {
     border: 1px solid var(--color-focus);
     border-radius: var(--radius-lg);
-    padding: var(--space-12) var(--space-16);
-    margin-bottom: var(--space-16);
+    padding: var(--panel-pad);
+    margin-bottom: var(--space-12);
     background: var(--color-surface);
   }
   h2 {
@@ -184,7 +184,7 @@
   }
   .buttons {
     display: flex;
-    gap: var(--space-8);
+    gap: var(--control-gap);
     flex-wrap: wrap;
   }
   /* フッターで文字を詰めても、操作できる高さは 24px 以上にする（段階4 4章、WCAG 2.5.8） */
@@ -192,5 +192,10 @@
     cursor: pointer;
     min-height: 1.5rem;
     padding-block: 0.15rem;
+  }
+  @media (pointer: coarse) {
+    .settings summary {
+      min-height: var(--touch-target);
+    }
   }
 </style>

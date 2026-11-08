@@ -478,7 +478,7 @@
   .recent {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-8);
+    gap: var(--control-gap);
     margin-block: var(--space-8);
   }
 
@@ -488,11 +488,11 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-8) var(--space-16);
-    padding: var(--space-12) var(--gutter);
+    gap: var(--space-6) var(--space-12);
+    padding: var(--space-8) var(--gutter);
     background: var(--color-surface);
     border-bottom: 1px solid var(--color-border);
-    margin-bottom: var(--space-16);
+    margin-bottom: var(--space-12);
   }
   .brand {
     min-width: 0;
@@ -503,7 +503,7 @@
     letter-spacing: 0.01em;
   }
   .app-bar.workbench {
-    padding-block: var(--space-6);
+    padding-block: var(--space-4);
     margin-bottom: 0;
   }
   .app-bar.workbench h1 {
@@ -518,7 +518,7 @@
   .place {
     display: flex;
     align-items: center;
-    gap: var(--space-8) var(--space-12);
+    gap: var(--control-gap) var(--space-12);
     flex-wrap: wrap;
     margin-inline-start: auto;
     min-width: 0;
@@ -530,7 +530,7 @@
   .workbench .place button,
   .app-bar.workbench > :global(.help-open) {
     font-size: var(--font-size-14);
-    padding-block: var(--space-4);
+    padding: var(--control-pad-y-sm) var(--control-pad-x-sm);
   }
 
   /* 画面の切り替え：選んでいる画面は文字の太さと下線で示す（色だけに頼らない：14.1） */
@@ -546,7 +546,7 @@
     background: transparent;
     color: var(--color-muted);
     font-size: var(--font-size-14);
-    padding: var(--space-6) var(--space-12);
+    padding: var(--control-pad-y) var(--control-pad-x);
     white-space: nowrap;
   }
   .sections button:not(:disabled):hover {
@@ -576,7 +576,7 @@
     max-width: 96rem;
   }
   main.workbench {
-    padding-block-start: var(--space-12);
+    padding-block-start: var(--space-8);
   }
   .section[hidden] {
     display: none !important;
@@ -588,8 +588,8 @@
   .notices {
     display: flex;
     flex-direction: column;
-    gap: var(--space-8);
-    margin-block-end: var(--space-12);
+    gap: var(--space-6);
+    margin-block-end: var(--space-8);
     font-size: var(--font-size-14);
   }
   .notices .banner,
@@ -623,7 +623,7 @@
   }
   .git-strip button {
     font-size: var(--font-size-14);
-    padding-block: var(--space-2);
+    padding: var(--control-pad-y-sm) var(--control-pad-x-sm);
   }
   .git-strip button :global(svg.lucide-icon) {
     margin: 0;
@@ -632,8 +632,8 @@
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
-    padding: var(--space-16) var(--space-20);
-    margin-block-end: var(--space-16);
+    padding: var(--panel-pad);
+    margin-block-end: var(--space-12);
   }
   h2 {
     margin: 0 0 var(--space-8);
@@ -644,6 +644,11 @@
     font-size: var(--font-size-14);
     color: var(--color-muted);
     min-height: 1.5rem;
+  }
+  @media (pointer: coarse) {
+    .env-details summary {
+      min-height: var(--touch-target);
+    }
   }
   .env-details[open] summary {
     margin-block-end: var(--space-8);
@@ -689,8 +694,8 @@
   .banner {
     border: 1px solid var(--color-ng);
     border-radius: var(--radius-md);
-    padding: var(--space-8) var(--space-12);
-    margin: 0 0 var(--space-12);
+    padding: var(--panel-pad-sm);
+    margin: 0 0 var(--space-8);
     background: var(--color-surface);
   }
   .banner p {
@@ -699,7 +704,7 @@
   .panes {
     display: grid;
     grid-template-columns: minmax(18rem, 26rem) minmax(0, 1fr);
-    gap: var(--space-20);
+    gap: var(--space-16);
     align-items: start;
   }
 
@@ -778,7 +783,7 @@
       width: 100%;
       display: flex;
       flex-direction: column;
-      padding-block-start: var(--space-8);
+      padding-block-start: var(--space-6);
     }
     main.workbench > .notices {
       flex: none;
@@ -810,10 +815,10 @@
     }
     main.workbench .list-pane {
       border-inline-end: 1px solid var(--color-border);
-      padding-inline-end: var(--space-12);
+      padding-inline-end: var(--space-8);
     }
     main.workbench .editor-pane {
-      padding-inline-start: var(--space-16);
+      padding-inline-start: var(--space-12);
     }
     main.workbench .panes:has(> .consent-slot) {
       grid-template-rows: auto minmax(0, 1fr);
@@ -821,7 +826,7 @@
     main.workbench .panes > .consent-slot {
       grid-column: 2;
       grid-row: 1;
-      padding: var(--space-12) 0 0 var(--space-16);
+      padding: var(--space-8) 0 0 var(--space-12);
     }
     main.workbench .panes:has(> .consent-slot) > .list-pane {
       grid-column: 1;
@@ -839,7 +844,7 @@
     }
   }
   .empty {
-    padding: var(--space-32) 0;
+    padding: var(--space-24) 0;
     text-align: center;
   }
   .small {

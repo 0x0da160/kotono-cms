@@ -244,7 +244,7 @@
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
     padding: var(--space-12);
-    margin-top: var(--space-16);
+    margin-top: var(--space-12);
     background: var(--color-surface);
   }
   h3 {
@@ -271,7 +271,7 @@
   .actions {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-8);
+    gap: var(--control-gap);
     align-items: center;
     margin-block: var(--space-6);
   }
@@ -317,8 +317,8 @@
   input:not([type="checkbox"]):not([type="radio"]) {
     font: inherit;
     font-size: var(--font-size-16);
-    padding: var(--space-6) var(--space-8);
-    min-height: 2.5rem;
+    line-height: var(--control-line-height);
+    padding: var(--control-pad-y) var(--space-8);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     background: transparent;

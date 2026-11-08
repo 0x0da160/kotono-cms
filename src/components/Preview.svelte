@@ -221,7 +221,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: var(--space-8);
+    gap: var(--control-gap);
   }
   h3 {
     margin: 0;

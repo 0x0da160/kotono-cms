@@ -151,7 +151,7 @@
     padding-inline-start: var(--space-20);
   }
   .more {
-    margin-top: var(--space-16);
+    margin-top: var(--space-12);
     color: var(--color-muted);
   }
 </style>

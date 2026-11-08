@@ -267,7 +267,7 @@
   .list {
     display: flex;
     flex-direction: column;
-    gap: var(--space-8);
+    gap: var(--space-6);
     min-width: 0;
   }
   .list-head {
@@ -283,12 +283,12 @@
   }
   .actions {
     display: flex;
-    gap: var(--space-8);
+    gap: var(--control-gap);
   }
   .filters {
     display: flex;
     flex-direction: column;
-    gap: var(--space-8);
+    gap: var(--space-6);
   }
   .filters label {
     display: flex;
@@ -331,6 +331,13 @@
     min-height: 1.5rem;
     font-size: var(--font-size-12);
     color: var(--color-muted);
+  }
+  /* 指で操作する画面では、開閉の見出しも 44px 以上にする（app.css と同じ） */
+  @media (pointer: coarse) {
+    .cond > summary {
+      min-height: var(--touch-target);
+      align-items: center;
+    }
   }
   /* display: flex にすると既定の開閉マーカーが消えるので、記号を付けて開閉できることを示す */
   .cond > summary::-webkit-details-marker {
@@ -376,8 +383,8 @@
     display: flex;
     flex-flow: row wrap;
     align-items: baseline;
-    gap: 0.0625rem var(--space-8);
-    padding: var(--space-6) var(--space-8);
+    gap: 0 var(--space-8);
+    padding: var(--space-4) var(--space-8);
     background: transparent;
     border: none;
     border-bottom: 1px solid var(--color-border);
@@ -449,7 +456,7 @@
   }
   .pager {
     display: flex;
-    gap: var(--space-8);
+    gap: var(--control-gap);
     align-items: center;
     justify-content: center;
   }
