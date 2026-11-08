@@ -8,9 +8,19 @@ import { ARTICLE_MAX_BYTES } from "./budgets";
 import { decodeUtf8Strict, toLf, utf8ByteLength } from "./bytes";
 import { isValidArticleId } from "./article-id";
 import { sameInstant } from "./datetime";
-import { STANDARD_KEYS, validateStandard, type FieldError, type SchemaResult, type StandardKey } from "./schema";
+import {
+  isOptionalKey,
+  OPTIONAL_KEYS,
+  STANDARD_KEYS,
+  validateStandard,
+  type FieldError,
+  type FieldKey,
+  type SchemaResult,
+  type StandardKey,
+} from "./schema";
 import { splitDocument, splitErrorMessage, type SplitResult } from "./split";
 import {
+  blockMapSeq,
   getValueNode,
   nodesEqual,
   parseFrontmatter,
@@ -25,7 +35,7 @@ import { isScalar } from "yaml";
 
 export interface Problem {
   readonly message: string;
-  readonly field?: StandardKey;
+  readonly field?: FieldKey;
   /** 文書全体での 1 始まりの行・列 */
   readonly line?: number;
   readonly col?: number;
@@ -196,11 +206,13 @@ export function classifyChange(base: Analysis, cur: Analysis): ChangeInfo {
 
 export type TextEdit = { ok: true; text: string } | { ok: false; message: string };
 
-export function editField(text: string, key: StandardKey, value: FieldValue): TextEdit {
+export function editField(text: string, key: FieldKey, value: FieldValue): TextEdit {
   const split = splitDocument(text);
   if (!split.ok) return { ok: false, message: splitErrorMessage(split.code) };
   const parse = parseCached(split.frontmatter);
   if (!parse.ok) return { ok: false, message: "frontmatter に構文エラーがあるため、フォームでは編集できません。" };
+  // 任意の標準項目は、ない記事ではフォームで入力したときに末尾へ足す
+  if (isOptionalKey(key) && getValueNode(parse.root, key) === undefined) return addTopLevelValue(text, key, value);
   const r = setTopLevelValue(parse, key, value);
   if (!r.ok) return r;
   return {
@@ -284,6 +296,7 @@ export { isValidArticleId };
 /**
  * 複製元の文書から、新しい記事の index.md を作る。title・本文・タグ・cover・未知フィールドは保持し、
  * id を新しい値、status を draft、slug を空文字、publishedAt を null、createdAt・updatedAt を同じ時刻にする。
+ * aliases・revisedAt・corrections がある場合は、それぞれ空の配列・null・空の配列にする。
  * 未知フィールド内の ID・外部参照は変換しない。
  */
 export function duplicateText(source: string, newId: string, at: string): TextEdit {
@@ -301,13 +314,26 @@ export function duplicateText(source: string, newId: string, at: string): TextEd
     if (!r.ok) return r;
     text = r.text;
   }
+  // 旧 slug・読者向けの更新日時・訂正は元の記事の履歴なので、ある場合だけ空にする（ない項目は足さない）
+  const optional: [FieldKey, FieldValue][] = [
+    ["aliases", []],
+    ["revisedAt", null],
+    ["corrections", []],
+  ];
+  for (const [k, v] of optional) {
+    const a = analyzeText(text, newId);
+    if (!a.parse?.ok || getValueNode(a.parse.root, k) === undefined) continue;
+    const r = editField(text, k, v);
+    if (!r.ok) return r;
+    text = r.text;
+  }
   return { ok: true, text };
 }
 
 /** 標準項目以外のトップレベルキー（複製前の注意表示に使う） */
 export function unknownKeys(a: Analysis): string[] {
   if (!a.parse?.ok) return [];
-  const std = new Set<string>(STANDARD_KEYS);
+  const std = new Set<string>([...STANDARD_KEYS, ...OPTIONAL_KEYS]);
   return topLevelKeys(a.parse.root).filter((k) => !std.has(k));
 }
 
@@ -323,13 +349,32 @@ export interface RepairProposal {
 
 /** トップレベルに欠けている文字列項目を frontmatter の末尾へ追加する。他の項目は変えない */
 export function addTopLevelString(text: string, key: string, value: string): TextEdit {
+  return addTopLevelValue(text, key, value);
+}
+
+/** 追加する項目の YAML。文字列は二重引用符、配列はブロック形式（空なら `[]`） */
+function topLevelYaml(key: string, value: FieldValue): string | null {
+  if (value === null) return `${key}: null`;
+  if (typeof value === "string") return `${key}: ${JSON.stringify(value)}`;
+  if (Array.isArray(value)) {
+    const items = value as readonly unknown[];
+    if (items.length === 0) return `${key}: []`;
+    if (typeof items[0] === "string") return `${key}:\n${items.map((v) => `  - ${JSON.stringify(v)}`).join("\n")}`;
+    return `${key}:\n${blockMapSeq(value as Parameters<typeof blockMapSeq>[0], "  ")}`;
+  }
+  return null;
+}
+
+/** トップレベルに欠けている項目を frontmatter の末尾へ追加する。他の項目は変えない */
+export function addTopLevelValue(text: string, key: string, value: FieldValue): TextEdit {
   const split = splitDocument(text);
   if (!split.ok) return { ok: false, message: splitErrorMessage(split.code) };
   const parse = parseCached(split.frontmatter);
   if (!parse.ok) return { ok: false, message: "frontmatter に構文エラーがあるため追加できません。" };
   if (topLevelKeys(parse.root).includes(key)) return { ok: false, message: `${key} は既にあります。` };
   const fm = split.frontmatter;
-  const line = `${key}: ${JSON.stringify(value)}`;
+  const line = topLevelYaml(key, value);
+  if (line === null) return { ok: false, message: `${key} は原文モードで追加してください。` };
   const nextFm = fm === "" ? `${line}\n` : fm.endsWith("\n") ? `${fm}${line}\n` : `${fm}\n${line}`;
   const re = parseFrontmatter(nextFm);
   if (!re.ok) return { ok: false, message: "追加後の frontmatter を解釈できません。" };

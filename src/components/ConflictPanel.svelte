@@ -2,7 +2,7 @@
   import type { Conflict } from "../lib/app/session.svelte";
   import { lineDiff } from "../lib/core/diff";
   import { analyzeText } from "../lib/core/article-doc";
-  import { STANDARD_KEYS, type StandardKey } from "../lib/core/schema";
+  import { OPTIONAL_KEYS, STANDARD_KEYS, type FieldKey } from "../lib/core/schema";
 
   let {
     conflict,
@@ -44,12 +44,17 @@
     const b = val(conflict.baseText);
     const d = val(conflict.diskText);
     const e = val(conflict.editingText);
-    const show = (v: Record<string, unknown> | null, k: StandardKey) => {
+    const optional = new Set<string>(OPTIONAL_KEYS);
+    const show = (v: Record<string, unknown> | null, k: FieldKey) => {
       if (v === null) return "—";
       const x = v[k];
-      return x === undefined ? "（読取不能）" : JSON.stringify(x);
+      return x === undefined ? (optional.has(k) ? "（なし）" : "（読取不能）") : JSON.stringify(x);
     };
-    return STANDARD_KEYS.map((k) => {
+    // 任意の項目は、どれかの版にあるときだけ並べる
+    const present = OPTIONAL_KEYS.filter((k) =>
+      [b, d, e].some((v) => v !== null && (v as Record<string, unknown>)[k] !== undefined),
+    );
+    return [...STANDARD_KEYS, ...present].map((k) => {
       const row = {
         key: k,
         base: show(b as Record<string, unknown> | null, k),

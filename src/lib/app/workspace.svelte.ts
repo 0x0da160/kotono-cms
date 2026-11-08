@@ -20,7 +20,7 @@ import { isValidDateTime, nowDateTime } from "../core/datetime";
 import { imageMarkdown } from "../core/image";
 import { refsFromTree, type MediaRefs } from "../core/markdown";
 import { unavailableMdService, type MdService } from "../parse/md-service";
-import { checkSlugUniqueness } from "../core/slug";
+import { checkAliasUniqueness, checkSlugUniqueness } from "../core/slug";
 import type { DraftRecord } from "../drafts/store";
 import { deleteEntries, duplicateArticle } from "../fs/article-ops";
 import { createBackup, itemsFromTree, type BackupItem } from "../fs/backup";
@@ -49,7 +49,9 @@ import {
   readEntryMeta,
   scanArticles,
   slugEntries,
+  readAuthors,
   ARTICLES_PATH,
+  type AuthorsState,
   type ListEntry,
   type RepoConfig,
   type ScanResult,
@@ -172,6 +174,8 @@ export class Workspace {
   folderError = $state<string | null>(null);
   config = $state<RepoConfig | null>(null);
   scan = $state<ScanResult | null>(null);
+  /** content/authors/ の著者（記事の authors の候補） */
+  authors = $state<AuthorsState | null>(null);
   scanning = $state(false);
   scanProgress = $state<{ done: number; total: number } | null>(null);
   #session = $state<EditorSession | null>(null);
@@ -357,6 +361,7 @@ export class Workspace {
     this.articles = null;
     this.missingArticles = false;
     this.scan = null;
+    this.authors = null;
     this.config = await readConfig(root);
     await this.drafts?.attach(root, place?.draftsId ?? null);
     const st = await openArticlesDir(root);
@@ -390,6 +395,7 @@ export class Workspace {
     try {
       if (this.root) this.config = await readConfig(this.root);
       this.scan = await scanArticles(articles, (done, total) => (this.scanProgress = { done, total }));
+      if (this.root) this.authors = await readAuthors(this.root).catch(() => null);
       this.announce(
         `記事一覧を読み込みました（${this.scan.entries.filter((e) => e.kind !== "not-directory").length}件）。`,
       );
@@ -569,6 +575,57 @@ export class Workspace {
       if (v !== "ok") return;
       s.recoveryMismatch = false;
     }
+    // 公開対象の記事の slug 変更（7.1）：旧 slug を aliases に残すかを、スナップショットの前に決める
+    let askedSlugChange = false;
+    {
+      // slug を旧 slug のどれかに戻した場合は、その値を aliases から外す（同じ値は両方に置けない）
+      const v0 = s.analysis.schema?.values;
+      if (v0?.slug && v0.aliases?.includes(v0.slug)) {
+        const slugNow = v0.slug;
+        s.setField(
+          "aliases",
+          v0.aliases.filter((a) => a !== slugNow),
+        );
+      }
+      const pre0 = s.precheck(s.text);
+      if (pre0.ok && pre0.slugChangedAfterPublish) {
+        const old = pre0.previousSlug ?? "";
+        const v = await this.ask({
+          title: "公開対象の記事の slug を変更します",
+          message:
+            old === ""
+              ? "slug を変えると、サイト側の URL が変わる可能性があります。"
+              : `slug を変えると、サイト側の URL が変わる可能性があります。旧 slug「${old}」を記事の aliases に残すと、サイト側で旧 URL からのリダイレクトを作れます。`,
+          details: ["リダイレクトを作るのはサイト側です。CMS は旧 slug を記録するだけです。"],
+          buttons: [
+            ...(old !== "" ? [{ label: "旧 slug を残して保存", value: "keep", variant: "primary" as const }] : []),
+            {
+              label: old !== "" ? "残さずに保存" : "変更して保存",
+              value: "ok",
+              ...(old === "" ? { variant: "primary" as const } : {}),
+            },
+            { label: "キャンセル", value: "cancel" },
+          ],
+          initial: "cancel",
+        });
+        if (v !== "ok" && v !== "keep") {
+          s.notice = { kind: "info", text: "保存を取り消しました。" };
+          return;
+        }
+        if (v === "keep") {
+          const cur = s.analysis.schema?.values ?? {};
+          const slugNow = cur.slug ?? "";
+          const next = [...(cur.aliases ?? [])].filter((a) => a !== slugNow);
+          if (!next.includes(old)) next.push(old);
+          const r = s.setField("aliases", next);
+          if (!r.ok) {
+            s.notice = { kind: "error", text: `旧 slug を aliases に残せませんでした：${r.message}` };
+            return;
+          }
+        }
+        askedSlugChange = true;
+      }
+    }
     // 1. スナップショットとリビジョンを固定する
     let snapshot = s.text;
     const snapRevision = s.revision;
@@ -612,10 +669,30 @@ export class Workspace {
       // 2. 全体検証：slug の一意性（7.1）
       const values = s.analysis.schema?.values ?? {};
       const slug = values.slug ?? "";
-      if (slug !== "" && (pre.slugChanged || pre.becamePublished || s.isNew)) {
+      const aliases = values.aliases ?? [];
+      if (
+        (slug !== "" && (pre.slugChanged || pre.becamePublished || s.isNew)) ||
+        (aliases.length > 0 && pre.aliasesChanged)
+      ) {
         // 一覧キャッシュだけに頼らず記事領域を再走査する
         const fresh = await scanArticles(articles);
         this.scan = fresh;
+        const a = checkAliasUniqueness(aliases, s.id, slugEntries(fresh));
+        if (a.kind === "duplicate") {
+          s.notice = {
+            kind: "error",
+            text: `旧 slug（${a.aliases.join("、")}）が他の記事（${a.ids.join("、")}）の slug または旧 slug と重複しています。`,
+          };
+          return;
+        }
+        if (a.kind === "uncheckable") {
+          s.notice = {
+            kind: "error",
+            text: `重複検査不能：${a.ids.length}件の記事の slug を確認できないため保存を止めました。`,
+            details: a.ids.map((id) => `検査不能：${id}`),
+          };
+          return;
+        }
         const u = checkSlugUniqueness(slug, s.id, slugEntries(fresh));
         if (u.kind === "duplicate") {
           s.notice = { kind: "error", text: `slug「${slug}」は他の記事（${u.ids.join("、")}）と重複しています。` };
@@ -641,7 +718,7 @@ export class Workspace {
           return;
         }
       }
-      if (pre.slugChangedAfterPublish) {
+      if (pre.slugChangedAfterPublish && !askedSlugChange) {
         const v = await this.ask({
           title: "公開対象の記事の slug を変更します",
           message:
@@ -971,6 +1048,7 @@ export class Workspace {
     this.articles = null;
     this.missingArticles = false;
     this.scan = null;
+    this.authors = null;
     this.config = null;
   }
 

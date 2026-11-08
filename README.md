@@ -13,6 +13,7 @@ Kotono CMS（コトノ シーエムエス）は、Webメディアの記事を作
 - 記事は `content/articles/<記事ID>/index.md`（Markdown＋YAML frontmatter）。画像は同じフォルダの `media/` に置く。
 - 本文は見たまま（WYSIWYG）でも Markdown でも編集できる。正本は Markdown で、変更していない部分の記述はそのまま保つ（[ADR-0005](docs/knowledge/decisions/0005-wysiwyg-images-recent-folder.md)）。
 - 画像は取り込み時に縦横 4096px・1,600万画素・4 MiB 以内に収め、メタデータを削除したものを原本にする。表示には幅 480・960・1920px の WebP・JPEG（または PNG）の派生画像（`media/variants/`）を使う（ADR-0005。仕様 3.1 からの変更）。
+- 記事情報に、任意で説明文・著者・読者向けの更新日時・訂正の記録・カバー画像のキャプションとクレジットを入れられる。公開後に slug を変えると、旧 slug を `aliases` に残してサイト側でリダイレクトを作れる（[ADR-0009](docs/knowledge/decisions/0009-optional-article-fields.md)）。
 - 手動保存。保存前に外部変更を検出し、無確認で上書きしない。
 - ローカルGitへの記事単位のコミットと、GitHub の REST API による push・pull・分岐時の簡易マージ（ブランチ操作・rebase・GitHub 以外は対象外）。CMS は Git のフック・署名・フィルターを実行しません。
 - 記事由来のHTML・スクリプトを実行せず、自動ネットワーク通信を行わない。

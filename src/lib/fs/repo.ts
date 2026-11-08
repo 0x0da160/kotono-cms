@@ -12,15 +12,18 @@ import {
   PROVISIONAL_SCAN_MAX_MS,
 } from "../core/budgets";
 import { decodeUtf8Prefix, decodeUtf8Strict } from "../core/bytes";
-import { validateStandard, type StandardValues } from "../core/schema";
+import { isValidAuthorId, validateStandard, type StandardValues } from "../core/schema";
 import type { SlugEntry } from "../core/slug";
 import { splitDocument, splitErrorMessage } from "../core/split";
-import { parseFrontmatter } from "../core/yaml-doc";
+import { getValueNode, parseFrontmatter } from "../core/yaml-doc";
+import { isScalar } from "yaml";
 import { classifyFsError, fsErrorMessage, type DirHandleLike, type FileHandleLike } from "./types";
 
 export const CONTENT_DIR = "content";
 export const ARTICLES_DIR = "articles";
 export const ARTICLES_PATH = "content/articles/";
+export const AUTHORS_DIR = "authors";
+export const AUTHORS_PATH = "content/authors/";
 export const CONFIG_FILE = "cms.config.json";
 export const INDEX_FILE = "index.md";
 
@@ -429,7 +432,12 @@ export function slugEntries(scan: ScanResult): SlugEntry[] {
   for (const e of scan.entries) {
     if (e.kind === "not-directory" || e.kind === "incomplete") continue;
     if (!e.slugKnown) out.push({ id: e.dirName, slug: null, uncheckable: true });
-    else out.push({ id: e.dirName, slug: typeof e.values.slug === "string" ? e.values.slug : "" });
+    else
+      out.push({
+        id: e.dirName,
+        slug: typeof e.values.slug === "string" ? e.values.slug : "",
+        ...(Array.isArray(e.values.aliases) ? { aliases: e.values.aliases } : {}),
+      });
   }
   if (!scan.complete) out.push({ id: "（未列挙の記事）", slug: null, uncheckable: true });
   return out;
@@ -459,4 +467,80 @@ export async function readArticle(articles: DirHandleLike, id: string): Promise<
     const k = classifyFsError(e);
     return { kind: "error", errorKind: k, message: fsErrorMessage(k) };
   }
+}
+
+// ---------------------------------------------------------------------------
+// 著者（docs/knowledge/research/cms-comparison.md の C5）
+//
+// content/authors/<著者ID>/index.md の frontmatter の name を読む。記事の authors の候補と、
+// 未登録の著者 ID の警告に使う。CMS は著者ファイルを作成・変更しない（外部ツールで編集する）。
+
+export interface AuthorEntry {
+  readonly id: string;
+  /** frontmatter の name。読めないときは null */
+  readonly name: string | null;
+  readonly problem?: string;
+}
+
+export interface AuthorsState {
+  /** missing：content/authors/ がない（著者を使っていない） */
+  readonly kind: "ok" | "missing" | "error";
+  readonly authors: readonly AuthorEntry[];
+  readonly message?: string;
+}
+
+/** 走査する著者フォルダの上限（未信頼入力の予算） */
+export const AUTHORS_MAX_ENTRIES = 1000;
+
+async function readAuthor(dir: DirHandleLike): Promise<AuthorEntry> {
+  const id = dir.name;
+  if (!isValidAuthorId(id)) return { id, name: null, problem: "フォルダ名が著者 ID の形式ではありません。" };
+  try {
+    const handle = await dir.getFileHandle(INDEX_FILE);
+    const file = await handle.getFile();
+    const truncated = file.size > PREFIX_BYTES;
+    const bytes = new Uint8Array(await file.slice(0, Math.min(file.size, PREFIX_BYTES)).arrayBuffer());
+    const d = decodeUtf8Prefix(bytes, truncated);
+    if (!d.ok) return { id, name: null, problem: "不正な UTF-8 を含みます。" };
+    const split = splitDocument(d.text);
+    if (!split.ok) return { id, name: null, problem: splitErrorMessage(split.code) };
+    const parse = parseFrontmatter(split.frontmatter);
+    if (!parse.ok) return { id, name: null, problem: parse.problems[0]?.message ?? "frontmatter を読めません。" };
+    const n = getValueNode(parse.root, "name");
+    if (!isScalar(n) || typeof n.value !== "string" || n.value.trim() === "")
+      return { id, name: null, problem: "name（表示名）がありません。" };
+    return { id, name: n.value };
+  } catch (e) {
+    return { id, name: null, problem: `index.md を読めません：${fsErrorMessage(classifyFsError(e))}` };
+  }
+}
+
+export async function readAuthors(root: DirHandleLike): Promise<AuthorsState> {
+  const content = await childDir(root, CONTENT_DIR, "content/");
+  if (content === "missing") return { kind: "missing", authors: [] };
+  if ("error" in content) return { kind: "error", authors: [], message: content.error };
+  const dir = await childDir(content, AUTHORS_DIR, AUTHORS_PATH);
+  if (dir === "missing") return { kind: "missing", authors: [] };
+  if ("error" in dir) return { kind: "error", authors: [], message: dir.error };
+  const dirs: DirHandleLike[] = [];
+  let message: string | undefined;
+  try {
+    for await (const entry of dir.values()) {
+      if (entry.kind !== "directory") continue;
+      if (dirs.length >= AUTHORS_MAX_ENTRIES) {
+        message = `著者フォルダが ${AUTHORS_MAX_ENTRIES} 件を超えたため、一部だけを読みました。`;
+        break;
+      }
+      dirs.push(entry);
+    }
+  } catch (e) {
+    return {
+      kind: "error",
+      authors: [],
+      message: `${AUTHORS_PATH} を読めません：${fsErrorMessage(classifyFsError(e))}`,
+    };
+  }
+  const authors = await pool(dirs, METADATA_IO_CONCURRENCY, readAuthor);
+  authors.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  return { kind: "ok", authors, ...(message !== undefined ? { message } : {}) };
 }
