@@ -9,7 +9,13 @@ import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { MemFs, type MemFile } from "./support/memory-fs";
 import { GitRepo, type RepoInfo } from "../../src/lib/git/repo";
-import { GitHubApi, parseRepoInput, type ApiCommit, type FetchLike } from "../../src/lib/sync/github-api";
+import {
+  GitHubApi,
+  parseRepoInput,
+  patCreationUrl,
+  type ApiCommit,
+  type FetchLike,
+} from "../../src/lib/sync/github-api";
 import { GitHubSync, isoDate, rebuildCommit } from "../../src/lib/sync/sync";
 import { encodeUtf8 } from "../../src/lib/core/bytes";
 import { hashObject } from "../../src/lib/git/objects";
@@ -201,6 +207,27 @@ async function setup() {
   const sync = new GitHubSync(repo, api, 540);
   return { remote, fs, repo, api, sync };
 }
+
+describe("トークンの作成ページの URL（40.2）", () => {
+  it("名前・所有者・有効期限・Contents の読み書きを入れた github.com の作成ページを指す", () => {
+    const u = new URL(patCreationUrl({ owner: "0x0da160", repo: "blog" }));
+    expect(u.origin + u.pathname).toBe("https://github.com/settings/personal-access-tokens/new");
+    expect(u.searchParams.get("name")).toBe("Kotono CMS blog");
+    expect(u.searchParams.get("target_name")).toBe("0x0da160");
+    expect(u.searchParams.get("expires_in")).toBe("90");
+    expect(u.searchParams.get("contents")).toBe("write");
+    expect(u.searchParams.get("description")).toContain("0x0da160/blog");
+  });
+
+  it("名前は 40 文字までにし、リポジトリが未入力なら所有者を入れない", () => {
+    const long = new URL(patCreationUrl({ owner: "o", repo: "r".repeat(60) }));
+    expect(long.searchParams.get("name")?.length).toBe(40);
+    const none = new URL(patCreationUrl(null));
+    expect(none.searchParams.get("name")).toBe("Kotono CMS");
+    expect(none.searchParams.has("target_name")).toBe(false);
+    expect(none.searchParams.get("contents")).toBe("write");
+  });
+});
 
 describe("GitHub との同期（40）", () => {
   it("入力の解釈と日時の形式", () => {

@@ -1,6 +1,7 @@
 <script lang="ts">
   import HelpTip from "./HelpTip.svelte";
   import type { SyncController } from "../lib/app/sync.svelte";
+  import { PAT_EXPIRES_DAYS, parseRepoInput, patCreationUrl } from "../lib/sync/github-api";
   import type { ConflictItem } from "../lib/sync/sync";
 
   let { sync }: { sync: SyncController } = $props();
@@ -31,6 +32,10 @@
     }
     return null;
   });
+
+  /** 入力中のリポジトリ（作り方の案内とリンクに使う） */
+  const typedRepo = $derived(parseRepoInput(repoInput));
+  const patUrl = $derived(patCreationUrl(typedRepo));
 
   const undecided = $derived(
     sync.merge ? sync.merge.plan.conflicts.filter((c) => !sync.merge?.choices[c.path]).length : 0,
@@ -112,12 +117,37 @@
       <label>ブランチ <input bind:value={branch} required autocapitalize="off" spellcheck="false" /></label>
       <div class="field">
         <span class="lab"
-          ><label for="sync-token">トークン（fine-grained personal access token）</label><HelpTip
-            label="トークンの作り方"
-            >GitHub の Settings → Developer settings → Fine-grained tokens で、このリポジトリだけを選び、「Contents」を
-            Read and write、有効期限つきで作ってください。通信先は api.github.com だけです。</HelpTip
+          ><label for="sync-token">トークン（fine-grained personal access token）</label><HelpTip label="トークンとは"
+            >GitHub
+            のアカウントの代わりに、このリポジトリの中身の読み書きだけを許す鍵です。パスワードは使いません。通信先は
+            api.github.com だけです。</HelpTip
           ></span
         >
+        <details class="howto" open={!sync.hasToken} data-testid="sync-pat-howto">
+          <summary>トークンの作り方（2 分ほど）</summary>
+          <ol>
+            <li>
+              <a href={patUrl} target="_blank" rel="noopener noreferrer" data-testid="sync-pat-link"
+                >GitHub のトークン作成ページを開く</a
+              >（名前・有効期限 {PAT_EXPIRES_DAYS} 日・「Contents」の読み書きは入力済みで開きます）
+            </li>
+            <li>
+              「Repository access」で「Only select repositories」を選び、<span class="mono"
+                >{typedRepo ? `${typedRepo.owner}/${typedRepo.repo}` : "同期するリポジトリ"}</span
+              >だけを選びます。
+            </li>
+            <li>
+              「Permissions」の「Contents」が「Read and write」になっていることを確かめます（他の権限は要りません）。
+            </li>
+            <li>
+              「Generate token」を押し、表示された <span class="mono">github_pat_</span>
+              で始まる文字列をコピーして、下の欄に貼り付けます。
+            </li>
+          </ol>
+          <p class="small muted">
+            トークンは作った直後にしか表示されません。期限が切れたら同じ手順で作り直し、ここに貼り直してください。
+          </p>
+        </details>
         <input
           id="sync-token"
           type="password"
@@ -265,6 +295,20 @@
   }
   .config .lab label {
     margin: 0;
+  }
+  .howto {
+    font-size: var(--font-size-14);
+    margin-block: var(--space-4);
+  }
+  .howto summary {
+    cursor: pointer;
+  }
+  .howto ol {
+    margin: var(--space-6) 0;
+    padding-inline-start: var(--space-20);
+  }
+  .howto li {
+    margin-block: var(--space-4);
   }
   .config label.check {
     flex-direction: row;

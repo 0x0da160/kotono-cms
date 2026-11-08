@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-11-08
+* **Addition**: [ADR-0008（案）ホスト版で GitHub にログインして同期するための計画](/decisions/0008-hosted-github-login-plan.md) を追加（計画・未着手）。
 * **Addition**: [Kotono CMS のアプリの外枠（シェル）](/product/app-shell.md) を追加。
 
 ## 2026-11-07
