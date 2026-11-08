@@ -9,6 +9,9 @@ interface SwRegistration {
   update(): Promise<unknown>;
 }
 
+/** 「新しい版を確かめる」の結果。画面に結果を示し、押しても何も起きないように見せない */
+export type UpdateCheck = "idle" | "checking" | "fetching" | "latest" | "failed";
+
 export interface PwaHost {
   location: { protocol: string; hostname: string };
   document: Document;
@@ -25,9 +28,16 @@ export class PwaController {
   /** 新しい版の取得が済み、切り替えを待っている */
   updateReady = $state(false);
   active = $state(false);
+  /** 直近の「新しい版を確かめる」の状態 */
+  checkState = $state<UpdateCheck>("idle");
   #reg: SwRegistration | null = null;
 
   constructor(private readonly host: PwaHost) {}
+
+  /** file:// で開いている（配布物の HTML を差し替えて開き直すと新しい版になる） */
+  get fromFile(): boolean {
+    return this.host.location.protocol === "file:";
+  }
 
   /** https（または開発用の localhost）で、Service Worker を使えるときだけ有効にする */
   get eligible(): boolean {
@@ -75,8 +85,23 @@ export class PwaController {
 
   /** 新しい版を確かめる（明示操作） */
   async check(): Promise<void> {
-    await this.#reg?.update().catch(() => undefined);
+    if (this.checkState === "checking") return;
+    this.checkState = "checking";
+    const ok = await (this.#reg?.update() ?? Promise.reject(new Error("未登録"))).then(
+      () => true,
+      () => false,
+    );
     if (this.#reg?.waiting) this.updateReady = true;
+    const w = this.#reg?.installing;
+    if (!this.updateReady && w) {
+      // 取得中の新しい版は、インストールが済むと updatefound の側で updateReady になる
+      this.checkState = "fetching";
+      w.addEventListener("statechange", () => {
+        if (w.state === "redundant") this.checkState = "failed";
+      });
+      return;
+    }
+    this.checkState = this.updateReady ? "idle" : ok ? "latest" : "failed";
   }
 
   /** 新しい版へ切り替える。未保存の編集は呼び出し側で確認すること */

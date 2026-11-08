@@ -9,6 +9,7 @@
   import Settings from "@lucide/svelte/icons/settings";
   import X from "@lucide/svelte/icons/x";
   import { onMount, untrack } from "svelte";
+  import AppUpdate from "./components/AppUpdate.svelte";
   import ArticleList from "./components/ArticleList.svelte";
   import CommitDialog from "./components/CommitDialog.svelte";
   import GitPanel from "./components/GitPanel.svelte";
@@ -139,6 +140,11 @@
     pwa.apply();
   }
 
+  async function reloadApp() {
+    if (!(await ws.confirmLeave("ページを読み込み直す前に、未保存の編集をどうしますか。"))) return;
+    location.reload();
+  }
+
   /** ログインで解錠した作業場所を開く */
   async function openPlace(id: string) {
     const e = places?.entries.find((x) => x.state === "ok" && x.meta.id === id);
@@ -187,14 +193,7 @@
 />
 
 {#snippet appInfo()}
-  {#if pwa.updateReady}
-    <p class="update" role="status" data-testid="update-ready">
-      新しい版を取得しました。
-      <button type="button" onclick={updateApp}>新しい版に切り替える</button>
-    </p>
-  {:else if pwa.active}
-    <p class="small"><button type="button" class="link" onclick={() => pwa.check()}>新しい版を確かめる</button></p>
-  {/if}
+  <AppUpdate {pwa} onapply={updateApp} onreload={reloadApp} />
   <dl class="versions">
     <dt>アプリ版</dt>
     <dd data-testid="app-version">{appVersion}</dd>
@@ -442,12 +441,13 @@
       <!-- 画面：設定 -->
       <div class="section page" hidden={section !== "settings"} data-section="settings">
         <div class="page-inner">
-          {#if supported && drafts.mode !== "undecided"}<DraftSettings {ws} dc={drafts} variant="page" />{/if}
-          {#if places?.current}<PlaceBar {places} {ws} {git} meta={places.current} part="settings" />{/if}
-          <section class="card" aria-labelledby="about-heading">
-            <h2 id="about-heading">このアプリについて</h2>
+          <!-- 新しい版の確認は、いつでも見つけられるよう設定の先頭に置く -->
+          <section class="card" aria-labelledby="about-heading" data-testid="settings-app">
+            <h2 id="about-heading">アプリの更新と版</h2>
             {@render appInfo()}
           </section>
+          {#if supported && drafts.mode !== "undecided"}<DraftSettings {ws} dc={drafts} variant="page" />{/if}
+          {#if places?.current}<PlaceBar {places} {ws} {git} meta={places.current} part="settings" />{/if}
         </div>
       </div>
     {/if}
@@ -866,15 +866,6 @@
     padding-block: var(--space-24) var(--space-32);
     color: var(--color-muted);
     font-size: var(--font-size-14);
-  }
-  button.link {
-    background: none;
-    border: none;
-    padding: 0;
-    min-height: 0;
-    text-decoration: underline;
-    color: inherit;
-    font-size: inherit;
   }
   .versions {
     display: flex;
