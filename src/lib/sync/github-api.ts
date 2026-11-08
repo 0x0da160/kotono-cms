@@ -66,6 +66,27 @@ export function parseRepoInput(s: string): { owner: string; repo: string } | nul
   return m ? { owner: m[1] as string, repo: m[2] as string } : null;
 }
 
+/** トークンの作成ページで、既定にする有効期限（日） */
+export const PAT_EXPIRES_DAYS = 90;
+
+/**
+ * fine-grained personal access token の作成ページの URL。名前・説明・所有者・有効期限・Contents の読み書きを
+ * 入力した状態で開く（GitHub の作成ページの URL パラメーター）。リポジトリの選択は GitHub 側で利用者が行う。
+ * 利用者が押したときに開くだけで、CMS は github.com と通信しない。
+ */
+export function patCreationUrl(target: { owner: string; repo: string } | null): string {
+  const q = new URLSearchParams({
+    name: target ? `Kotono CMS ${target.repo}`.slice(0, 40) : "Kotono CMS",
+    description: target
+      ? `Kotono CMS から ${target.owner}/${target.repo} へ同期するためのトークン`
+      : "Kotono CMS から同期するためのトークン",
+    ...(target ? { target_name: target.owner } : {}),
+    expires_in: String(PAT_EXPIRES_DAYS),
+    contents: "write",
+  });
+  return `https://github.com/settings/personal-access-tokens/new?${q.toString()}`;
+}
+
 function b64(bytes: Uint8Array): string {
   let s = "";
   const CH = 0x8000;
@@ -132,7 +153,12 @@ export class GitHubApi {
     if (res.ok) return json;
     const msg =
       typeof (json as { message?: unknown })?.message === "string" ? (json as { message: string }).message : "";
-    if (res.status === 401) throw new GitHubError("トークンが無効か、期限が切れています。", 401, "auth");
+    if (res.status === 401)
+      throw new GitHubError(
+        "トークンが無効か、期限が切れています。「設定」の「トークンの作り方」で作り直して貼り付けてください。",
+        401,
+        "auth",
+      );
     if (res.status === 403 && this.remaining === 0)
       throw new GitHubError("GitHub の回数制限に達しました。しばらく待ってから再試行してください。", 403, "rate");
     if (res.status === 403)

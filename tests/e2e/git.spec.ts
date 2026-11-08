@@ -184,3 +184,37 @@ test("Git パネルの行からコミットすると、結果の通知が見え�
   await expect(page.getByTestId("git-notice")).toContainText("コミットしました");
   await expect(page.getByTestId("git-notice")).toBeInViewport();
 });
+
+test("同期の設定に、入力済みで開くトークンの作成ページへのリンクと手順を出す（40.2）", async ({ page }) => {
+  const requests: string[] = [];
+  page.on("request", (r) => requests.push(r.url()));
+  await page.addInitScript(installFakeFs, SEED);
+  await page.goto(url);
+  await page.getByTestId("choose-folder").click();
+  await page.getByTestId("nav-changes").click();
+  await page.getByTestId("git-init").click();
+  await page.getByRole("button", { name: "初期化する", exact: true }).click();
+  await expect(page.getByTestId("git-notice")).toContainText("初期化しました");
+
+  // トークン未入力のうちは手順を開いて見せる
+  const howto = page.getByTestId("sync-pat-howto");
+  await expect(howto).toHaveAttribute("open", "");
+  await expect(howto).toContainText("Only select repositories");
+  await expect(howto).toContainText("同期するリポジトリ");
+
+  // 入力したリポジトリに合わせて、リンクと手順が変わる
+  await page.getByTestId("sync-repo").fill("https://github.com/0x0da160/blog");
+  await expect(howto).toContainText("0x0da160/blog");
+  const link = page.getByTestId("sync-pat-link");
+  await expect(link).toHaveAttribute("target", "_blank");
+  await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  const href = new URL((await link.getAttribute("href")) ?? "");
+  expect(href.origin + href.pathname).toBe("https://github.com/settings/personal-access-tokens/new");
+  expect(href.searchParams.get("target_name")).toBe("0x0da160");
+  expect(href.searchParams.get("contents")).toBe("write");
+
+  // リンクを出すだけで、github.com とは通信しない
+  expect(requests.filter((u) => !u.startsWith("file:") && !u.startsWith("data:") && !u.startsWith("blob:"))).toEqual(
+    [],
+  );
+});
