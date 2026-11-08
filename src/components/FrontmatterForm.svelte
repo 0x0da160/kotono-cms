@@ -2,31 +2,37 @@
   import HelpTip from "./HelpTip.svelte";
   import type { EditorSession } from "../lib/app/session.svelte";
   import { formatForDisplay, formatLocalDateTime, publishTiming } from "../lib/core/datetime";
-  import type { StandardKey } from "../lib/core/schema";
+  import { isValidAuthorId, type Correction, type FieldKey } from "../lib/core/schema";
+  import type { AuthorsState } from "../lib/fs/repo";
   import type { FieldValue } from "../lib/core/yaml-doc";
 
-  let { session }: { session: EditorSession } = $props();
+  let { session, authors = null }: { session: EditorSession; authors?: AuthorsState | null } = $props();
+
+  /** 説明文の目安の文字数（超えても保存は止めない） */
+  const DESCRIPTION_GUIDE = 120;
 
   const values = $derived(session.analysis.schema?.values ?? {});
   const fieldErrors = $derived(
-    (session.analysis.problems ?? []).filter((p) => p.field !== undefined) as { field: StandardKey; message: string }[],
+    (session.analysis.problems ?? []).filter((p) => p.field !== undefined) as { field: FieldKey; message: string }[],
   );
-  let rejected = $state<Partial<Record<StandardKey, string>>>({});
+  let rejected = $state<Partial<Record<FieldKey, string>>>({});
   let tagDraft = $state("");
+  let aliasDraft = $state("");
+  let authorDraft = $state("");
   let composing = false;
 
   // 読み取り専用・削除手続き中の編集停止（11.3）ではフォーム全体を無効にする
   const readOnly = $derived(!session.editable);
   const timing = $derived(publishTiming(values.publishedAt ?? null, Date.now()));
 
-  function errorsFor(k: StandardKey): string[] {
+  function errorsFor(k: FieldKey): string[] {
     const out = fieldErrors.filter((e) => e.field === k).map((e) => e.message);
     const r = rejected[k];
     if (r) out.push(r);
     return out;
   }
 
-  function apply(k: StandardKey, v: FieldValue, input?: HTMLInputElement | HTMLSelectElement) {
+  function apply(k: FieldKey, v: FieldValue, input?: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) {
     const r = session.setField(k, v);
     if (!r.ok) {
       rejected = { ...rejected, [k]: r.message };
@@ -37,7 +43,7 @@
     }
   }
 
-  function currentValue(k: StandardKey): unknown {
+  function currentValue(k: FieldKey): unknown {
     return (values as Record<string, unknown>)[k];
   }
 
@@ -65,6 +71,47 @@
     }
   }
 
+  // 著者（content/authors/ の一覧から選ぶ。未登録の ID は警告だけ）
+  const knownAuthors = $derived(authors?.kind === "ok" ? authors.authors : []);
+  const authorName = (id: string) => knownAuthors.find((a) => a.id === id)?.name ?? null;
+  const unknownAuthors = $derived(
+    authors === null ? [] : (values.authors ?? []).filter((id) => !knownAuthors.some((a) => a.id === id)),
+  );
+
+  function addAuthor() {
+    // 表示名で入力した場合は ID に置き換える
+    const typed = authorDraft.trim();
+    if (typed === "") return;
+    const byName = knownAuthors.find((a) => a.name === typed);
+    apply("authors", [...(values.authors ?? []), byName ? byName.id : typed]);
+    authorDraft = "";
+  }
+
+  function addAlias() {
+    const a = aliasDraft.trim();
+    if (a === "") return;
+    apply("aliases", [...(values.aliases ?? []), a]);
+    aliasDraft = "";
+  }
+
+  function onEnter(e: KeyboardEvent, fn: () => void) {
+    if (e.key === "Enter" && !e.isComposing && !composing) {
+      e.preventDefault();
+      fn();
+    }
+  }
+
+  const corrections = $derived<Correction[]>(values.corrections ?? []);
+  function setCorrection(i: number, patch: Partial<Correction>, input?: HTMLInputElement | HTMLTextAreaElement) {
+    apply(
+      "corrections",
+      corrections.map((c, j) => (j === i ? { ...c, ...patch } : c)),
+      input,
+    );
+  }
+
+  const descriptionLength = $derived([...(values.description ?? "")].length);
+
   const tagDraftHasEdgeSpace = $derived(tagDraft !== "" && tagDraft.trim() !== tagDraft);
   const visibleSpaces = (s: string) => s.replace(/^\s+|\s+$/g, (m) => "␣".repeat(m.length));
 </script>
@@ -89,6 +136,28 @@
       {#each errorsFor("title") as m, i (i)}<p class="err" id="f-title-err">{m}</p>{/each}
     </div>
 
+    <div class="field wide">
+      <div class="lab">
+        <label for="f-description">説明文</label><HelpTip label="説明文"
+          >記事一覧のリード文・検索結果・SNS
+          のカードに使う要約です（description）。サイト側での使い方はサイトが決めます。</HelpTip
+        >
+      </div>
+      <textarea
+        id="f-description"
+        rows="2"
+        value={values.description ?? ""}
+        oninput={(e) => apply("description", e.currentTarget.value, e.currentTarget)}
+        aria-describedby="f-description-hint"></textarea>
+      <p class="hint" id="f-description-hint" data-testid="description-count">
+        {descriptionLength}文字（目安は{DESCRIPTION_GUIDE}文字前後）
+      </p>
+      {#if descriptionLength > DESCRIPTION_GUIDE}<p class="warn">
+          目安より長いため、検索結果などで途中までしか表示されないことがあります。
+        </p>{/if}
+      {#each errorsFor("description") as m, i (i)}<p class="err">{m}</p>{/each}
+    </div>
+
     <div class="field">
       <div class="lab">
         <label for="f-slug">slug</label><HelpTip label="slug" id="f-slug-hint"
@@ -105,6 +174,44 @@
         aria-describedby="f-slug-hint"
       />
       {#each errorsFor("slug") as m, i (i)}<p class="err">{m}</p>{/each}
+      {#if (values.aliases ?? []).length > 0 || errorsFor("aliases").length > 0}
+        <div class="lab">
+          <span id="f-aliases-label">旧 slug</span><HelpTip label="旧 slug"
+            >公開後に slug を変えたときの旧い slug です（aliases）。サイト側で旧 URL
+            からのリダイレクトを作るのに使います。</HelpTip
+          >
+        </div>
+        <ul class="chips" aria-labelledby="f-aliases-label" data-testid="aliases">
+          {#each values.aliases ?? [] as a, i (i)}
+            <li>
+              <span class="chip-text">{a}</span>
+              <button
+                type="button"
+                class="chip-x"
+                aria-label={`旧 slug「${a}」を外す`}
+                onclick={() =>
+                  apply(
+                    "aliases",
+                    (values.aliases ?? []).filter((_, j) => j !== i),
+                  )}>×</button
+              >
+            </li>
+          {/each}
+        </ul>
+        <div class="inline">
+          <input
+            type="text"
+            aria-labelledby="f-aliases-label"
+            placeholder="旧 slug を入力して Enter"
+            spellcheck="false"
+            autocomplete="off"
+            bind:value={aliasDraft}
+            onkeydown={(e) => onEnter(e, addAlias)}
+          />
+          <button type="button" onclick={addAlias} disabled={aliasDraft.trim() === ""}>追加</button>
+        </div>
+        {#each errorsFor("aliases") as m, i (i)}<p class="err">{m}</p>{/each}
+      {/if}
     </div>
 
     <div class="field">
@@ -143,6 +250,83 @@
         公開日時を設定しただけでは、サイトはビルドも配信もされません。配信の状態は本CMSでは確認しません。
       </p>
       {#each errorsFor("publishedAt") as m, i (i)}<p class="err">{m}</p>{/each}
+    </div>
+
+    <div class="field wide">
+      <div class="lab">
+        <label for="f-revised">読者向けの更新日時</label><HelpTip label="読者向けの更新日時"
+          >内容を更新したことを読者に示す日時です（revisedAt）。誤字の修正などでは変えません。保存のたびに変わる更新日時（updatedAt）とは別です。</HelpTip
+        >
+      </div>
+      <div class="inline">
+        <input
+          id="f-revised"
+          type="text"
+          value={values.revisedAt ?? ""}
+          placeholder="未設定（例：2026-11-03T22:08:00+09:00）"
+          spellcheck="false"
+          oninput={(e) =>
+            apply("revisedAt", e.currentTarget.value === "" ? null : e.currentTarget.value, e.currentTarget)}
+        />
+        <button type="button" onclick={() => apply("revisedAt", formatLocalDateTime(new Date()))}>現在時刻</button>
+        <button
+          type="button"
+          onclick={() => apply("revisedAt", null)}
+          disabled={values.revisedAt === null || values.revisedAt === undefined}>未設定にする</button
+        >
+      </div>
+      {#if values.revisedAt}<p class="hint">
+          更新日時（読者向け）：{formatForDisplay(values.revisedAt)}
+        </p>{/if}
+      {#each errorsFor("revisedAt") as m, i (i)}<p class="err">{m}</p>{/each}
+    </div>
+
+    <div class="field wide">
+      <div class="lab">
+        <span id="f-corrections-label">訂正・追記</span><HelpTip label="訂正・追記"
+          >記事の訂正や追記の記録です（corrections）。サイト側で記事の末尾などに表示できます。</HelpTip
+        >
+      </div>
+      {#if corrections.length > 0}
+        <ol class="corrections" aria-labelledby="f-corrections-label" data-testid="corrections">
+          {#each corrections as c, i (i)}
+            <li>
+              <label>
+                <span>日時</span>
+                <input
+                  type="text"
+                  value={c.at}
+                  spellcheck="false"
+                  oninput={(e) => setCorrection(i, { at: e.currentTarget.value }, e.currentTarget)}
+                />
+              </label>
+              <label>
+                <span>内容</span>
+                <textarea
+                  rows="2"
+                  value={c.note}
+                  oninput={(e) => setCorrection(i, { note: e.currentTarget.value }, e.currentTarget)}></textarea>
+              </label>
+              <button
+                type="button"
+                onclick={() =>
+                  apply(
+                    "corrections",
+                    corrections.filter((_, j) => j !== i),
+                  )}>この記録を消す</button
+              >
+            </li>
+          {/each}
+        </ol>
+      {/if}
+      <div class="inline">
+        <button
+          type="button"
+          onclick={() => apply("corrections", [...corrections, { at: formatLocalDateTime(new Date()), note: "" }])}
+          >訂正・追記を記録</button
+        >
+      </div>
+      {#each errorsFor("corrections") as m, i (i)}<p class="err">{m}</p>{/each}
     </div>
 
     <div class="field wide">
@@ -189,6 +373,62 @@
     </div>
 
     <div class="field wide">
+      <div class="lab">
+        <span id="f-authors-label">著者</span><HelpTip label="著者"
+          >著者 ID で記録します（authors）。先頭が主な著者です。著者の一覧は content/authors/&lt;著者ID&gt;/index.md の
+          name から読みます。</HelpTip
+        >
+      </div>
+      {#if (values.authors ?? []).length > 0}
+        <ul class="chips" aria-labelledby="f-authors-label" data-testid="authors">
+          {#each values.authors ?? [] as a, i (i)}
+            <li>
+              <span class="chip-text">{authorName(a) ? `${authorName(a)}（${a}）` : a}</span>
+              <button
+                type="button"
+                class="chip-x"
+                aria-label={`著者「${authorName(a) ?? a}」を外す`}
+                onclick={() =>
+                  apply(
+                    "authors",
+                    (values.authors ?? []).filter((_, j) => j !== i),
+                  )}>×</button
+              >
+            </li>
+          {/each}
+        </ul>
+      {/if}
+      <div class="inline">
+        <input
+          type="text"
+          aria-labelledby="f-authors-label"
+          placeholder={knownAuthors.length > 0 ? "著者を選ぶか、著者 ID を入力して Enter" : "著者 ID を入力して Enter"}
+          list="f-authors-list"
+          spellcheck="false"
+          autocomplete="off"
+          bind:value={authorDraft}
+          onkeydown={(e) => onEnter(e, addAuthor)}
+          oncompositionstart={() => (composing = true)}
+          oncompositionend={() => (composing = false)}
+        />
+        <button type="button" onclick={addAuthor} disabled={authorDraft.trim() === ""}>追加</button>
+        <datalist id="f-authors-list">
+          {#each knownAuthors as a (a.id)}<option value={a.id}>{a.name ?? a.id}</option>{/each}
+        </datalist>
+      </div>
+      {#if authorDraft.trim() !== "" && !isValidAuthorId(authorDraft.trim()) && !knownAuthors.some((a) => a.name === authorDraft.trim())}<p
+          class="warn"
+        >
+          著者 ID は半角英小文字・数字とハイフンで入力してください。
+        </p>{/if}
+      {#if unknownAuthors.length > 0}<p class="warn" data-testid="unknown-authors">
+          content/authors/ にない著者 ID です：{unknownAuthors.join("、")}（保存はできます）
+        </p>{/if}
+      {#if authors?.kind === "ok" && authors.message}<p class="hint">{authors.message}</p>{/if}
+      {#each errorsFor("authors") as m, i (i)}<p class="err">{m}</p>{/each}
+    </div>
+
+    <div class="field wide">
       <span class="label">カバー画像</span>
       {#if values.cover === null || values.cover === undefined}
         <button
@@ -215,6 +455,32 @@
               value={values.cover.alt}
               oninput={(e) =>
                 apply("cover", { src: values.cover?.src ?? "", alt: e.currentTarget.value }, e.currentTarget)}
+            />
+          </label>
+          <label>
+            <span>キャプション（任意）</span>
+            <input
+              type="text"
+              value={values.cover.caption ?? ""}
+              oninput={(e) =>
+                apply(
+                  "cover",
+                  { src: values.cover?.src ?? "", alt: values.cover?.alt ?? "", caption: e.currentTarget.value },
+                  e.currentTarget,
+                )}
+            />
+          </label>
+          <label>
+            <span>クレジット（任意。撮影者・提供元など）</span>
+            <input
+              type="text"
+              value={values.cover.credit ?? ""}
+              oninput={(e) =>
+                apply(
+                  "cover",
+                  { src: values.cover?.src ?? "", alt: values.cover?.alt ?? "", credit: e.currentTarget.value },
+                  e.currentTarget,
+                )}
             />
           </label>
           <button type="button" onclick={() => apply("cover", null)}>カバー画像を外す</button>
@@ -288,6 +554,25 @@
     display: grid;
     gap: var(--space-8);
   }
+  textarea {
+    font: inherit;
+    resize: vertical;
+    min-width: 0;
+  }
+  .corrections {
+    margin: 0;
+    padding-inline-start: var(--space-20);
+    display: grid;
+    gap: var(--space-8);
+  }
+  .corrections li {
+    display: grid;
+    gap: var(--space-4);
+  }
+  .corrections button {
+    justify-self: start;
+  }
+  .corrections label,
   .cover label {
     display: flex;
     flex-direction: column;

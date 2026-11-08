@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-11-08
+* **Addition**: [ADR-0009 記事の任意の標準項目](/decisions/0009-optional-article-fields.md) を追加。[他の CMS との比較](/research/cms-comparison.md) の P1 の 5 件を実装済みと更新。
 * **Addition**: [他の CMS との比較](/research/cms-comparison.md) を追加（調査・未決定）。
 * **Update**: [ADR-0006](/decisions/0006-ios-safari-git-plan.md) を更新。作業場所の表示名を暗号化せず平文で保存するよう変更。
 * **Update**: [Kotono CMS のアプリの外枠（シェル）](/product/app-shell.md) に、起動時のパスキーでのログインの画面を追加（仕様 3.2 第39.3節にも追記）。

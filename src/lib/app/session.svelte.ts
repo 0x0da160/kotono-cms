@@ -21,7 +21,7 @@ import {
 import { bytesEqual, encodeUtf8, sha256Hex } from "../core/bytes";
 import { nowDateTime } from "../core/datetime";
 import { DocHistory } from "../core/history";
-import type { StandardKey } from "../core/schema";
+import type { FieldKey } from "../core/schema";
 import type { FieldValue } from "../core/yaml-doc";
 import type { DiskState } from "../fs/save";
 
@@ -149,7 +149,7 @@ export class EditorSession {
     if (r.ok) this.setText(r.text, "body");
   }
 
-  setField(key: StandardKey, value: FieldValue): TextEdit {
+  setField(key: FieldKey, value: FieldValue): TextEdit {
     if (!this.editable) return { ok: false, message: this.locked ?? this.readOnlyReason ?? "編集できません。" };
     const r = editField(this.text, key, value);
     if (r.ok) this.setText(r.text, `field:${key}`);
@@ -227,10 +227,17 @@ export class EditorSession {
   // 保存の準備（13.2 手順1・2）
 
   /** 保存前の検証。問題があれば理由を返す。 */
-  precheck(
-    snapshot: string,
-  ):
-    | { ok: true; bump: boolean; slugChanged: boolean; becamePublished: boolean; slugChangedAfterPublish: boolean }
+  precheck(snapshot: string):
+    | {
+        ok: true;
+        bump: boolean;
+        slugChanged: boolean;
+        becamePublished: boolean;
+        slugChangedAfterPublish: boolean;
+        /** 保存済みの版の slug（新規記事は null） */
+        previousSlug: string | null;
+        aliasesChanged: boolean;
+      }
     | { ok: false; notice: Notice } {
     const a = analyzeText(snapshot, this.id);
     if (a.problems.length > 0) {
@@ -250,6 +257,8 @@ export class EditorSession {
         slugChanged: true,
         becamePublished: cur.status === "published",
         slugChangedAfterPublish: false,
+        previousSlug: null,
+        aliasesChanged: (cur.aliases ?? []).length > 0,
       };
     }
     const baseA = analyzeText(this.base.text, this.id);
@@ -277,6 +286,8 @@ export class EditorSession {
       slugChanged: prev.slug !== cur.slug,
       becamePublished: cur.status === "published" && prev.status !== "published",
       slugChangedAfterPublish: prev.status === "published" && prev.slug !== cur.slug,
+      previousSlug: prev.slug ?? null,
+      aliasesChanged: (prev.aliases ?? []).join("\u0000") !== (cur.aliases ?? []).join("\u0000"),
     };
   }
 

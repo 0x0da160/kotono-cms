@@ -581,7 +581,7 @@
                 data-body-focus></textarea>
             {/if}
           </div>
-          <FrontmatterForm {session} />
+          <FrontmatterForm {session} authors={ws.authors} />
         </div>
       {:else}
         <label class="src">

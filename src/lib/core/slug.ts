@@ -25,7 +25,8 @@ export function slugProblemMessage(p: SlugProblem): string {
 }
 
 /** 一意性判定に使う、記事ごとの slug の取得結果 */
-export type SlugEntry = { id: string; slug: string } | { id: string; slug: null; uncheckable: true };
+export type SlugEntry =
+  { id: string; slug: string; aliases?: readonly string[] } | { id: string; slug: null; uncheckable: true };
 
 export type SlugUniqueness =
   { kind: "unique" } | { kind: "duplicate"; ids: string[] } | { kind: "uncheckable"; ids: string[] };
@@ -41,9 +42,44 @@ export function checkSlugUniqueness(slug: string, selfId: string, entries: reado
   for (const e of entries) {
     if (e.id === selfId) continue;
     if (e.slug === null) unknown.push(e.id);
-    else if (e.slug === slug) dup.push(e.id);
+    else if (e.slug === slug || (e.aliases ?? []).includes(slug)) dup.push(e.id);
   }
   if (dup.length > 0) return { kind: "duplicate", ids: dup };
+  if (unknown.length > 0) return { kind: "uncheckable", ids: unknown };
+  return { kind: "unique" };
+}
+
+export type AliasUniqueness =
+  { kind: "unique" } | { kind: "duplicate"; ids: string[]; aliases: string[] } | { kind: "uncheckable"; ids: string[] };
+
+/**
+ * 旧 slug（aliases）が他の記事の slug・旧 slug と重ならないか。
+ * 旧 slug はフロントがリダイレクトに使うので、他の記事の URL と衝突させない。
+ */
+export function checkAliasUniqueness(
+  aliases: readonly string[],
+  selfId: string,
+  entries: readonly SlugEntry[],
+): AliasUniqueness {
+  const list = aliases.filter((a) => a !== "");
+  if (list.length === 0) return { kind: "unique" };
+  const ids = new Set<string>();
+  const hit = new Set<string>();
+  const unknown: string[] = [];
+  for (const e of entries) {
+    if (e.id === selfId) continue;
+    if (e.slug === null) {
+      unknown.push(e.id);
+      continue;
+    }
+    for (const a of list) {
+      if (e.slug === a || (e.aliases ?? []).includes(a)) {
+        ids.add(e.id);
+        hit.add(a);
+      }
+    }
+  }
+  if (ids.size > 0) return { kind: "duplicate", ids: [...ids], aliases: list.filter((a) => hit.has(a)) };
   if (unknown.length > 0) return { kind: "uncheckable", ids: unknown };
   return { kind: "unique" };
 }

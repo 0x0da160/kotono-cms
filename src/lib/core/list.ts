@@ -24,7 +24,7 @@ export interface ListQuery {
 
 export const DEFAULT_QUERY: ListQuery = { keyword: "", status: "all", tags: [], sort: "updatedAt", dir: "desc" };
 
-/** キーワードはタイトル・slug・ID・タグへの部分一致。英字大小を区別しない。 */
+/** キーワードはタイトル・slug・ID・タグ・説明文・著者 ID への部分一致。英字大小を区別しない。 */
 export function matches(item: ListItem, q: ListQuery): boolean {
   const v = item.values;
   if (q.status !== "all" && v.status !== q.status) return false;
@@ -34,7 +34,7 @@ export function matches(item: ListItem, q: ListQuery): boolean {
   }
   const kw = q.keyword.trim().toLowerCase();
   if (kw === "") return true;
-  const hay = [v.title ?? "", v.slug ?? "", item.id, ...(v.tags ?? [])];
+  const hay = [v.title ?? "", v.slug ?? "", item.id, ...(v.tags ?? []), v.description ?? "", ...(v.authors ?? [])];
   return hay.some((h) => h.toLowerCase().includes(kw));
 }
 

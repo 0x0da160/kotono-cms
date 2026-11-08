@@ -329,7 +329,22 @@ export function collectComments(doc: Document): string[] {
 // ---------------------------------------------------------------------------
 // 値の直列化（変更したノードだけ）
 
-export type FieldValue = string | null | readonly string[] | { readonly src: string; readonly alt: string };
+export interface CoverValue {
+  readonly src: string;
+  readonly alt: string;
+  /** 省略時は既存の値を変えない。空文字で、項目がなければ追加しない */
+  readonly caption?: string;
+  readonly credit?: string;
+}
+export interface CorrectionValue {
+  readonly at: string;
+  readonly note: string;
+}
+export type FieldValue = string | null | readonly string[] | readonly CorrectionValue[] | CoverValue;
+
+function isCorrectionList(v: readonly unknown[]): v is readonly CorrectionValue[] {
+  return v.length > 0 && typeof v[0] === "object" && v[0] !== null;
+}
 
 function doubleQuoted(s: string): string {
   // JSON の文字列エスケープは YAML の二重引用符スカラーで有効
@@ -401,29 +416,68 @@ export function setTopLevelValue(parsed: ParsedFrontmatter, key: string, value: 
     const [start, end] = node.range ?? [0, 0];
     next = replaceRange(source, start, end, serializeScalar(value, node));
   } else if (Array.isArray(value)) {
-    next = replaceSeq(source, node, value as readonly string[]);
+    const items = value as readonly unknown[];
+    if (isCorrectionList(items)) {
+      const r = replaceMapSeq(source, node, items);
+      if (r === null) return { ok: false, message: REJECT_STRUCTURE };
+      next = r;
+    } else next = replaceSeq(source, node, items as readonly string[]);
   } else {
-    const cover = value as { src: string; alt: string };
+    const cover = value as CoverValue;
     if (isMap(node)) {
-      // 既存のマッピングでは src・alt のスカラーだけを置き換え、未知の子項目を保持する
+      // 既存のマッピングでは src・alt 等のスカラーだけを置き換え、未知の子項目を保持する
       let cur: ParsedFrontmatter = parsed;
-      for (const sub of ["src", "alt"] as const) {
+      for (const sub of ["src", "alt", "caption", "credit"] as const) {
+        const want = cover[sub];
+        if (want === undefined) continue;
         const map = getValueNode(cur.root, key);
         if (!isMap(map)) return { ok: false, message: REJECT_STRUCTURE };
         const subNode = getValueNode(map, sub);
-        if (subNode === undefined || subNode === null)
-          return { ok: false, message: `${key}.${sub} がありません。原文モードで追加してください。` };
-        if (isScalar(subNode) && subNode.value === cover[sub]) continue;
+        if (subNode === undefined) {
+          if (sub === "src" || sub === "alt")
+            return { ok: false, message: `${key}.${sub} がありません。原文モードで追加してください。` };
+          if (want === "") continue;
+          const added = addMapChild(cur.source, map, sub, want);
+          if (added === null) return { ok: false, message: `${key}.${sub} は原文モードで追加してください。` };
+          const reparsed = parseFrontmatter(added);
+          if (!reparsed.ok) return { ok: false, message: REJECT_STRUCTURE };
+          cur = reparsed;
+          continue;
+        }
+        if (subNode === null) return { ok: false, message: REJECT_STRUCTURE };
+        if (isScalar(subNode) && subNode.value === want) continue;
         const [s, e] = subNode.range ?? [0, 0];
-        const reparsed = parseFrontmatter(replaceRange(cur.source, s, e, serializeScalar(cover[sub], subNode)));
+        const reparsed = parseFrontmatter(replaceRange(cur.source, s, e, serializeScalar(want, subNode)));
         if (!reparsed.ok) return { ok: false, message: REJECT_STRUCTURE };
         cur = reparsed;
+      }
+      // 書き換えなかった子項目（未知の項目を含む）が変わっていないこと
+      const before = getValueNode(root, key);
+      const after = getValueNode(cur.root, key);
+      if (!isMap(before) || !isMap(after)) return { ok: false, message: REJECT_STRUCTURE };
+      try {
+        for (const k of topLevelKeys(before)) {
+          if (cover[k as keyof CoverValue] !== undefined) continue;
+          if (!nodesEqual(getValueNode(before, k), getValueNode(after, k)))
+            return { ok: false, message: REJECT_STRUCTURE };
+        }
+      } catch {
+        return { ok: false, message: REJECT_STRUCTURE };
       }
       next = cur.source;
     } else {
       if (node === null) return { ok: false, message: REJECT_STRUCTURE };
       const [start, end] = node.range ?? [0, 0];
-      next = replaceRange(source, start, end, `{ src: ${doubleQuoted(cover.src)}, alt: ${doubleQuoted(cover.alt)} }`);
+      const extra = (["caption", "credit"] as const)
+        .filter((k) => (cover[k] ?? "") !== "")
+        .map((k) => `, ${k}: ${doubleQuoted(cover[k] ?? "")}`)
+        .join("");
+      next = replaceRange(
+        source,
+        start,
+        end,
+        `{ src: ${doubleQuoted(cover.src)}, alt: ${doubleQuoted(cover.alt)}${extra} }`,
+      );
     }
   }
 
@@ -471,19 +525,88 @@ function replaceSeq(source: string, node: YamlNode | null, items: readonly strin
   return replaceRange(source, start, end, flowSeq(items));
 }
 
+/**
+ * 訂正・追記のようなマッピングの配列を書き直す。ブロック形式は元のインデントを保つ。
+ * 空のフロー形式（`[]`）からは、キーの次の行にブロック形式で書く。
+ */
+function replaceMapSeq(source: string, node: YamlNode | null, items: readonly CorrectionValue[]): string | null {
+  if (node === null) return null;
+  const [start, end] = node.range ?? [0, 0];
+  const colon = source.lastIndexOf(":", start - 1);
+  const afterKey = colon >= 0 && /^\s*$/.test(source.slice(colon + 1, start));
+  if (items.length === 0) {
+    // ブロック形式から空にするときは `key: []` に戻す
+    if (afterKey && isSeq(node) && !node.flow) return replaceRange(source, colon + 1, end, " []");
+    return replaceRange(source, start, end, "[]");
+  }
+  if (isSeq(node) && !node.flow) {
+    const lineStart = source.lastIndexOf("\n", start - 1) + 1;
+    const indent = source.slice(lineStart, start);
+    if (!/^[ ]*$/.test(indent)) return null;
+    return replaceRange(source, start, end, blockMapSeq(items, indent).slice(indent.length));
+  }
+  // フロー形式・スカラーからは、キーの直後をブロック形式に置き換える
+  if (!afterKey) return null;
+  const lineStart = source.lastIndexOf("\n", colon - 1) + 1;
+  const keyIndent = source.slice(lineStart, colon).match(/^[ ]*/)?.[0] ?? "";
+  const rep = `\n${blockMapSeq(items, `${keyIndent}  `)}`;
+  return replaceRange(source, colon + 1, end, rep);
+}
+
+/** `- at: …` の形のブロック配列。各行の先頭に indent を付け、末尾に改行を付けない */
+export function blockMapSeq(items: readonly CorrectionValue[], indent: string): string {
+  return items.map((c) => `${indent}- at: ${doubleQuoted(c.at)}\n${indent}  note: ${doubleQuoted(c.note)}`).join("\n");
+}
+
+/** マッピングの末尾に子項目を 1 つ足す。足せない形のときは null */
+function addMapChild(source: string, map: YAMLMap, key: string, value: string): string | null {
+  const [start, end] = map.range ?? [0, 0];
+  const line = `${key}: ${doubleQuoted(value)}`;
+  if (map.flow) {
+    const close = source.lastIndexOf("}", end);
+    if (close < start) return null;
+    const sep = map.items.length > 0 ? ", " : "";
+    // 閉じ括弧の前の空白は残す
+    let p = close;
+    while (p > start && source[p - 1] === " ") p--;
+    return `${source.slice(0, p)}${sep}${line}${source.slice(p)}`;
+  }
+  const first = map.items[0]?.key as YamlNode | undefined;
+  const firstStart = first?.range?.[0];
+  if (firstStart === undefined) return null;
+  const lineStart = source.lastIndexOf("\n", firstStart - 1) + 1;
+  const indent = source.slice(lineStart, firstStart);
+  if (!/^[ ]+$/.test(indent)) return null;
+  let p = end;
+  while (p > start && source[p - 1] === "\n") p--;
+  return `${source.slice(0, p)}\n${indent}${line}${source.slice(p)}`;
+}
+
 function valueMatches(node: YamlNode | null | undefined, value: FieldValue): boolean {
   if (value === null) return node === null || (isScalar(node) && node.value === null);
   if (typeof value === "string") return isScalar(node) && node.value === value;
   if (Array.isArray(value)) {
-    return (
-      isSeq(node) &&
-      node.items.length === value.length &&
-      node.items.every((it, i) => isScalar(it) && it.value === value[i])
-    );
+    const items = value as readonly unknown[];
+    if (!isSeq(node) || node.items.length !== items.length) return false;
+    if (isCorrectionList(items)) {
+      return node.items.every((it, i) => {
+        if (!isMap(it)) return false;
+        const at = getValueNode(it, "at");
+        const note = getValueNode(it, "note");
+        const want = items[i] as CorrectionValue;
+        return isScalar(at) && at.value === want.at && isScalar(note) && note.value === want.note;
+      });
+    }
+    return node.items.every((it, i) => isScalar(it) && it.value === items[i]);
   }
-  const cover = value as { src: string; alt: string };
+  const cover = value as CoverValue;
   if (!isMap(node)) return false;
-  const src = getValueNode(node, "src");
-  const alt = getValueNode(node, "alt");
-  return isScalar(src) && src.value === cover.src && isScalar(alt) && alt.value === cover.alt;
+  for (const sub of ["src", "alt", "caption", "credit"] as const) {
+    const want = cover[sub];
+    if (want === undefined) continue;
+    const n = getValueNode(node, sub);
+    if (n === undefined && want === "" && (sub === "caption" || sub === "credit")) continue;
+    if (!isScalar(n) || n.value !== want) return false;
+  }
+  return true;
 }

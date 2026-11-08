@@ -207,3 +207,54 @@ test("content/articles/ がなければ確認後に作成する（3.1）", async
   await page.getByTestId("prepare-articles").click();
   await expect(page.getByTestId("list-summary")).toHaveText("記事がありません");
 });
+
+test("説明文・著者・読者向けの更新日時・訂正・カバーのキャプションをフォームで入れ、公開後の slug 変更で旧 slug を残す", async ({
+  page,
+}) => {
+  const published = article(B, "公開した記事", "second")
+    .replace('status: "draft"', 'status: "published"')
+    .replace("publishedAt: null", 'publishedAt: "2026-11-03T22:08:00+09:00"')
+    .replace("cover: null", 'cover:\r\n  src: "./media/a.jpg"\r\n  alt: ""');
+  // 壊れた記事があると重複検査不能で止まる（7.1）ので、正常な記事だけにする
+  const { errors } = await launch(page, {
+    [`content/articles/${A}/index.md`]: article(A, "最初の記事", "first"),
+    [`content/articles/${B}/index.md`]: published,
+    "content/authors/yamada-taro/index.md": '---\nname: "山田 太郎"\n---\n',
+  });
+  await page.getByTestId("article-row").filter({ hasText: "公開した記事" }).click();
+  await expect(page.getByTestId("save-status")).toHaveText("保存済み");
+
+  await page.getByLabel("説明文", { exact: true }).fill("地方選挙の開票速報です。");
+  await expect(page.getByTestId("description-count")).toContainText("12文字");
+  const authorInput = page.getByPlaceholder("著者を選ぶか、著者 ID を入力して Enter");
+  await authorInput.fill("山田 太郎");
+  await authorInput.press("Enter");
+  await expect(page.getByTestId("authors")).toContainText("山田 太郎（yamada-taro）");
+  await authorInput.fill("guest");
+  await authorInput.press("Enter");
+  await expect(page.getByTestId("unknown-authors")).toContainText("guest");
+  await page.getByLabel("読者向けの更新日時", { exact: true }).fill("2026-11-08T10:00:00+09:00");
+  await page.getByRole("button", { name: "訂正・追記を記録" }).click();
+  await page.getByTestId("corrections").getByLabel("内容").fill("得票数を訂正しました。");
+  await page.getByLabel("キャプション（任意）").fill("開票所の様子");
+  await page.getByLabel("クレジット（任意。撮影者・提供元など）").fill("撮影：編集部");
+  await page.getByLabel("slug", { exact: true }).fill("second-updated");
+
+  await page.getByTestId("save-button").click();
+  await expect(page.getByRole("dialog")).toContainText("旧 slug「second」");
+  await page.getByRole("button", { name: "旧 slug を残して保存" }).click();
+  await expect(page.getByTestId("save-status")).toHaveText("保存済み");
+  await expect(page.getByTestId("aliases")).toContainText("second");
+
+  const saved = (await fsRead(page, `content/articles/${B}/index.md`)) ?? "";
+  expect(saved).toContain('slug: "second-updated"');
+  expect(saved).toContain(
+    'cover:\n  src: "./media/a.jpg"\n  alt: ""\n  caption: "開票所の様子"\n  credit: "撮影：編集部"\n',
+  );
+  expect(saved).toContain('description: "地方選挙の開票速報です。"\n');
+  expect(saved).toContain('authors:\n  - "yamada-taro"\n  - "guest"\n');
+  expect(saved).toContain('revisedAt: "2026-11-08T10:00:00+09:00"\n');
+  expect(saved).toMatch(/corrections:\n {2}- at: "[^"]+"\n {4}note: "得票数を訂正しました。"\n/);
+  expect(saved).toContain('aliases:\n  - "second"\n');
+  expect(errors).toEqual([]);
+});
