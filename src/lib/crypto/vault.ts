@@ -55,6 +55,8 @@ export interface NewKeyring {
   readonly recoveryCode: string;
 }
 
+type PasskeySlot = Extract<KeySlot, { kind: "passkey" }>;
+
 export interface UnlockResult {
   /**
    * 以前の版で暗号化して保存していた表示名を復号したもの。
@@ -169,25 +171,10 @@ export class Vault {
   async unlockSlots(slots: readonly KeySlot[], method: UnlockMethod): Promise<Unlocked | null> {
     let dk: Uint8Array | null = null;
     if (method.kind === "passkey") {
-      if (!this.passkey) throw new Error("この環境ではパスキーを使えません。");
-      const pk = slots.filter((s): s is Extract<KeySlot, { kind: "passkey" }> => s.kind === "passkey");
+      const pk = slots.filter((s): s is PasskeySlot => s.kind === "passkey");
       if (pk.length === 0) throw new Error("この作業場所にはパスキーが登録されていません。");
-      // 配信元（RP ID）が違うパスキーはこの配信元では使えない（39.2）。記録のない古い枠は試す
-      const here = this.passkey.rpId;
-      const usable = pk.filter((s) => s.rpId === undefined || here === undefined || s.rpId === here);
-      if (usable.length === 0)
-        throw new Error(
-          `この作業場所のパスキーは「${pk[0]?.rpId ?? ""}」で登録したもので、ここ（${here ?? ""}）では使えません。回復コードで開き、パスキーを登録し直してください。`,
-        );
-      const got = await this.passkey.authenticate(
-        usable.map((s) => ({
-          credentialId: fromB64u(s.credentialId) ?? new Uint8Array(),
-          prfSalt: fromB64u(s.prfSalt) ?? new Uint8Array(),
-        })),
-      );
-      const slot = usable.find((s) => s.credentialId === b64u(got.credentialId));
-      const wrapped = slot ? fromB64u(slot.wrapped) : null;
-      if (wrapped) dk = await unwrapDk(await keyFromPrf(got.prf), wrapped);
+      const found = await this.authenticatePasskey(pk.map((slot) => ({ id: "", slot })));
+      dk = found?.dk ?? null;
     } else {
       const secret = method.kind === "recovery" ? normalizeRecoveryCode(method.code) : method.passphrase;
       if (secret === null || secret === "") return null;
@@ -201,6 +188,70 @@ export class Vault {
       }
     }
     return dk ? { dk, keys: await deriveDataKeys(dk) } : null;
+  }
+
+  /** この配信元で使えるパスキーの枠か（記録のない古い枠は試す：39.2） */
+  usablePasskey(slot: KeySlot): slot is PasskeySlot {
+    const here = this.passkey?.rpId;
+    return slot.kind === "passkey" && (slot.rpId === undefined || here === undefined || slot.rpId === here);
+  }
+
+  /**
+   * 候補の枠をまとめて 1 回のパスキー認証にかけ、選ばれたパスキーの枠で DK を開く。
+   * 選ばれたパスキーがどの候補にもない・DK を開けないときは null。
+   */
+  private async authenticatePasskey(
+    candidates: readonly { id: string; slot: PasskeySlot }[],
+  ): Promise<{ id: string; dk: Uint8Array } | null> {
+    if (!this.passkey) throw new Error("この環境ではパスキーを使えません。");
+    const usable = candidates.filter((c) => this.usablePasskey(c.slot));
+    if (usable.length === 0) {
+      const rp = candidates[0]?.slot.rpId ?? "";
+      throw new Error(
+        `この作業場所のパスキーは「${rp}」で登録したもので、ここ（${this.passkey.rpId ?? ""}）では使えません。回復コードで開き、パスキーを登録し直してください。`,
+      );
+    }
+    const got = await this.passkey.authenticate(
+      usable.map((c) => ({
+        credentialId: fromB64u(c.slot.credentialId) ?? new Uint8Array(),
+        prfSalt: fromB64u(c.slot.prfSalt) ?? new Uint8Array(),
+      })),
+    );
+    const cid = b64u(got.credentialId);
+    const w = await keyFromPrf(got.prf);
+    for (const c of usable) {
+      if (c.slot.credentialId !== cid) continue;
+      const wrapped = fromB64u(c.slot.wrapped);
+      const dk = wrapped ? await unwrapDk(w, wrapped) : null;
+      if (dk) return { id: c.id, dk };
+    }
+    return null;
+  }
+
+  /**
+   * 起動時のログイン（39.3）：パスキーが登録された作業場所すべてを候補に 1 回だけ認証し、
+   * 選ばれたパスキーの作業場所を解錠する。解錠した作業場所の ID（と以前の版の暗号化した表示名）を返す。開けなければ null。
+   */
+  async loginWithPasskey(
+    places: readonly { id: string; record: KeyringRecord }[],
+  ): Promise<({ id: string } & UnlockResult) | null> {
+    const candidates = places.flatMap((p) =>
+      p.record.slots.filter((s): s is PasskeySlot => s.kind === "passkey").map((slot) => ({ id: p.id, slot })),
+    );
+    if (candidates.length === 0) throw new Error("パスキーを登録した作業場所がありません。");
+    const found = await this.authenticatePasskey(candidates);
+    if (!found) return null;
+    const record = places.find((p) => p.id === found.id)?.record;
+    if (!record) return null;
+    const k = { dk: found.dk, keys: await deriveDataKeys(found.dk) };
+    let legacyName: string | null = null;
+    if (record.name) {
+      // 以前の版の記録：暗号化した表示名を復号して返す（読めなければ鍵が違うものとして扱う）
+      legacyName = await this.decryptLegacyName(k, record.name);
+      if (legacyName === null) return null;
+    }
+    this.open.set(found.id, k);
+    return { id: found.id, legacyName };
   }
 
   /** 解錠する。開けなければ null */

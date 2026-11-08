@@ -18,6 +18,7 @@
   import DraftSettings from "./components/DraftSettings.svelte";
   import Editor from "./components/Editor.svelte";
   import RecoveryPanel from "./components/RecoveryPanel.svelte";
+  import LoginGate from "./components/LoginGate.svelte";
   import PlacesPanel from "./components/PlacesPanel.svelte";
   import PlaceBar from "./components/PlaceBar.svelte";
   import SyncPanel from "./components/SyncPanel.svelte";
@@ -136,6 +137,12 @@
   async function updateApp() {
     if (!(await ws.confirmLeave("新しい版に切り替える前に、未保存の編集をどうしますか。"))) return;
     pwa.apply();
+  }
+
+  /** ログインで解錠した作業場所を開く */
+  async function openPlace(id: string) {
+    const e = places?.entries.find((x) => x.state === "ok" && x.meta.id === id);
+    if (places && e?.state === "ok") await places.open(e.meta);
   }
 
   function onActivity() {
@@ -275,8 +282,13 @@
 
 <main id="main" tabindex="-1" class:wide={ws.root !== null} class:workbench>
   {#if supported && drafts.mode === "undecided" && !workbench}<DraftSettings {ws} dc={drafts} />{/if}
-  {#if places && ws.root === null}
-    <PlacesPanel {places} {ws} />
+  {#if places && ws.root === null && (places.ready || places.error)}
+    {#if places.loginRequired}
+      <!-- 起動時のログイン（39.3）：暗号化した作業場所があれば、一覧より先にパスキーでの解錠を求める -->
+      <LoginGate {places} onopen={openPlace} />
+    {:else}
+      <PlacesPanel {places} {ws} />
+    {/if}
   {/if}
   {#if !supported || ws.root === null}
     {#if !places}<section aria-labelledby="start-heading" class="card">

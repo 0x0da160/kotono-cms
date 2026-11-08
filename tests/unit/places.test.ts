@@ -10,6 +10,7 @@ import { PlacesController, type Deliver } from "../../src/lib/app/places.svelte"
 import { Workspace } from "../../src/lib/app/workspace.svelte";
 import { encodeUtf8, sha256Hex } from "../../src/lib/core/bytes";
 import { aesEncrypt, b64u } from "../../src/lib/crypto/keys";
+import type { PasskeyApi } from "../../src/lib/crypto/passkey";
 import { Vault } from "../../src/lib/crypto/vault";
 import { SealedDraftStore } from "../../src/lib/drafts/sealed";
 import { DRAFT_FORMAT_VERSION, IdbDraftStore, type DraftRecord } from "../../src/lib/drafts/store";
@@ -42,7 +43,37 @@ async function rec(ws: string, text: string, over: Partial<DraftRecord> = {}): P
   };
 }
 
-function setup(opts: { now?: () => Date } = {}) {
+/**
+ * パスキーの代わり。登録したパスキーごとに秘密を持ち、PRF の出力は秘密と塩から決まる。
+ * `pick` で、認証のときに利用者が選ぶパスキー（登録順の番号）を決める。null なら取り消し（NotAllowedError 相当）。
+ */
+function fakePasskey(rpId = "kotono.example") {
+  const secrets: Uint8Array[] = [];
+  const state = { pick: 0 as number | null, asked: 0, lastAllowed: 0 };
+  const prf = async (secret: Uint8Array, salt: Uint8Array) =>
+    new Uint8Array(await crypto.subtle.digest("SHA-256", new Uint8Array([...secret, ...salt])));
+  const api: PasskeyApi = {
+    rpId,
+    async register(_label, prfSalt) {
+      const secret = crypto.getRandomValues(new Uint8Array(32));
+      secrets.push(secret);
+      return { credentialId: new Uint8Array([secrets.length]), prf: await prf(secret, prfSalt) };
+    },
+    async authenticate(allowed) {
+      state.asked++;
+      state.lastAllowed = allowed.length;
+      if (state.pick === null) throw new Error("取り消されました。回復コードで開けます。");
+      const n = state.pick + 1;
+      const a = allowed.find((x) => x.credentialId[0] === n);
+      const secret = secrets[state.pick];
+      if (!a || !secret) throw new Error("該当するパスキーがありません。回復コードで開けます。");
+      return { credentialId: new Uint8Array([n]), prf: await prf(secret, a.prfSalt) };
+    },
+  };
+  return { api, state };
+}
+
+function setup(opts: { now?: () => Date; passkey?: PasskeyApi } = {}) {
   const idb = new IDBFactory();
   const base = new IdbDraftStore(idb);
   const sealed = new SealedDraftStore(base);
@@ -54,7 +85,7 @@ function setup(opts: { now?: () => Date } = {}) {
     delivered.push({ bytes, name });
     return "downloaded";
   };
-  const vault = new Vault(null, 100_000);
+  const vault = new Vault(opts.passkey ?? null, 100_000);
   const places = new PlacesController(ws, {}, deliver, { vault, sealed, ...(opts.now ? { now: opts.now } : {}) });
   return { idb, base, sealed, drafts, ws, fs, places, delivered, vault };
 }
@@ -275,5 +306,127 @@ describe("作業場所の操作（38・39.3）", () => {
     ws.noteDiskChange();
     await new Promise((r) => setTimeout(r, 10));
     expect(places.current?.lastChangeAt).not.toBeNull();
+  });
+});
+
+describe("起動時のログイン（39.3）", () => {
+  /** 暗号化した作業場所を 2 つ作り、それぞれにパスキーを 1 件ずつ登録して、すべてロックした状態から起動し直す */
+  async function twoPlaces() {
+    const pk = fakePasskey();
+    const a = setup({ passkey: pk.api });
+    await a.places.init(a.fs.root);
+    const codes: string[] = [];
+    for (const name of ["ブログ", "日記"]) {
+      const m = await a.places.create(name, true);
+      if (!m) throw new Error(a.places.error ?? "create");
+      codes.push(a.places.recoveryToShow?.code ?? "");
+      a.places.recoveryToShow = null;
+      expect(await a.places.addUnlock(m, { kind: "passkey" })).toBe(true);
+    }
+    // 同じ保存領域・同じパスキーで起動し直す（鍵はメモリにしかないので、すべてロック中になる）
+    const b = setup({ passkey: pk.api });
+    expect(b.places.loginRequired).toBe(false);
+    await b.places.init(a.fs.root);
+    return { pk, places: b.places, ws: b.ws, codes };
+  }
+
+  it("暗号化した作業場所があれば、一覧より先にログインを求め、選んだパスキーの作業場所を開く", async () => {
+    const { pk, places, ws } = await twoPlaces();
+    expect(places.loginRequired).toBe(true);
+    expect(places.passkeyPlaces).toBe(2);
+    pk.state.pick = 1;
+    const m = await places.loginWithPasskey();
+    // 1 回の認証で、両方の作業場所のパスキーを候補にする
+    expect(pk.state.asked).toBe(1);
+    expect(pk.state.lastAllowed).toBe(2);
+    expect(m && places.names[m.id]).toBe("日記");
+    expect(places.loginRequired).toBe(false);
+    if (!m) return;
+    await places.open(m);
+    expect(ws.rootName).toBe("日記");
+    // ほかの作業場所はロックしたまま
+    expect(places.views().filter((v) => v.locked)).toHaveLength(1);
+  });
+
+  it("パスキーが取り消し・失敗なら自動で繰り返さず、回復コードで開く道を示す", async () => {
+    const { pk, places, codes } = await twoPlaces();
+    pk.state.pick = null;
+    expect(await places.loginWithPasskey()).toBeNull();
+    expect(pk.state.asked).toBe(1);
+    expect(places.loginFailed).toBe(true);
+    expect(places.error).toContain("回復コード");
+    expect(places.loginRequired).toBe(true);
+    // 回復コードで開く一覧へ進む
+    places.useFallback();
+    expect(places.loginRequired).toBe(false);
+    expect(places.error).toBeNull();
+    const e = places.entries.find((x) => x.state === "ok" && x.meta.keyring);
+    if (e?.state !== "ok") throw new Error("entry");
+    // どちらの作業場所かは一覧の順による。どちらかの回復コードで開ける
+    let ok = false;
+    for (const c of codes) ok ||= await places.unlock(e.meta, { kind: "recovery", code: c });
+    expect(ok).toBe(true);
+    // 失敗のあとも、パスキーの要求は 1 回のまま
+    expect(pk.state.asked).toBe(1);
+    // パスキーは登録済みなので、登録は勧めない
+    expect(places.suggestPasskey).toBeNull();
+  });
+
+  it("すべてロックすると（自動ロックを含む）、またログインの画面に戻る", async () => {
+    const { pk, places } = await twoPlaces();
+    pk.state.pick = 0;
+    const m = await places.loginWithPasskey();
+    if (!m) throw new Error(places.error ?? "login");
+    await places.open(m);
+    await places.lock(m.id);
+    expect(places.loginRequired).toBe(true);
+    // 回復コードの一覧に進んでからロックしても、ログインの画面に戻る
+    places.useFallback();
+    pk.state.pick = 0;
+    const m2 = await places.loginWithPasskey();
+    if (!m2) throw new Error("login");
+    await places.lockAll();
+    expect(places.fallback).toBe(false);
+    expect(places.loginRequired).toBe(true);
+  });
+
+  it("パスキーのない作業場所は回復コードで開き、パスキーの登録を勧める", async () => {
+    const pk = fakePasskey();
+    const a = setup({ passkey: pk.api });
+    await a.places.init(a.fs.root);
+    const m = await a.places.create("ブログ", true);
+    if (!m) throw new Error("create");
+    const code = a.places.recoveryToShow?.code ?? "";
+    a.places.recoveryToShow = null;
+    await a.places.lock(m.id);
+    expect(a.places.loginRequired).toBe(true);
+    // パスキーでのログインはできないので、要求もしない
+    expect(a.places.passkeyPlaces).toBe(0);
+    a.places.useFallback();
+    const fresh = a.places.entries.find((e) => e.state === "ok" && e.meta.id === m.id);
+    if (fresh?.state !== "ok") throw new Error("entry");
+    expect(await a.places.unlock(fresh.meta, { kind: "recovery", code })).toBe(true);
+    expect(a.places.suggestPasskey).toBe(m.id);
+    expect(await a.places.addUnlock(fresh.meta, { kind: "passkey" })).toBe(true);
+    expect(a.places.suggestPasskey).toBeNull();
+    expect(a.places.passkeyPlaces).toBe(1);
+    expect(pk.state.asked).toBe(0);
+  });
+
+  it("暗号化した作業場所がなければ、ログインを求めない", async () => {
+    const { fs, places } = setup({ passkey: fakePasskey().api });
+    await places.init(fs.root);
+    expect(places.loginRequired).toBe(false);
+    await places.create("平文", false);
+    expect(places.loginRequired).toBe(false);
+  });
+
+  it("別の配信元で登録したパスキーしかなければ、要求せずに回復コードを案内する", async () => {
+    const { places } = await twoPlaces();
+    const other = new Vault(fakePasskey("other.example").api, 100_000);
+    const metas = places.entries.flatMap((e) => (e.state === "ok" && e.meta.keyring ? [e.meta] : []));
+    await expect(
+      other.loginWithPasskey(metas.map((m) => ({ id: m.id, record: m.keyring ?? { v: 1, slots: [], name: "" } }))),
+    ).rejects.toThrow("回復コードで開き");
   });
 });
