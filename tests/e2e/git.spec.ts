@@ -57,6 +57,8 @@ async function commitCurrent(page: Page, expectMessage: string, first: boolean) 
   }
   await page.getByTestId("commit-confirm").click();
   await expect(page.getByTestId("git-notice")).toContainText("コミットしました");
+  // 編集画面からのコミットの結果は、お知らせの帯にも出る（アプリの外枠：Git の画面は隠れている）
+  await expect(page.getByTestId("git-notice-strip")).toContainText("コミットしました");
 }
 
 test("Git を初期化し、記事を追加・更新コミットして、ネイティブ Git が整合と認める", async ({ page }) => {
@@ -68,6 +70,8 @@ test("Git を初期化し、記事を追加・更新コミットして、ネイ�
   await page.goto(url);
   await page.getByTestId("choose-folder").click();
 
+  // Git の操作は上部バーの「Git と同期」の画面にある
+  await page.getByTestId("nav-changes").click();
   await expect(page.getByTestId("git-none")).toBeVisible();
   await page.getByTestId("git-init").click();
   // 危険・不可逆な操作は既定にしない（14.1）
@@ -78,6 +82,7 @@ test("Git を初期化し、記事を追加・更新コミットして、ネイ�
   await expect(page.getByTestId("git-notice")).toContainText(".git/config は作っていません");
   await expect(page.getByTestId("git-branch")).toHaveText("main");
   await expect(page.getByTestId("git-writable")).toHaveText("可能");
+  await page.getByTestId("nav-articles").click();
   await expect(page.getByTestId("git-badge")).toHaveText("未追跡");
 
   await page.getByRole("button", { name: /最初の記事/ }).click();
@@ -94,6 +99,8 @@ test("Git を初期化し、記事を追加・更新コミットして、ネイ�
   await expect(page.getByTestId("git-status")).toHaveText("未コミット");
   await commitCurrent(page, "記事を更新: 変更後の記事", false);
 
+  await page.getByTestId("git-notice-strip").getByRole("button", { name: "「Git と同期」で見る" }).click();
+  await expect(page.getByTestId("nav-changes")).toHaveAttribute("aria-current", "page");
   await page.getByTestId("git-history-article").click();
   await expect(page.getByTestId("git-history").locator("li")).toHaveCount(2);
   await expect(page.getByTestId("git-history")).toContainText("記事を更新: 変更後の記事");
@@ -130,9 +137,11 @@ test("キーボードで開いたコミット画面を閉じると、フォー�
   await page.addInitScript(installFakeFs, SEED);
   await page.goto(url);
   await page.getByTestId("choose-folder").click();
+  await page.getByTestId("nav-changes").click();
   await page.getByTestId("git-init").click();
   await page.getByRole("button", { name: "初期化する", exact: true }).click();
   await expect(page.getByTestId("git-notice")).toContainText("初期化しました");
+  await page.getByTestId("nav-articles").click();
   await page.getByRole("button", { name: /最初の記事/ }).click();
   const commit = page.getByTestId("commit-button");
   await commit.focus();
@@ -161,6 +170,7 @@ test("Git パネルの行からコミットすると、結果の通知が見え�
   await page.addInitScript(installFakeFs, many);
   await page.goto(url);
   await page.getByTestId("choose-folder").click();
+  await page.getByTestId("nav-changes").click();
   await page.getByTestId("git-init").click();
   await page.getByRole("button", { name: "初期化する", exact: true }).click();
   await expect(page.getByTestId("git-notice")).toContainText("初期化しました");

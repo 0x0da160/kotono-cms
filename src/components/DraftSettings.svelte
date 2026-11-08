@@ -4,12 +4,34 @@
   import type { DraftController } from "../lib/app/drafts.svelte";
   import type { Workspace } from "../lib/app/workspace.svelte";
 
-  let { ws, dc }: { ws: Workspace; dc: DraftController } = $props();
+  let {
+    ws,
+    dc,
+    variant = "footer",
+  }: {
+    ws: Workspace;
+    dc: DraftController;
+    /** footer：最初の画面のフッターに畳んで出す。page：「設定」の画面に開いて出す（docs/knowledge/product/app-shell.md） */
+    variant?: "footer" | "page";
+  } = $props();
 
-  // 初回の設定を閉じたら、設定の移り先（フッターの「復旧ドラフト」）へフォーカスを移す。ページの先頭に飛ばさない
+  const modeLabel = $derived(
+    dc.mode === "enabled" ? "有効" : dc.mode === "disabled" ? "無効（復旧退避なし）" : "利用できません",
+  );
+
+  /**
+   * 初回の設定を閉じたら、設定の移り先へフォーカスを移す。ページの先頭に飛ばさない。
+   * 最初の画面ではフッターの「復旧ドラフト」、作業中は上部バーの「設定」（設定の画面は閉じているため）。
+   */
   async function focusSettings() {
     await tick();
-    document.querySelector<HTMLElement>('[data-testid="draft-settings-summary"]')?.focus();
+    const summary = document.querySelector<HTMLElement>('[data-testid="draft-settings-summary"]');
+    if (summary?.checkVisibility?.()) {
+      summary.focus();
+      return;
+    }
+    document.querySelector<HTMLElement>('[data-testid="nav-settings"]')?.focus();
+    ws.announce("復旧ドラフトの設定は、上部の「設定」からいつでも変えられます。");
   }
 
   async function enable() {
@@ -80,7 +102,7 @@
       ><span class="tip-p"
         >次回同じフォルダを開いたときに見分けるため、選んだフォルダの参照（ハンドル）も保存します。これは次回の書き込み許可ではありません。</span
       ><span class="tip-p"
-        >保持期間は最終退避から7日間が目安です。期限後、次に起動したときに整理します。フッターの「復旧ドラフト」からいつでも削除できます。</span
+        >保持期間は最終退避から7日間が目安です。期限後、次に起動したときに整理します。「設定」の「復旧ドラフト」からいつでも削除できます。</span
       ><span class="tip-p">file:// で開いたローカルの HTML どうしでは、保存領域が共有されることがあります。</span><span
         class="tip-p">外部への送信・同期はしません。復旧できるのは、実際に退避に成功した内容までです。</span
       ></HelpTip
@@ -99,14 +121,7 @@
     </div>
   </section>
 {:else}
-  <details class="settings">
-    <summary data-testid="draft-settings-summary">
-      復旧ドラフト：{dc.mode === "enabled"
-        ? "有効"
-        : dc.mode === "disabled"
-          ? "無効（復旧退避なし）"
-          : "利用できません"}
-    </summary>
+  {#snippet body()}
     {#if dc.reason}<p class="small">{dc.reason}</p>{/if}
     {#if dc.mode === "unavailable"}
       <p class="small">
@@ -126,10 +141,32 @@
         >
       </div>
     {/if}
-  </details>
+  {/snippet}
+  {#if variant === "page"}
+    <section class="card page" aria-labelledby="draft-settings-heading" data-testid="draft-settings">
+      <h2 id="draft-settings-heading">復旧ドラフト</h2>
+      <p class="state">状態：{modeLabel}</p>
+      {@render body()}
+    </section>
+  {:else}
+    <details class="settings">
+      <summary data-testid="draft-settings-summary">復旧ドラフト：{modeLabel}</summary>
+      {@render body()}
+    </details>
+  {/if}
 {/if}
 
 <style>
+  .page {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-16) var(--space-20);
+    margin-bottom: var(--space-16);
+  }
+  .state {
+    margin: 0 0 var(--space-4);
+  }
   .consent {
     border: 1px solid var(--color-focus);
     border-radius: var(--radius-lg);

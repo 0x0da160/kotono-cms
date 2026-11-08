@@ -1,7 +1,6 @@
 <script lang="ts">
   import HelpTip from "./HelpTip.svelte";
   import Download from "@lucide/svelte/icons/download";
-  import Lock from "@lucide/svelte/icons/lock";
   import { LOCK_MINUTE_CHOICES, type PlacesController } from "../lib/app/places.svelte";
   import type { Workspace } from "../lib/app/workspace.svelte";
   import type { GitController } from "../lib/app/git.svelte";
@@ -15,7 +14,20 @@
     git,
     meta,
     sync,
-  }: { places: PlacesController; ws: Workspace; git: GitController; meta: WorkspaceMeta; sync?: Snippet } = $props();
+    part = "status",
+  }: {
+    places: PlacesController;
+    ws: Workspace;
+    git: GitController;
+    meta: WorkspaceMeta;
+    sync?: Snippet;
+    /**
+     * アプリの外枠（docs/knowledge/product/app-shell.md）のどこに出すか。
+     * status：お知らせの帯（書き出しの状態・書き出す操作・お知らせ）。settings：「設定」の画面（解錠の方法と自動ロック）。
+     * 作業場所の一覧・ロックは上部バーにある。
+     */
+    part?: "status" | "settings";
+  } = $props();
 
   let pass1 = $state("");
   let pass2 = $state("");
@@ -82,68 +94,70 @@
   }
 </script>
 
-<div class="placebar" data-testid="placebar">
-  <div class="status">
-    {#if days !== null}
-      <span class="unsynced" class:warn={places.shouldRemind(meta)} data-testid="unsynced"
-        >書き出し・同期していない変更あり（{days} 日）</span
+{#if part === "status"}
+  <div class="placebar" data-testid="placebar">
+    <div class="status">
+      {#if days !== null}
+        <span class="unsynced" class:warn={places.shouldRemind(meta)} data-testid="unsynced"
+          >書き出し・同期していない変更あり（{days} 日）</span
+        >
+      {:else}
+        <span class="muted small" data-testid="unsynced-none">書き出し・同期していない変更はありません</span>
+      {/if}
+      {#if places.sharedOrigin}<span class="badge err" title="他のページと保存領域を共有する配信元です">開発版</span
+        >{/if}
+      {#if places.persist !== "persisted"}<span class="badge unknown" title="ブラウザが保存領域を消去することがあります"
+          >消去されることがあります</span
+        >{/if}
+      <button
+        type="button"
+        class="export"
+        onclick={exportNow}
+        disabled={places.busy || ws.busy}
+        data-testid="place-export-open"><Download />書き出す</button
       >
-    {:else}
-      <span class="muted small" data-testid="unsynced-none">書き出し・同期していない変更はありません</span>
-    {/if}
-    {#if places.sharedOrigin}<span class="badge err" title="他のページと保存領域を共有する配信元です">開発版</span>{/if}
-    {#if places.persist !== "persisted"}<span class="badge unknown" title="ブラウザが保存領域を消去することがあります"
-        >消去されることがあります</span
-      >{/if}
-  </div>
-  <div class="actions">
-    <button type="button" onclick={() => places.leave()} data-testid="place-leave">作業場所の一覧</button>
-    <button type="button" onclick={exportNow} disabled={places.busy || ws.busy} data-testid="place-export-open"
-      ><Download />書き出す</button
-    >
-    {#if encrypted}
-      <button type="button" onclick={() => places.lock(meta.id)} data-testid="place-lock-open"><Lock />ロック</button>
-    {/if}
-  </div>
-  {#if places.error}<p class="banner" role="alert">{places.error}</p>{/if}
-  {#if places.info}<p class="banner info" role="status">{places.info}</p>{/if}
-  {#if places.shouldRemind(meta)}
-    <p class="banner" role="status" data-testid="backup-remind">
-      最後の書き出し・同期から {days} 日たちました。ブラウザのデータ消去に備えて、書き出すか同期してください。
-    </p>
-  {/if}
-  {@render sync?.()}
-  {#if encrypted}
-    <details class="settings">
-      <summary data-testid="place-settings">解錠の方法と自動ロック</summary>
-      <p class="small muted">
-        回復コードは常に使えます。{hasPassphrase ? "パスフレーズを設定済みです。" : ""}{passkeys > 0
-          ? `パスキー ${passkeys} 件を登録済みです。`
-          : ""}
+    </div>
+    {#if places.error}<p class="banner" role="alert">{places.error}</p>{/if}
+    {#if places.info}<p class="banner info" role="status">{places.info}</p>{/if}
+    {#if places.shouldRemind(meta)}
+      <p class="banner" role="status" data-testid="backup-remind">
+        最後の書き出し・同期から {days} 日たちました。ブラウザのデータ消去に備えて、書き出すか同期してください。
       </p>
-      <form onsubmit={setPassphrase} class="pp">
-        <label
-          >{hasPassphrase ? "パスフレーズを変える" : "パスフレーズを設定"}（{PASSPHRASE_MIN} 文字以上）
-          <input
-            type="password"
-            bind:value={pass1}
-            autocomplete="new-password"
-            minlength={PASSPHRASE_MIN}
-            required
-          /></label
-        >
-        <label
-          >確認 <input
-            type="password"
-            bind:value={pass2}
-            autocomplete="new-password"
-            minlength={PASSPHRASE_MIN}
-            required
-          /></label
-        >
-        <button type="submit" disabled={places.busy}>設定する</button>
-      </form>
-      {#if places.vault?.passkey}
+    {/if}
+    {@render sync?.()}
+  </div>
+{:else if encrypted}
+  <section class="card settings" aria-labelledby="place-settings-heading" data-testid="place-settings">
+    <h2 id="place-settings-heading">解錠の方法と自動ロック</h2>
+    <p class="small muted">
+      回復コードは常に使えます。{hasPassphrase ? "パスフレーズを設定済みです。" : ""}{passkeys > 0
+        ? `パスキー ${passkeys} 件を登録済みです。`
+        : ""}
+    </p>
+    <form onsubmit={setPassphrase} class="pp">
+      <label
+        >{hasPassphrase ? "パスフレーズを変える" : "パスフレーズを設定"}（{PASSPHRASE_MIN} 文字以上）
+        <input
+          type="password"
+          bind:value={pass1}
+          autocomplete="new-password"
+          minlength={PASSPHRASE_MIN}
+          required
+        /></label
+      >
+      <label
+        >確認 <input
+          type="password"
+          bind:value={pass2}
+          autocomplete="new-password"
+          minlength={PASSPHRASE_MIN}
+          required
+        /></label
+      >
+      <button type="submit" disabled={places.busy}>設定する</button>
+    </form>
+    {#if places.vault?.passkey}
+      <div class="passkeys">
         <button
           type="button"
           onclick={() => places.addUnlock(meta, { kind: "passkey" })}
@@ -158,36 +172,46 @@
         <HelpTip label="パスキー"
           >パスキーは、この配信元（{location.hostname}）でだけ使えます。配信元を移したら登録し直してください。</HelpTip
         >
-      {/if}
-      <label class="row"
-        >自動ロック
-        <select bind:value={places.lockMinutes} data-testid="lock-minutes">
-          {#each LOCK_MINUTE_CHOICES as m (m)}
-            <option value={m}>{m === 0 ? "しない" : `${m} 分操作がなければ`}</option>
-          {/each}
-        </select>
-      </label>
-    </details>
-  {/if}
-</div>
+      </div>
+    {/if}
+    <label class="row"
+      >自動ロック
+      <select bind:value={places.lockMinutes} data-testid="lock-minutes">
+        {#each LOCK_MINUTE_CHOICES as m (m)}
+          <option value={m}>{m === 0 ? "しない" : `${m} 分操作がなければ`}</option>
+        {/each}
+      </select>
+    </label>
+  </section>
+{/if}
 
 <style>
-  .placebar {
+  /* お知らせの帯の1行目：状態の文と「書き出す」。帯の外枠（余白・区切り）は App.svelte が持つ */
+  .status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4) var(--space-8);
+    align-items: center;
+  }
+  .export {
+    margin-inline-start: auto;
+  }
+  .card {
+    background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
-    padding: var(--space-8) var(--space-12);
-    margin-bottom: var(--space-12);
-    background: var(--color-surface);
+    padding: var(--space-16) var(--space-20);
+    margin-block-end: var(--space-16);
   }
-  .status,
-  .actions {
+  h2 {
+    margin: 0 0 var(--space-8);
+    font-size: var(--font-size-18);
+  }
+  .passkeys {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-8);
     align-items: center;
-  }
-  .actions {
-    margin-top: var(--space-8);
   }
   .unsynced {
     font-size: var(--font-size-14);
@@ -205,9 +229,6 @@
   }
   .banner.info {
     border-color: var(--color-border);
-  }
-  .settings {
-    margin-top: var(--space-8);
   }
   .pp {
     display: flex;

@@ -294,7 +294,7 @@ test("復旧ドラフトは同意後にだけ退避し、退避済みを表示�
   await expect(panel.getByRole("button", { name: "原文を退避" }).first()).toBeVisible();
 });
 
-test("初回の復旧ドラフトの設定は編集側の列に出し、決めたらフッターの設定へフォーカスを移す（UI刷新 P-04）", async ({
+test("初回の復旧ドラフトの設定は編集側の列に出し、決めたら上部バーの「設定」へフォーカスを移す（UI刷新 P-04）", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -316,7 +316,51 @@ test("初回の復旧ドラフトの設定は編集側の列に出し、決め�
   await consent.getByRole("button", { name: "今は有効にしない" }).focus();
   await page.keyboard.press("Enter");
   await expect(consent).toHaveCount(0);
-  await expect(page.getByTestId("draft-settings-summary")).toBeFocused();
+  // 作業中の設定は「設定」の画面にある（アプリの外枠）。移り先を示すため、上部バーの「設定」へフォーカスを移す
+  const nav = page.getByTestId("nav-settings");
+  await expect(nav).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(nav).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId("draft-settings")).toContainText("状態：無効（復旧退避なし）");
+});
+
+test("上部バーで画面を切り替えても編集中の内容は残り、狭い画面では一覧と編集を分けて示す（アプリの外枠）", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await launch(page);
+  await page.getByRole("button", { name: "今は有効にしない" }).click();
+  const nav = page.getByRole("navigation", { name: "画面の切り替え" });
+  // 広い画面：記事・Git と同期・設定の3つ
+  await expect(nav.getByRole("button")).toHaveText(["記事", "Git と同期", "設定"]);
+  await expect(page.getByTestId("nav-articles")).toHaveAttribute("aria-current", "page");
+  await openA(page);
+  await page.getByLabel("タイトル", { exact: true }).fill("編集中のタイトル");
+  await expect(page.getByTestId("save-status")).toHaveText("未保存");
+  await page.getByTestId("nav-changes").click();
+  await expect(page.getByTestId("git-panel")).toBeVisible();
+  await expect(page.getByTestId("save-status")).toBeHidden();
+  await page.getByTestId("nav-settings").click();
+  await expect(page.getByTestId("app-version")).toBeVisible();
+  await page.getByTestId("nav-articles").click();
+  await expect(page.getByLabel("タイトル", { exact: true })).toHaveValue("編集中のタイトル");
+  await expect(page.getByTestId("save-status")).toHaveText("未保存");
+  // ヘルプは上部バーにある
+  await expect(page.locator("header").getByTestId("help-open")).toBeVisible();
+
+  // 狭い画面：一覧・編集・Git と同期・設定の4つ。記事を開くと「編集」に移る
+  await page.setViewportSize({ width: 900, height: 800 });
+  await expect(nav.getByRole("button")).toHaveText(["一覧", "編集", "Git と同期", "設定"]);
+  await expect(page.getByTestId("nav-editor")).toHaveAttribute("aria-current", "page");
+  await page.getByTestId("nav-list").click();
+  await expect(page.getByTestId("nav-list")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId("save-status")).toBeHidden();
+  await page
+    .getByRole("button", { name: /編集中のタイトル|最初の記事/ })
+    .first()
+    .click();
+  await expect(page.getByTestId("nav-editor")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId("save-status")).toHaveText("未保存");
 });
 
 test("キーボードだけで記事を開き、保存できる（14.1）", async ({ page }) => {
@@ -384,7 +428,7 @@ test("一覧の絞り込み・並び順は折り畳んでも今の条件を見�
   await expect(page.getByTestId("list-conditions-summary")).toHaveText("状態：下書き・更新日時の昇順");
 });
 
-test("説明は「?」で開いて Esc で閉じ、長い説明はフッターの「ヘルプ」にまとめる", async ({ page }) => {
+test("説明は「?」で開いて Esc で閉じ、長い説明は上部バーの「ヘルプ」にまとめる", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await launch(page);
   await page.getByRole("button", { name: "今は有効にしない" }).click();
