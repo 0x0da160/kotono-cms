@@ -1,5 +1,13 @@
 <script lang="ts">
+  import FileText from "@lucide/svelte/icons/file-text";
   import FolderOpen from "@lucide/svelte/icons/folder-open";
+  import Folders from "@lucide/svelte/icons/folders";
+  import GitBranch from "@lucide/svelte/icons/git-branch";
+  import List from "@lucide/svelte/icons/list";
+  import Lock from "@lucide/svelte/icons/lock";
+  import PenLine from "@lucide/svelte/icons/pen-line";
+  import Settings from "@lucide/svelte/icons/settings";
+  import X from "@lucide/svelte/icons/x";
   import { onMount, untrack } from "svelte";
   import ArticleList from "./components/ArticleList.svelte";
   import CommitDialog from "./components/CommitDialog.svelte";
@@ -75,6 +83,7 @@
         git.reset();
         sync.reset();
         pane = "list";
+        section = "articles";
       }
       if (root && scannedAt !== undefined)
         void git.refresh().then(() => {
@@ -85,6 +94,21 @@
   });
   /** 狭い画面での単一ペイン切替（14.1） */
   let pane = $state<"list" | "editor">("list");
+  /**
+   * 上部バーで切り替える画面（docs/knowledge/product/app-shell.md）。
+   * 切り替えても各画面は閉じずに隠すだけなので、編集中の内容・取り消し履歴・スクロール位置はそのまま残る。
+   */
+  type Section = "articles" | "changes" | "settings";
+  let section = $state<Section>("articles");
+
+  const configIssues = $derived(ws.config !== null && (ws.config.errors.length > 0 || ws.config.warnings.length > 0));
+  /** Git の結果の通知があり、それを出す「Git と同期」の画面を見ていない */
+  const gitElsewhere = $derived(workbench && git.notice !== null && section !== "changes");
+
+  function go(s: Section, p?: "list" | "editor") {
+    section = s;
+    if (p) pane = p;
+  }
 
   let workerProbe: "pending" | "ok" | "failed" = $state("pending");
   onMount(() => {
@@ -155,20 +179,83 @@
   onbeforeunload={onBeforeUnload}
 />
 
+{#snippet appInfo()}
+  {#if pwa.updateReady}
+    <p class="update" role="status" data-testid="update-ready">
+      新しい版を取得しました。
+      <button type="button" onclick={updateApp}>新しい版に切り替える</button>
+    </p>
+  {:else if pwa.active}
+    <p class="small"><button type="button" class="link" onclick={() => pwa.check()}>新しい版を確かめる</button></p>
+  {/if}
+  <dl class="versions">
+    <dt>アプリ版</dt>
+    <dd data-testid="app-version">{appVersion}</dd>
+    <dt>仕様版</dt>
+    <dd data-testid="spec-version">{specVersion}</dd>
+  </dl>
+{/snippet}
+
 <a class="skip" href="#main">本文へ移動</a>
-<header class="app-header">
+<!-- 上部バー：アプリ名・画面の切り替え・開いている場所とその操作・ヘルプ（docs/knowledge/product/app-shell.md） -->
+<header class="app-bar" class:workbench>
   <div class="brand">
     <h1>Kotono CMS</h1>
-    <p class="tagline">手元のMarkdownで記事をつくる、ローカルCMS。</p>
+    {#if !workbench}<p class="tagline">手元のMarkdownで記事をつくる、ローカルCMS。</p>{/if}
   </div>
-  {#if places}
-    {#if ws.root}
-      <div class="folder">
+  {#if workbench}
+    <nav class="sections" aria-label="画面の切り替え" data-testid="app-nav">
+      <!-- 広い画面：一覧と編集は同じ画面に並ぶので「記事」1つ。狭い画面：「一覧」「編集」に分ける -->
+      <button
+        type="button"
+        class="wide-only"
+        aria-current={section === "articles" ? "page" : undefined}
+        onclick={() => go("articles")}
+        data-testid="nav-articles"><FileText />記事</button
+      >
+      <button
+        type="button"
+        class="narrow-only"
+        aria-current={section === "articles" && pane === "list" ? "page" : undefined}
+        onclick={() => go("articles", "list")}
+        data-testid="nav-list"><List />一覧</button
+      >
+      <button
+        type="button"
+        class="narrow-only"
+        aria-current={section === "articles" && pane === "editor" ? "page" : undefined}
+        onclick={() => go("articles", "editor")}
+        disabled={!ws.session}
+        data-testid="nav-editor"><PenLine />編集</button
+      >
+      <button
+        type="button"
+        aria-current={section === "changes" ? "page" : undefined}
+        onclick={() => go("changes")}
+        data-testid="nav-changes"><GitBranch />Git と同期</button
+      >
+      <button
+        type="button"
+        aria-current={section === "settings" ? "page" : undefined}
+        onclick={() => go("settings")}
+        data-testid="nav-settings"><Settings />設定</button
+      >
+    </nav>
+  {/if}
+  <div class="place">
+    {#if places}
+      {#if ws.root}
         <span class="folder-name" data-testid="folder-name">作業場所：{ws.rootName}</span>
-      </div>
-    {/if}
-  {:else if supported}
-    <div class="folder">
+      {/if}
+      {#if places.current}
+        <button type="button" onclick={() => places.leave()} data-testid="place-leave"><Folders />作業場所の一覧</button
+        >
+        {#if places.current.keyring !== null}
+          {@const id = places.current.id}
+          <button type="button" onclick={() => places.lock(id)} data-testid="place-lock-open"><Lock />ロック</button>
+        {/if}
+      {/if}
+    {:else if supported}
       {#if ws.root}
         <span class="folder-name" data-testid="folder-name">作業フォルダ：{ws.rootName}</span>
       {/if}
@@ -181,8 +268,9 @@
       >
         <FolderOpen />{ws.root ? "別のフォルダを開く" : "フォルダを選択"}
       </button>
-    </div>
-  {/if}
+    {/if}
+  </div>
+  <HelpDialog />
 </header>
 
 <main id="main" tabindex="-1" class:wide={ws.root !== null} class:workbench>
@@ -260,16 +348,40 @@
       </details>
     </section>
   {:else}
-    {#if places?.current}
-      <PlaceBar {places} {ws} {git} meta={places.current} />
-    {/if}
-    {#if ws.folderError}
-      <p class="banner" role="alert" data-testid="folder-error">{ws.folderError}</p>
-    {/if}
-    {#if ws.config && (ws.config.errors.length > 0 || ws.config.warnings.length > 0)}
-      <div class="banner warn" role="status">
-        {#each ws.config.errors as m, i (i)}<p>設定：{m}</p>{/each}
-        {#each ws.config.warnings as m, i (i)}<p>設定（警告）：{m}</p>{/each}
+    <!-- お知らせの帯：どの画面にいても見える。書き出しの状態・新しい版・フォルダと設定の問題 -->
+    {#if (workbench && pwa.updateReady) || places?.current || ws.folderError || configIssues || gitElsewhere}
+      <div class="notices" data-testid="app-notices">
+        {#if workbench && pwa.updateReady}
+          <p class="update" role="status" data-testid="update-ready">
+            新しい版を取得しました。
+            <button type="button" onclick={updateApp}>新しい版に切り替える</button>
+          </p>
+        {/if}
+        {#if places?.current}
+          <PlaceBar {places} {ws} {git} meta={places.current} />
+        {/if}
+        {#if ws.folderError}
+          <p class="banner" role="alert" data-testid="folder-error">{ws.folderError}</p>
+        {/if}
+        {#if ws.config && configIssues}
+          <div class="banner warn" role="status">
+            {#each ws.config.errors as m, i (i)}<p>設定：{m}</p>{/each}
+            {#each ws.config.warnings as m, i (i)}<p>設定（警告）：{m}</p>{/each}
+          </div>
+        {/if}
+        {#if git.notice && gitElsewhere}
+          <!-- 編集画面からのコミットなど、Git の結果を「Git と同期」の外でも見えるようにする。詳細はその画面にある -->
+          <div
+            class="git-strip"
+            data-kind={git.notice.kind}
+            role={git.notice.kind === "error" ? "alert" : "status"}
+            data-testid="git-notice-strip"
+          >
+            <span class="git-strip-text">Git：{git.notice.text}</span>
+            <button type="button" onclick={() => go("changes")}>「Git と同期」で見る</button>
+            <button type="button" onclick={() => (git.notice = null)} aria-label="Git の通知を閉じる"><X /></button>
+          </div>
+        {/if}
       </div>
     {/if}
 
@@ -286,61 +398,67 @@
         >
       </section>
     {:else if ws.articles}
-      <RecoveryPanel {ws} />
-      <div class="pane-switch" role="group" aria-label="表示する領域">
-        <button type="button" aria-pressed={pane === "list"} onclick={() => (pane = "list")}>一覧</button>
-        <button type="button" aria-pressed={pane === "editor"} onclick={() => (pane = "editor")} disabled={!ws.session}
-          >編集</button
-        >
+      <!-- 画面：記事（一覧｜編集） -->
+      <div class="section articles" hidden={section !== "articles"} data-section="articles">
+        <RecoveryPanel {ws} />
+        <div class="panes" data-pane={pane}>
+          {#if supported && drafts.mode === "undecided"}
+            <!-- 初回の設定は編集側の列に置き、一覧を押し下げない（UI刷新 P-04） -->
+            <div class="consent-slot"><DraftSettings {ws} dc={drafts} /></div>
+          {/if}
+          <div class="pane list-pane">
+            <ArticleList {ws} {git} onopen={() => (pane = "editor")} />
+          </div>
+          <div class="pane editor-pane">
+            {#if ws.session}
+              {#key ws.session}
+                <Editor {ws} session={ws.session} {git} />
+              {/key}
+            {:else}
+              <p class="muted empty">一覧から記事を選ぶか、「新規作成」を押してください。</p>
+            {/if}
+          </div>
+        </div>
       </div>
-      <div class="panes" data-pane={pane}>
-        {#if supported && drafts.mode === "undecided"}
-          <!-- 初回の設定は編集側の列に置き、一覧を押し下げない（UI刷新 P-04） -->
-          <div class="consent-slot"><DraftSettings {ws} dc={drafts} /></div>
-        {/if}
-        <div class="pane list-pane">
-          <ArticleList {ws} {git} onopen={() => (pane = "editor")} />
+      <!-- 画面：Git と同期 -->
+      <div class="section page" hidden={section !== "changes"} data-section="changes">
+        <div class="page-inner">
           <GitPanel {ws} {git} />
           {#if git.repo}<SyncPanel {sync} />{/if}
         </div>
-        <div class="pane editor-pane">
-          {#if ws.session}
-            {#key ws.session}
-              <Editor {ws} session={ws.session} {git} />
-            {/key}
-          {:else}
-            <p class="muted empty">一覧から記事を選ぶか、「新規作成」を押してください。</p>
-          {/if}
+      </div>
+      <!-- 画面：設定 -->
+      <div class="section page" hidden={section !== "settings"} data-section="settings">
+        <div class="page-inner">
+          {#if supported && drafts.mode !== "undecided"}<DraftSettings {ws} dc={drafts} variant="page" />{/if}
+          {#if places?.current}<PlaceBar {places} {ws} {git} meta={places.current} part="settings" />{/if}
+          <section class="card" aria-labelledby="about-heading">
+            <h2 id="about-heading">このアプリについて</h2>
+            {@render appInfo()}
+          </section>
         </div>
       </div>
     {/if}
   {/if}
 </main>
 
-<footer class="app-footer" class:wide={ws.root !== null} class:workbench>
-  {#if supported && drafts.mode !== "undecided"}<DraftSettings {ws} dc={drafts} />{/if}
-  <p class="keys small"><HelpDialog /></p>
-  {#if pwa.updateReady}
-    <p class="update" role="status" data-testid="update-ready">
-      新しい版を取得しました。
-      <button type="button" onclick={updateApp}>新しい版に切り替える</button>
-    </p>
-  {:else if pwa.active}
-    <p class="small"><button type="button" class="link" onclick={() => pwa.check()}>新しい版を確かめる</button></p>
-  {/if}
-  <dl>
-    <dt>アプリ版</dt>
-    <dd data-testid="app-version">{appVersion}</dd>
-    <dt>仕様版</dt>
-    <dd data-testid="spec-version">{specVersion}</dd>
-  </dl>
-</footer>
+{#if !workbench}
+  <footer class="app-footer" class:wide={ws.root !== null}>
+    {#if supported && drafts.mode !== "undecided"}<DraftSettings {ws} dc={drafts} />{/if}
+    {@render appInfo()}
+  </footer>
+{/if}
 
 <ConfirmDialog request={ws.dialog} />
 <CommitDialog {git} />
 <div class="sr-only" aria-live="polite" data-testid="announcer">{ws.announcement}</div>
 
 <style>
+  /*
+   * アプリの外枠（シェル）。領域と切り替えの決定は docs/knowledge/product/app-shell.md。
+   * 上部バー → お知らせの帯 → 画面（記事｜Git と同期｜設定）。最初の画面だけフッター（版・復旧ドラフト）を持つ。
+   * 上部バーの左右の余白は、内容の最大幅（96rem）に合わせて中身の端をそろえる。
+   */
   .skip {
     position: absolute;
     left: var(--space-8);
@@ -357,16 +475,96 @@
   main:focus {
     outline: none;
   }
-  .keys {
-    margin: var(--space-8) 0;
-  }
   .recent {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-8);
     margin-block: var(--space-8);
   }
-  .app-header,
+
+  /* ---- 上部バー ---- */
+  .app-bar {
+    --gutter: max(var(--space-16), (100% - 96rem) / 2 + var(--space-16));
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-8) var(--space-16);
+    padding: var(--space-12) var(--gutter);
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    margin-bottom: var(--space-16);
+  }
+  .brand {
+    min-width: 0;
+  }
+  h1 {
+    margin: 0;
+    font-size: var(--font-size-24);
+    letter-spacing: 0.01em;
+  }
+  .app-bar.workbench {
+    padding-block: var(--space-6);
+    margin-bottom: 0;
+  }
+  .app-bar.workbench h1 {
+    font-size: var(--font-size-18);
+    white-space: nowrap;
+  }
+  .tagline {
+    margin: 0;
+    color: var(--color-muted);
+    font-size: var(--font-size-14);
+  }
+  .place {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8) var(--space-12);
+    flex-wrap: wrap;
+    margin-inline-start: auto;
+    min-width: 0;
+  }
+  .folder-name {
+    font-size: var(--font-size-14);
+    overflow-wrap: anywhere;
+  }
+  .workbench .place button,
+  .app-bar.workbench > :global(.help-open) {
+    font-size: var(--font-size-14);
+    padding-block: var(--space-4);
+  }
+
+  /* 画面の切り替え：選んでいる画面は文字の太さと下線で示す（色だけに頼らない：14.1） */
+  .sections {
+    display: flex;
+    gap: var(--space-4);
+  }
+  .sections button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-color: transparent;
+    background: transparent;
+    color: var(--color-muted);
+    font-size: var(--font-size-14);
+    padding: var(--space-6) var(--space-12);
+    white-space: nowrap;
+  }
+  .sections button:not(:disabled):hover {
+    color: var(--color-text);
+    background: var(--color-bg);
+  }
+  .sections button[aria-current="page"] {
+    color: var(--color-text);
+    font-weight: var(--font-weight-strong);
+    box-shadow: inset 0 -2px 0 var(--color-accent);
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
+  }
+  .narrow-only {
+    display: none !important;
+  }
+
+  /* ---- 画面の中身 ---- */
   main,
   .app-footer {
     max-width: 48rem;
@@ -374,39 +572,61 @@
     padding-inline: var(--space-16);
   }
   main.wide,
-  .app-footer.wide,
-  .app-header {
+  .app-footer.wide {
     max-width: 96rem;
   }
-  .app-header {
-    padding-block: var(--space-16) var(--space-12);
+  main.workbench {
+    padding-block-start: var(--space-12);
+  }
+  .section[hidden] {
+    display: none !important;
+  }
+  .page-inner {
+    max-width: 48rem;
+    margin-inline: auto;
+  }
+  .notices {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    margin-block-end: var(--space-12);
+    font-size: var(--font-size-14);
+  }
+  .notices .banner,
+  .notices .update {
+    margin: 0;
+  }
+  .update {
+    margin: var(--space-8) 0;
+  }
+  .git-strip {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--space-8) var(--space-16);
-    border-bottom: 1px solid var(--color-border);
-    margin-bottom: var(--space-16);
+    gap: var(--space-4) var(--space-8);
+    border: 1px solid var(--color-border);
+    border-inline-start: 3px solid var(--color-field-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4) var(--space-4) var(--space-4) var(--space-12);
+    background: var(--color-surface);
   }
-  h1 {
-    margin: 0;
-    font-size: var(--font-size-24);
-    letter-spacing: 0.01em;
+  .git-strip[data-kind="ok"] {
+    border-inline-start-color: var(--color-ok);
   }
-  .tagline {
-    margin: 0;
-    color: var(--color-muted);
+  .git-strip[data-kind="error"],
+  .git-strip[data-kind="warn"] {
+    border-color: var(--color-ng);
+  }
+  .git-strip-text {
+    flex: 1 1 16rem;
+    min-width: 0;
+  }
+  .git-strip button {
     font-size: var(--font-size-14);
+    padding-block: var(--space-2);
   }
-  .folder {
-    display: flex;
-    align-items: center;
-    gap: var(--space-12);
-    flex-wrap: wrap;
-  }
-  .folder-name {
-    font-size: var(--font-size-14);
-    overflow-wrap: anywhere;
+  .git-strip button :global(svg.lucide-icon) {
+    margin: 0;
   }
   .card {
     background: var(--color-surface);
@@ -482,18 +702,28 @@
     gap: var(--space-20);
     align-items: start;
   }
-  .pane-switch {
-    display: none;
-    gap: var(--space-8);
-    margin-bottom: var(--space-12);
-  }
-  .pane-switch button[aria-pressed="true"] {
-    font-weight: var(--font-weight-strong);
-    border-color: var(--color-focus);
-  }
+
+  /*
+   * 狭い画面（60rem 以下：iPad の縦・iPhone を含む）：ページ全体を1つのスクロールにし、
+   * 上部バーの2行目に「一覧｜編集｜Git と同期｜設定」を並べる。一覧と編集は1度に1つだけ出す（14.1）。
+   */
   @media (max-width: 60rem) {
-    .pane-switch {
-      display: flex;
+    .wide-only {
+      display: none !important;
+    }
+    .narrow-only {
+      display: inline-flex !important;
+    }
+    .sections {
+      order: 3;
+      flex: 1 0 100%;
+      gap: var(--space-2);
+      margin-inline: calc(var(--space-4) * -1);
+    }
+    .sections button {
+      flex: 1 1 0;
+      min-width: 0;
+      padding-inline: var(--space-4);
     }
     .panes {
       grid-template-columns: minmax(0, 1fr);
@@ -504,8 +734,32 @@
     }
   }
   /*
-   * 作業台レイアウト（UI刷新 方向B）：広い画面では一覧と編集をそれぞれ独立してスクロールさせ、
-   * 画面の高さ全体で作業する。狭い画面（60rem 以下）は従来の単一ペイン切替のまま。
+   * とても狭い画面（iPhone の縦）：1行目にアプリ名とヘルプ、2行目に開いている場所とその操作、3行目に画面の切り替え。
+   * 切り替えのアイコンは外して文字を優先する（ボタンの意味は常に文字で伝える：14.1）
+   */
+  @media (max-width: 30rem) {
+    .brand {
+      flex: 1 1 auto;
+    }
+    .app-bar > :global(.help-open) {
+      order: 1;
+    }
+    .place {
+      order: 2;
+      flex: 1 0 100%;
+      margin-inline-start: 0;
+    }
+    .folder-name {
+      flex: 1 1 auto;
+    }
+    .sections :global(svg.lucide-icon) {
+      display: none;
+    }
+  }
+
+  /*
+   * 作業台レイアウト（UI刷新 方向B）：広い画面では画面全体の高さを使い、上部バーとお知らせの帯は固定、
+   * 「記事」は一覧と編集をそれぞれ独立してスクロールさせる。「Git と同期」「設定」は画面ごとにスクロールする。
    */
   @media (min-width: 60.0625rem) {
     :global(#app:has(> main.workbench)) {
@@ -514,21 +768,9 @@
       flex-direction: column;
       overflow: clip;
     }
-    :global(#app:has(> main.workbench)) > .app-header {
+    .app-bar.workbench {
       flex: none;
-      width: 100%;
-      padding-block: var(--space-8);
-      margin-bottom: var(--space-8);
-    }
-    :global(#app:has(> main.workbench)) h1 {
-      font-size: var(--font-size-18);
-    }
-    /* 作業中は名前と説明を1行にして、縦の領域を空ける（UI刷新 P-10） */
-    :global(#app:has(> main.workbench)) .brand {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: baseline;
-      gap: 0 var(--space-12);
+      flex-wrap: nowrap;
     }
     main.workbench {
       flex: 1 1 auto;
@@ -536,8 +778,25 @@
       width: 100%;
       display: flex;
       flex-direction: column;
+      padding-block-start: var(--space-8);
     }
-    main.workbench > .panes {
+    main.workbench > .notices {
+      flex: none;
+    }
+    main.workbench > .section {
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+    main.workbench > .articles {
+      display: flex;
+      flex-direction: column;
+    }
+    main.workbench > .page {
+      overflow: auto;
+      overscroll-behavior: contain;
+      padding-block-end: var(--space-24);
+    }
+    main.workbench .panes {
       flex: 1 1 auto;
       min-height: 0;
       grid-template-columns: minmax(17rem, 22rem) minmax(0, 1fr);
@@ -556,43 +815,26 @@
     main.workbench .editor-pane {
       padding-inline-start: var(--space-16);
     }
-    main.workbench > .panes:has(> .consent-slot) {
+    main.workbench .panes:has(> .consent-slot) {
       grid-template-rows: auto minmax(0, 1fr);
     }
-    main.workbench > .panes > .consent-slot {
+    main.workbench .panes > .consent-slot {
       grid-column: 2;
       grid-row: 1;
       padding: var(--space-12) 0 0 var(--space-16);
     }
-    main.workbench > .panes:has(> .consent-slot) > .list-pane {
+    main.workbench .panes:has(> .consent-slot) > .list-pane {
       grid-column: 1;
       grid-row: 1 / span 2;
     }
-    main.workbench > .panes:has(> .consent-slot) > .editor-pane {
+    main.workbench .panes:has(> .consent-slot) > .editor-pane {
       grid-column: 2;
       grid-row: 2;
-    }
-    .app-footer.workbench {
-      flex: none;
-      width: 100%;
-      max-height: 40vh;
-      overflow: auto;
-      padding-block: var(--space-4) var(--space-6);
-      border-top: 1px solid var(--color-border);
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0 var(--space-16);
-      font-size: var(--font-size-12);
-    }
-    .app-footer.workbench .keys {
-      margin: 0;
-      font-size: var(--font-size-12);
     }
   }
   /* 狭い側の作業台（〜75rem）では一覧の列を最小幅にして、編集側の操作列を1行に収める（UI刷新 反復4） */
   @media (min-width: 60.0625rem) and (max-width: 75rem) {
-    main.workbench > .panes {
+    main.workbench .panes {
       grid-template-columns: 17rem minmax(0, 1fr);
     }
   }
@@ -608,9 +850,6 @@
     color: var(--color-muted);
     font-size: var(--font-size-14);
   }
-  .update {
-    margin: var(--space-8) 0;
-  }
   button.link {
     background: none;
     border: none;
@@ -620,16 +859,16 @@
     color: inherit;
     font-size: inherit;
   }
-  .app-footer dl {
+  .versions {
     display: flex;
     gap: var(--space-4) var(--space-12);
     flex-wrap: wrap;
     margin: 0;
   }
-  .app-footer dt::after {
+  .versions dt::after {
     content: "：";
   }
-  .app-footer dd {
+  .versions dd {
     margin: 0 var(--space-12) 0 0;
   }
 </style>

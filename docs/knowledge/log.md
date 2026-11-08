@@ -1,5 +1,8 @@
 # Directory Update Log
 
+## 2026-11-08
+* **Addition**: [Kotono CMS のアプリの外枠（シェル）](/product/app-shell.md) を追加。
+
 ## 2026-11-07
 * **Addition**: [ADR-0007 デザインシステムの再構築と Oklab のカラーパレット](/decisions/0007-design-system-oklab.md) を追加。
 * **Addition**: [Kotono CMS のデザインシステム](/product/design-system.md) を追加。

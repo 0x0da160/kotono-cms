@@ -1,5 +1,5 @@
 <script lang="ts">
-  /** 画面に常に出していた長めの説明をまとめたヘルプ。フッターの「ヘルプ」から開く */
+  /** 画面に常に出していた長めの説明をまとめたヘルプ。上部バーの「ヘルプ」から開く */
   import CircleQuestionMark from "@lucide/svelte/icons/circle-question-mark";
   import X from "@lucide/svelte/icons/x";
 
@@ -17,7 +17,7 @@
   }
 </script>
 
-<button type="button" class="link help-open" onclick={show} data-testid="help-open"
+<button type="button" class="help-open" onclick={show} data-testid="help-open"
   ><CircleQuestionMark aria-hidden="true" />ヘルプ</button
 >
 
@@ -27,6 +27,14 @@
     <button type="button" onclick={() => el?.close()} aria-label="ヘルプを閉じる"><X aria-hidden="true" />閉じる</button
     >
   </div>
+
+  <section>
+    <h3>画面の構成</h3>
+    <p>
+      フォルダ（作業場所）を開くと、上部に「記事」「Git
+      と同期」「設定」が並びます。「記事」では左に記事の一覧、右に編集中の記事を表示します。画面の幅が狭いときは「一覧」と「編集」を切り替えて使います。画面を切り替えても、編集中の内容はそのまま残ります。
+    </p>
+  </section>
 
   <section>
     <h3>保存とキーボード</h3>
@@ -64,7 +72,7 @@
   <section>
     <h3>復旧ドラフト</h3>
     <p>
-      未保存の編集を、ブラウザの中に自動で退避します。タブを閉じたりブラウザが落ちたりしても、次回の起動で戻せます。ディスクへは自動で書き込みません。設定はフッターの「復旧ドラフト」から変えられます。
+      未保存の編集を、ブラウザの中に自動で退避します。タブを閉じたりブラウザが落ちたりしても、次回の起動で戻せます。ディスクへは自動で書き込みません。設定は上部の「設定」（フォルダを開く前はフッターの「復旧ドラフト」）から変えられます。
     </p>
   </section>
 
