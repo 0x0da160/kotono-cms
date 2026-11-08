@@ -102,12 +102,22 @@ test("作業場所を作り、記事を保存し、ロックと解錠、暗号�
   expect(names).not.toContain("PLAINTEXT");
 
   await page.getByTestId("place-lock-open").click();
+  // すべてロックすると、起動時と同じログインの画面に戻る。パスキーがないので回復コードを主な操作にする
+  await expect(page.getByTestId("login-gate")).toBeVisible();
+  await expect(page.getByTestId("login-no-passkey")).toBeVisible();
+  await expect(page.getByTestId("login-passkey")).toHaveCount(0);
+  await expect(page.getByTestId("places")).toHaveCount(0);
+  await page.getByTestId("login-recovery").click();
   await expect(page.getByTestId("place")).toHaveAttribute("data-locked", "true");
   await page.getByTestId("place-unlock").click();
   await expect(page.getByTestId("unlock-secret")).toHaveAttribute("autocomplete", "current-password");
   await page.getByTestId("unlock-secret").fill(code.toLowerCase());
   await page.getByTestId("unlock-run").click();
   await expect(page.getByTestId("article-row").filter({ hasText: "iPhone の記事" })).toBeVisible();
+  // 回復コードで開いたので、次の起動からパスキーでログインできるよう登録を勧める
+  await expect(page.getByTestId("suggest-passkey")).toBeVisible();
+  await page.getByTestId("suggest-passkey-later").click();
+  await expect(page.getByTestId("suggest-passkey")).toHaveCount(0);
 
   const dl = page.waitForEvent("download");
   await page.getByTestId("place-export-open").click();
@@ -133,4 +143,97 @@ test("作業場所を作り、記事を保存し、ロックと解錠、暗号�
   await expect(p2.getByTestId("folder-name")).toHaveText("作業場所：取り込んだブログ");
   await expect(p2.getByTestId("article-row").filter({ hasText: "iPhone の記事" })).toBeVisible();
   await other.close();
+});
+
+/** Chromium の仮想の認証器（PRF 対応）。パスキーの登録・認証を、利用者の操作なしで通す */
+async function virtualAuthenticator(page: Page) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("WebAuthn.enable");
+  const { authenticatorId } = await cdp.send("WebAuthn.addVirtualAuthenticator", {
+    options: {
+      protocol: "ctap2",
+      ctap2Version: "ctap2_1",
+      transport: "internal",
+      hasResidentKey: true,
+      hasUserVerification: true,
+      isUserVerified: true,
+      hasPrf: true,
+      automaticPresenceSimulation: true,
+    },
+  });
+  return { cdp, authenticatorId };
+}
+
+test("起動時はパスキーでログインして作業場所を開き、失敗したら回復コードで開ける（39.3）", async ({ page }) => {
+  const { cdp, authenticatorId } = await virtualAuthenticator(page);
+  await open(page);
+  await page.getByTestId("place-name").fill("ブログ");
+  await page.getByTestId("place-create-run").click();
+  const code = (await page.getByTestId("recovery-code-value").textContent()) ?? "";
+  await page.getByTestId("recovery-add-passkey").click();
+  await expect(page.getByTestId("recovery-passkey")).toContainText("登録しました");
+  await page.getByTestId("recovery-kept").check();
+  await page.getByTestId("recovery-done").click();
+  await expect(page.getByTestId("folder-name")).toHaveText("作業場所：ブログ");
+
+  // 起動し直すと、作業場所の一覧より先にログインを求める
+  await page.reload();
+  await expect(page.getByTestId("login-gate")).toBeVisible();
+  await expect(page.getByTestId("places")).toHaveCount(0);
+  await expect(page.getByTestId("login-passkey")).toHaveClass(/primary/);
+  await page.getByTestId("login-passkey").click();
+  await expect(page.getByTestId("folder-name")).toHaveText("作業場所：ブログ");
+
+  // ロックすると、またログインの画面に戻る
+  await page.getByTestId("place-lock-open").click();
+  await expect(page.getByTestId("login-gate")).toBeVisible();
+
+  // パスキーが見つからない（別の端末など）：自動で繰り返さず、回復コードを主な操作にする
+  await cdp.send("WebAuthn.clearCredentials", { authenticatorId });
+  let asked = 0;
+  cdp.on("WebAuthn.credentialAsserted", () => asked++);
+  await page.getByTestId("login-passkey").click();
+  await expect(page.getByTestId("login-error")).toContainText("回復コード");
+  await expect(page.getByTestId("login-recovery")).toHaveClass(/primary/);
+  await expect(page.getByTestId("login-passkey")).not.toHaveClass(/primary/);
+  await expect(page.getByTestId("login-passkey")).toBeEnabled();
+  await page.waitForTimeout(500);
+  await expect(page.getByTestId("login-gate")).toBeVisible();
+  expect(asked).toBe(0);
+
+  await page.getByTestId("login-recovery").click();
+  await expect(page.getByTestId("back-to-login")).toBeVisible();
+  await page.getByTestId("place-unlock").click();
+  await page.getByTestId("unlock-secret").fill(code);
+  await page.getByTestId("unlock-run").click();
+  await expect(page.getByTestId("folder-name")).toHaveText("作業場所：ブログ");
+});
+
+test("パスキーのない作業場所を回復コードで開くと、パスキーの登録を勧め、次からパスキーでログインできる（39.3）", async ({
+  page,
+}) => {
+  await virtualAuthenticator(page);
+  await open(page);
+  await page.getByTestId("place-name").fill("日記");
+  await page.getByTestId("place-create-run").click();
+  const code = (await page.getByTestId("recovery-code-value").textContent()) ?? "";
+  await page.getByTestId("recovery-kept").check();
+  await page.getByTestId("recovery-done").click();
+  await expect(page.getByTestId("folder-name")).toHaveText("作業場所：日記");
+
+  await page.reload();
+  await expect(page.getByTestId("login-gate")).toBeVisible();
+  await expect(page.getByTestId("login-no-passkey")).toBeVisible();
+  await expect(page.getByTestId("login-recovery")).toHaveClass(/primary/);
+  await page.getByTestId("login-recovery").click();
+  await page.getByTestId("place-unlock").click();
+  await page.getByTestId("unlock-secret").fill(code);
+  await page.getByTestId("unlock-run").click();
+  await expect(page.getByTestId("suggest-passkey")).toBeVisible();
+  await page.getByTestId("suggest-passkey-add").click();
+  await expect(page.getByTestId("suggest-passkey")).toHaveCount(0);
+
+  await page.reload();
+  await page.getByTestId("login-passkey").click();
+  await expect(page.getByTestId("folder-name")).toHaveText("作業場所：日記");
 });

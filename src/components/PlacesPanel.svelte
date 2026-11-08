@@ -136,6 +136,12 @@
 
   <StorageNotice {places} />
 
+  {#if places.fallback && !places.anyUnlocked && places.passkeyPlaces > 0}
+    <p class="small" data-testid="back-to-login">
+      <button type="button" class="link" onclick={() => places.backToLogin()}>パスキーでログインに戻る</button>
+    </p>
+  {/if}
+
   <!-- 解錠の失敗は、入力した欄のすぐ下に出す（パネルの先頭では目に入らない） -->
   {#if places.error && !unlockOpen}<p class="banner" role="alert" data-testid="places-error">
       {places.error}
