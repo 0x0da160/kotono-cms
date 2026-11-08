@@ -140,7 +140,7 @@
           )}）。{:else if timing === "past"}公開日時：過去または現在（{formatForDisplay(
             values.publishedAt ?? "",
           )}）。{/if}
-        公開日時を設定しただけでは、サイトのビルド・配信は行われません。配信の状態は本CMSでは確認しません。
+        公開日時を設定しただけでは、サイトはビルドも配信もされません。配信の状態は本CMSでは確認しません。
       </p>
       {#each errorsFor("publishedAt") as m, i (i)}<p class="err">{m}</p>{/each}
     </div>

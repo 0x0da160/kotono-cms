@@ -73,7 +73,7 @@ export function analyzeText(text: string, folderId: string | null): Analysis {
         ...(p.col !== undefined ? { col: p.col } : {}),
       });
       if (p.kind === "unsupported" || p.kind === "budget") {
-        readOnlyReason ??= `非対応のYAML構文または上限超過のため、編集・保存できません：${p.message}`;
+        readOnlyReason ??= `YAML の構文が非対応か上限を超えているため、編集・保存できません：${p.message}`;
       }
     }
     return { text, split, parse, schema: null, problems, readOnlyReason };
@@ -336,10 +336,10 @@ export function addTopLevelString(text: string, key: string, value: string): Tex
   const before = topLevelKeys(parse.root);
   const after = topLevelKeys(re.root);
   if (after.join("\u0000") !== [...before, key].join("\u0000"))
-    return { ok: false, message: "追加で他の項目が変わるため、原文モードで追加してください。" };
+    return { ok: false, message: "追加すると他の項目も変わるため、原文モードで追加してください。" };
   for (const k of before)
     if (!nodesEqual(getValueNode(parse.root, k), getValueNode(re.root, k)))
-      return { ok: false, message: "追加で他の項目が変わるため、原文モードで追加してください。" };
+      return { ok: false, message: "追加すると他の項目も変わるため、原文モードで追加してください。" };
   return { ok: true, text: text.slice(0, split.fmStart) + nextFm + text.slice(split.fmStart + fm.length) };
 }
 

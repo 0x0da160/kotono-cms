@@ -147,7 +147,7 @@
     if (l.target.kind !== "external") return;
     const v = await ws.ask({
       title: "外部のリンクを開きます",
-      message: `新しいタブで次の行先を開きます。外部との通信が発生します。`,
+      message: `新しいタブで次の行先を開きます。外部と通信します。`,
       details: [l.target.url],
       buttons: [
         { label: "開く", value: "open", variant: "primary" },

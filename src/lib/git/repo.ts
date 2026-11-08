@@ -896,7 +896,7 @@ export class GitRepo {
         .filter((e) => !(e.section === "user" && e.subsection === null && (e.key === "name" || e.key === "email")))
         .map((e) => `${e.section}\u0000${e.subsection}\u0000${e.key}\u0000${e.value}`)
         .join("\n");
-    if (others(after) !== others(cfg)) throw new GitError("設定の書き換えで他の項目が変わるため保存しません。");
+    if (others(after) !== others(cfg)) throw new GitError("設定を書き換えると他の項目も変わるため、保存しません。");
     try {
       await this.fs.replace(".git/config", new TextEncoder().encode(text), { create: true });
     } catch (e) {

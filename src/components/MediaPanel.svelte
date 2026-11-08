@@ -78,7 +78,7 @@
             10_000}万画素・{ORIGINAL_MAX_BYTES / 1_048_576} MiB 以内に収め、撮影情報・位置情報などのメタデータを削除したものを原本として保存します。表示には幅
           {VARIANT_WIDTHS.join("・")}px の派生画像（WebP
           など、media/variants/）を使います。アニメーション画像は加工せずに保存します。</span
-        ><span class="tip-p">取り込んだ画像は、編集を破棄しても削除されません。</span><span class="tip-p"
+        ><span class="tip-p">取り込んだ画像は編集を破棄しても削除されません。</span><span class="tip-p"
           >「参照あり／なし」の確認範囲は、この記事の保存済み本文と cover
           だけです。別の記事や独自の項目からの参照は確認しません。</span
         ></HelpTip

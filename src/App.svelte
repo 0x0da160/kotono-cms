@@ -296,7 +296,7 @@
           <p>
             記事を保存しているリポジトリのフォルダ（<code>content/articles/</code>
             を含むフォルダ）を選んでください。<HelpTip label="フォルダの選択"
-              >フォルダへのアクセスは、このタブを閉じるまで有効です。開いたフォルダは、次回すぐ開けるようこのブラウザ内に記憶します（フォルダ名とアクセス用の情報だけで、記事の内容は保存しません）。開くときにブラウザがアクセスの許可を求めることがあります。</HelpTip
+              >フォルダへのアクセスはこのタブを閉じるまで有効です。開いたフォルダは次回すぐ開けるようこのブラウザ内に記憶します（フォルダ名とアクセス用の情報だけで、記事の内容は保存しません）。開くときにブラウザがアクセスの許可を求めることがあります。</HelpTip
             >
           </p>
           {#if ws.recent}
@@ -403,7 +403,7 @@
           このフォルダには <code>{ARTICLES_PATH}</code> がありません。記事を作成するには、次のフォルダを作成します。
         </p>
         <p><code>{ws.rootName}/{ARTICLES_PATH}</code></p>
-        <p class="muted small">確認なしには作成しません。Git の初期化は行いません。</p>
+        <p class="muted small">確認なしには作成しません。Git の初期化はしません。</p>
         <button type="button" class="primary" onclick={() => ws.prepareArticles()} data-testid="prepare-articles"
           >{ARTICLES_PATH} を作成する</button
         >

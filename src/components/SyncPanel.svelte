@@ -183,7 +183,7 @@
         自動で決まったファイル {m.plan.resolved.size} 件{m.plan.mergedBlobs.size > 0
           ? `（うち記事の行単位の自動マージ ${m.plan.mergedBlobs.size} 件）`
           : ""}。
-        {#if m.plan.conflicts.length > 0}残り {m.plan.conflicts.length} 件は選んでください。どちらかを採った後で、記事を編集してコミットし直せます。{/if}
+        {#if m.plan.conflicts.length > 0}残り {m.plan.conflicts.length} 件は、どちらを採るか選んでください。どちらかを採ったあとで、記事を編集してコミットし直せます。{/if}
       </p>
       <ul class="conflicts">
         {#each m.plan.conflicts as c (c.path)}

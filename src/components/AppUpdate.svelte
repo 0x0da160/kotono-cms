@@ -41,7 +41,7 @@
         {:else if pwa.checkState === "latest"}
           いまの版が最新です。
         {:else if pwa.checkState === "failed"}
-          確かめられませんでした。ネットワークにつながっているか確かめてください。
+          新しい版を確かめられませんでした。ネットワークにつながっているか確認してください。
         {/if}
       </span>
     </p>
@@ -54,7 +54,7 @@
     <p class="row">
       <button type="button" onclick={onreload} data-testid="update-reload"><RefreshCw />ページを読み込み直す</button>
       <span class="muted" data-testid="update-unavailable"
-        >このブラウザでは新しい版を確かめる仕組みを使えません。読み込み直すと、配信されている版になります。</span
+        >このブラウザでは新しい版を確かめられません。読み込み直すと、配信されている版になります。</span
       >
     </p>
   {/if}

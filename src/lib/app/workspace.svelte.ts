@@ -521,7 +521,7 @@ export class Workspace {
     if (!alloc.ok) {
       this.folderError =
         alloc.reason === "exhausted"
-          ? "記事IDの候補がすべて既存のエントリーと重なりました。設定とディレクトリを確認してください。"
+          ? "記事IDの候補がすべて既存のエントリーと重なりました。設定とフォルダを確認してください。"
           : "記事IDの重複を確認できません。フォルダへのアクセスを確認してください。";
       return;
     }
@@ -600,7 +600,7 @@ export class Workspace {
             generateArticleId,
           );
           if (!alloc.ok) {
-            s.notice = { kind: "error", text: "記事IDを確保できません。ディレクトリを確認してください。" };
+            s.notice = { kind: "error", text: "記事IDを確保できません。フォルダを確認してください。" };
             return;
           }
           s.changeNewId(alloc.id);
@@ -766,7 +766,7 @@ export class Workspace {
           kind: "error",
           text: `作成は完了していません（不完全）：${r.message}`,
           details: [
-            `残存している可能性のあるパス：${r.path}`,
+            `残っている可能性のあるパス：${r.path}`,
             "もう一度保存すると、ディスクの状態を確認してから再試行します。",
           ],
         };
@@ -1128,7 +1128,7 @@ export class Workspace {
         } else
           update(i, {
             status: "failed",
-            message: r.leftover ? `${r.message}（残存の可能性：${r.leftover}）` : r.message,
+            message: r.leftover ? `${r.message}（残っている可能性：${r.leftover}）` : r.message,
           });
       }
     } catch (e) {
@@ -1219,7 +1219,7 @@ export class Workspace {
             ? [`表示用の派生画像 ${variantItems.length} 件（media/${VARIANTS_DIR}/）も一緒に退避・削除します。`]
             : []),
           ...(await this.gitDetails(id, [`${MEDIA_DIR}/${name}`, ...variantItems.map((v) => v.path)])),
-          "復元は CMS では行いません。退避先から外部ツールで戻してください。",
+          "CMS は復元しません。退避先から外部ツールで戻してください。",
         ],
         buttons: [
           { label: "退避先を選んで退避する", value: "backup", variant: "primary" },
@@ -1403,7 +1403,7 @@ export class Workspace {
           return this.fail(
             s,
             `複製は完了していません（不完全）：${r.message}`,
-            r.path ? [`残存しているパス：${r.path}（自動では再利用・削除しません）`] : undefined,
+            r.path ? [`残っているパス：${r.path}（自動では再利用・削除しません）`] : undefined,
           );
         case "done":
           break;
@@ -1520,7 +1520,7 @@ export class Workspace {
         return deleteEntries(dir, c2.items, { parent: articles, name: id });
       });
       if ("stopped" in rep)
-        return this.fail(s, `実行直前の確認で記事フォルダの変化を検出したため、削除しませんでした：${rep.stopped}`, [
+        return this.fail(s, `実行直前の確認で記事フォルダが変わっていたため、削除しませんでした：${rep.stopped}`, [
           `退避は保持しています：${where}`,
         ]);
       finished = true;
@@ -1548,7 +1548,7 @@ export class Workspace {
             ...rep.remaining.map((p) => `残存：${p}`),
             ...rep.unknown.map((p) => `不明：${p}`),
             `退避は保持しています：${where}`,
-            "一覧を再読み込みし、残存しているファイルを確認してから、もう一度削除を確認してください。",
+            "一覧を再読み込みし、残っているファイルを確認してから、もう一度削除を確認してください。",
           ],
         };
         this.session = ro;

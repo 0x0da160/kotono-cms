@@ -96,7 +96,7 @@ export function detectCapabilities(host: CapabilityHost): CapabilityResult[] {
       id: "worker",
       label: "隔離処理（Web Worker）",
       ok: has(host, "Worker") && has(host, "Blob") && hasProtoMethod(host, "URL", "toString"),
-      impact: "解析を終了可能な隔離処理で実行できません。",
+      impact: "解析を、途中で止められる隔離処理で実行できません。",
     },
     {
       id: "web-crypto",
