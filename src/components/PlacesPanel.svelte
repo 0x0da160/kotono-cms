@@ -219,7 +219,11 @@
                 >
               </div>
               {#if v.locked && unlocking !== v.id}
-                <p class="muted small">名前と内容は暗号化されています。解錠すると表示されます。</p>
+                <p class="muted small">
+                  {e.state === "ok" && e.meta.name
+                    ? "内容は暗号化されています。解錠すると開けます。"
+                    : "名前と内容は暗号化されています。解錠すると表示されます。"}
+                </p>
               {/if}
               {#if v.locked && unlocking === v.id}
                 <UnlockForm

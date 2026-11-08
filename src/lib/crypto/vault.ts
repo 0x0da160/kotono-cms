@@ -31,6 +31,7 @@ import type { PasskeyApi } from "./passkey";
 
 const te = new TextEncoder();
 const td = new TextDecoder("utf-8", { fatal: true });
+/** 以前の版で作業場所の表示名を暗号化していたときの追加認証データ（読み取りと移行にだけ使う） */
 const NAME_AAD = te.encode("kotono-cms/meta/name");
 const TOKEN_AAD = te.encode("kotono-cms/meta/token");
 const DRAFT_AAD = te.encode("kotono-cms/draft");
@@ -55,6 +56,14 @@ export interface NewKeyring {
 }
 
 type PasskeySlot = Extract<KeySlot, { kind: "passkey" }>;
+
+export interface UnlockResult {
+  /**
+   * 以前の版で暗号化して保存していた表示名を復号したもの。
+   * 呼び出し側は meta の平文の name へ移し、keyring から name を外す。新しい形式では null
+   */
+  readonly legacyName: string | null;
+}
 
 export interface SealedExportHeader {
   readonly v: 1;
@@ -102,21 +111,19 @@ export class Vault {
     return k;
   }
 
-  /** 新しい DK と回復コードの枠を作る */
-  async prepareNew(name: string): Promise<NewKeyring> {
+  /** 新しい DK と回復コードの枠を作る。表示名は暗号化せず meta に平文で置く */
+  async prepareNew(): Promise<NewKeyring> {
     const dk = randomBytes(32);
     const keys = await deriveDataKeys(dk);
     const code = newRecoveryCode();
     const slot = await this.secretSlot("recovery", normalizeRecoveryCode(code) ?? "", dk);
-    const encName = await aesEncrypt(keys.meta, te.encode(name.trim()), NAME_AAD);
     this.lastRecovery = { id: null, code };
-    return { record: { v: 1, slots: [slot], name: b64u(encName) }, key: { dk, keys }, recoveryCode: code };
+    return { record: { v: 1, slots: [slot] }, key: { dk, keys }, recoveryCode: code };
   }
 
-  /** 取り込んだ暗号化書き出しの DK と枠をそのまま使う（名前だけ付け直す） */
-  async keyringFor(name: string, key: Unlocked, slots: readonly KeySlot[]): Promise<KeyringRecord> {
-    const encName = await aesEncrypt(key.keys.meta, te.encode(name.trim()), NAME_AAD);
-    return { v: 1, slots: [...slots], name: b64u(encName) };
+  /** 取り込んだ暗号化書き出しの枠をそのまま使う（DK は同じ） */
+  keyringFor(slots: readonly KeySlot[]): KeyringRecord {
+    return { v: 1, slots: [...slots] };
   }
 
   private async secretSlot(kind: "recovery" | "passphrase", secret: string, dk: Uint8Array): Promise<KeySlot> {
@@ -223,11 +230,11 @@ export class Vault {
 
   /**
    * 起動時のログイン（39.3）：パスキーが登録された作業場所すべてを候補に 1 回だけ認証し、
-   * 選ばれたパスキーの作業場所を解錠する。解錠した作業場所の ID と表示名を返す。開けなければ null。
+   * 選ばれたパスキーの作業場所を解錠する。解錠した作業場所の ID（と以前の版の暗号化した表示名）を返す。開けなければ null。
    */
   async loginWithPasskey(
     places: readonly { id: string; record: KeyringRecord }[],
-  ): Promise<{ id: string; name: string } | null> {
+  ): Promise<({ id: string } & UnlockResult) | null> {
     const candidates = places.flatMap((p) =>
       p.record.slots.filter((s): s is PasskeySlot => s.kind === "passkey").map((slot) => ({ id: p.id, slot })),
     );
@@ -237,24 +244,32 @@ export class Vault {
     const record = places.find((p) => p.id === found.id)?.record;
     if (!record) return null;
     const k = { dk: found.dk, keys: await deriveDataKeys(found.dk) };
-    const name = await this.decryptName(k, record);
-    if (name === null) return null;
+    let legacyName: string | null = null;
+    if (record.name) {
+      // 以前の版の記録：暗号化した表示名を復号して返す（読めなければ鍵が違うものとして扱う）
+      legacyName = await this.decryptLegacyName(k, record.name);
+      if (legacyName === null) return null;
+    }
     this.open.set(found.id, k);
-    return { id: found.id, name };
+    return { id: found.id, legacyName };
   }
 
-  /** 解錠する。表示名を返す。開けなければ null */
-  async unlock(id: string, record: KeyringRecord, method: UnlockMethod): Promise<string | null> {
+  /** 解錠する。開けなければ null */
+  async unlock(id: string, record: KeyringRecord, method: UnlockMethod): Promise<UnlockResult | null> {
     const k = await this.unlockSlots(record.slots, method);
     if (!k) return null;
-    const name = await this.decryptName(k, record);
-    if (name === null) return null;
+    let legacyName: string | null = null;
+    if (record.name) {
+      // 以前の版の記録：暗号化した表示名を復号して返す（読めなければ鍵が違うものとして扱う）
+      legacyName = await this.decryptLegacyName(k, record.name);
+      if (legacyName === null) return null;
+    }
     this.open.set(id, k);
-    return name;
+    return { legacyName };
   }
 
-  private async decryptName(k: Unlocked, record: KeyringRecord): Promise<string | null> {
-    const sealed = fromB64u(record.name);
+  private async decryptLegacyName(k: Unlocked, encName: string): Promise<string | null> {
+    const sealed = fromB64u(encName);
     if (!sealed) return null;
     const p = await aesDecrypt(k.keys.meta, sealed, NAME_AAD);
     if (!p) return null;
@@ -354,7 +369,7 @@ export class Vault {
     }
     const r = v as { v?: unknown; slots?: unknown };
     // 枠の形式は meta と同じ規則で検査する（未信頼入力：38.2）
-    if (r.v !== 1 || !validKeyring({ v: 1, name: "", slots: r.slots })) return null;
+    if (r.v !== 1 || !validKeyring({ v: 1, slots: r.slots })) return null;
     return { header: { v: 1, slots: r.slots as KeySlot[] }, raw, body: bytes.slice(EXPORT_MAGIC.length + 4 + len) };
   }
 
