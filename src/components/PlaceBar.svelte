@@ -200,8 +200,8 @@
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
-    padding: var(--space-16) var(--space-20);
-    margin-block-end: var(--space-16);
+    padding: var(--panel-pad);
+    margin-block-end: var(--space-12);
   }
   h2 {
     margin: 0 0 var(--space-8);
@@ -210,7 +210,7 @@
   .passkeys {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-8);
+    gap: var(--control-gap);
     align-items: center;
   }
   .unsynced {
@@ -223,7 +223,7 @@
   .banner {
     border: 1px solid var(--color-ng);
     border-radius: var(--radius-md);
-    padding: var(--space-8) var(--space-12);
+    padding: var(--panel-pad-sm);
     margin: var(--space-8) 0 0;
     font-size: var(--font-size-14);
   }
@@ -246,15 +246,15 @@
   label.row {
     flex-direction: row;
     align-items: center;
-    gap: var(--space-8);
+    gap: var(--control-gap);
     margin-top: var(--space-8);
   }
   input,
   select {
     font: inherit;
     font-size: var(--font-size-16);
-    padding: var(--space-6) var(--space-8);
-    min-height: 2.5rem;
+    line-height: var(--control-line-height);
+    padding: var(--control-pad-y) var(--space-8);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     background: transparent;

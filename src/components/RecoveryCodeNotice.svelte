@@ -127,7 +127,7 @@
   .recovery {
     border: 2px solid var(--color-focus);
     border-radius: var(--radius-lg);
-    padding: var(--space-12) var(--space-16);
+    padding: var(--panel-pad);
     margin-block: var(--space-12);
   }
   h3 {
@@ -151,8 +151,8 @@
   .field input {
     font: inherit;
     font-size: var(--font-size-16);
-    padding: var(--space-8);
-    min-height: 2.75rem;
+    line-height: var(--control-line-height);
+    padding: var(--control-pad-y) var(--space-8);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     background: transparent;
@@ -170,7 +170,7 @@
   }
   .actions {
     display: flex;
-    gap: var(--space-8);
+    gap: var(--control-gap);
   }
   .passkey {
     margin-block: var(--space-12);

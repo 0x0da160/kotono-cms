@@ -103,8 +103,8 @@
   input:not([type="radio"]) {
     font: inherit;
     font-size: var(--font-size-16);
-    padding: var(--space-8);
-    min-height: 2.75rem;
+    line-height: var(--control-line-height);
+    padding: var(--control-pad-y) var(--space-8);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     background: transparent;

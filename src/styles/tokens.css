@@ -111,6 +111,17 @@
   --space-24: 1.5rem;
   --space-32: 2rem;
 
+  /* 操作部品の寸法 */
+  --control-line-height: 1.5; /* ボタン・入力欄の行間（本文の 1.6 より詰める） */
+  --control-pad-y: var(--space-4); /* 標準の部品の上下 */
+  --control-pad-x: var(--space-10); /* 標準の部品の左右 */
+  --control-pad-y-sm: var(--space-2); /* 詰めた部品（14px）の上下 */
+  --control-pad-x-sm: var(--space-8); /* 詰めた部品（14px）の左右 */
+  --control-gap: var(--space-6); /* 横に並べた操作の間隔 */
+  --panel-pad: var(--space-12) var(--space-16); /* カード・パネルの内側 */
+  --panel-pad-sm: var(--space-8) var(--space-12); /* 中に入れ子にした枠・お知らせの内側 */
+  --touch-target: 2.75rem; /* 指で押せる最小の高さ（44px。pointer: coarse のとき） */
+
   /* 角丸 */
   --radius-sm: 4px; /* 小さな部品（等幅の囲み・つまみ） */
   --radius-md: 6px; /* ボタン・入力欄・パネル */

@@ -247,13 +247,13 @@
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
-    padding: var(--space-12) var(--space-16);
-    margin-block: var(--space-16);
+    padding: var(--panel-pad);
+    margin-block: var(--space-12);
   }
   .head,
   .row {
     display: flex;
-    gap: var(--space-8);
+    gap: var(--control-gap);
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
@@ -314,7 +314,7 @@
   .notice {
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
-    padding: var(--space-8) var(--space-12);
+    padding: var(--panel-pad-sm);
     margin-top: var(--space-12);
   }
   .notice[data-kind="error"],
@@ -382,7 +382,7 @@
       font-size: var(--font-size-14);
     }
     button:not(.link) {
-      padding: var(--space-4) var(--space-10);
+      padding: var(--control-pad-y-sm) var(--control-pad-x-sm);
       font-size: var(--font-size-14);
     }
   }

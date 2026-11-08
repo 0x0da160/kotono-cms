@@ -243,7 +243,7 @@
   .form {
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
-    padding: var(--space-12) var(--space-16) var(--space-16);
+    padding: var(--panel-pad);
     margin: 0;
     min-width: 0;
   }
@@ -254,7 +254,7 @@
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-    gap: var(--space-12) var(--space-16);
+    gap: var(--space-8) var(--space-12);
   }
   .wide {
     grid-column: 1 / -1;
@@ -342,7 +342,7 @@
     display: grid;
     grid-template-columns: max-content 1fr;
     gap: var(--space-2) var(--space-12);
-    margin: var(--space-12) 0 var(--space-4);
+    margin: var(--space-8) 0 var(--space-4);
     font-size: var(--font-size-14);
   }
   .managed dt {
