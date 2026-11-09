@@ -10,6 +10,7 @@ import {
   BACKUP_REMIND_DAYS,
   WorkspaceStore,
   unsyncedSince,
+  type OpfsResult,
   type WorkspaceEntry,
   type WorkspaceMeta,
 } from "../workspaces/store";
@@ -127,11 +128,40 @@ export class PlacesController {
     );
   }
 
+  /** ブラウザ内の保存領域（OPFS）を開けなかった理由。開けていれば null（作成・取り込みの欄を出さない） */
+  storageError = $state<string | null>(null);
+  private opener: (() => Promise<OpfsResult>) | null = null;
+
+  /** 保存領域を開いてから一覧を読む。開けなければ理由を storageError に置く（retry でやり直せる） */
+  async start(open: () => Promise<OpfsResult>): Promise<void> {
+    this.opener = open;
+    this.storageError = null;
+    const r = await open();
+    if (!r.ok) {
+      this.storageError = r.reason;
+      this.ready = true;
+      return;
+    }
+    await this.init(r.root);
+  }
+
+  /** 保存領域をもう一度開く */
+  async retry(): Promise<void> {
+    if (!this.opener || this.store || this.busy) return;
+    this.busy = true;
+    try {
+      await this.start(this.opener);
+    } finally {
+      this.busy = false;
+    }
+  }
+
   async init(root: DirHandleLike): Promise<void> {
     try {
       this.store = await WorkspaceStore.open(root);
+      this.storageError = null;
     } catch (e) {
-      this.error = `ブラウザ内の保存領域を開けません：${(e as Error).message}`;
+      this.storageError = (e as Error).message;
       this.ready = true;
       return;
     }
@@ -196,7 +226,12 @@ export class PlacesController {
   }
 
   async create(name: string, encrypted: boolean): Promise<WorkspaceMeta | null> {
-    if (!this.store || this.busy) return null;
+    if (this.busy) return null;
+    if (!this.store) {
+      // 黙って何もしないと、押しても反応しないように見える
+      this.error = "ブラウザ内の保存領域を開けていないため、作業場所を作れません。";
+      return null;
+    }
     this.busy = true;
     this.error = null;
     try {

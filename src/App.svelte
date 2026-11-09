@@ -32,7 +32,7 @@
   import { Vault } from "./lib/crypto/vault";
   import { browserPasskey } from "./lib/crypto/passkey";
   import { SealedDraftStore } from "./lib/drafts/sealed";
-  import { opfsRoot } from "./lib/workspaces/store";
+  import { openOpfs } from "./lib/workspaces/store";
   import { DraftController } from "./lib/app/drafts.svelte";
   import { LoginController } from "./lib/app/login.svelte";
   import { IdbLoginStore } from "./lib/login/store";
@@ -142,10 +142,7 @@
       void login.init();
     }
     if (places) {
-      placesReady = opfsRoot(host).then(async (root) => {
-        if (root) await places.init(root);
-        else places.error = "ブラウザ内の保存領域（OPFS）を開けません。";
-      });
+      placesReady = places.start(() => openOpfs(host));
       // 自動ロック（39.3）：無操作の時間を数える。非表示の間はタイマーが止まることがあるので、戻ったときにも調べる
       const t = setInterval(() => void places.tick(), 30_000);
       const onVis = () => void places.visibility(document.visibilityState === "hidden");
@@ -483,7 +480,7 @@
     {#if login.phase !== "loading"}<LoginScreen {login} onreset={resetLogin} />{/if}
   {:else}
     {#if login.info && !workbench}<p class="banner info" role="status" data-testid="login-info">{login.info}</p>{/if}
-    {#if places && ws.root === null && (places.ready || places.error)}
+    {#if places && ws.root === null && (places.ready || places.error || places.storageError)}
       <PlacesPanel {places} {ws} />
     {/if}
   {/if}
