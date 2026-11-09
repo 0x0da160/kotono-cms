@@ -48,6 +48,21 @@ export interface PlaceView {
   readonly locked: boolean;
 }
 
+/**
+ * 起動時のログイン（ADR-0011）とのつなぎ。暗号化した作業場所の鍵をログイン鍵で包んで覚え、
+ * ログインしただけで開けるようにする。自動ロックではログインもロックする。
+ */
+export interface PlaceHooks {
+  /** 作業場所を解錠した（作成・取り込み・解錠） */
+  readonly unlocked?: (id: string) => Promise<void>;
+  /** 作業場所を削除した */
+  readonly removed?: (id: string) => Promise<void>;
+  /** 無操作で自動ロックした */
+  readonly autoLocked?: () => void;
+  /** 作業場所のほかに、自動ロックの対象（ログイン）が開いているか */
+  readonly active?: () => boolean;
+}
+
 /** 書き出したファイルを端末の外へ渡す（共有シート、なければダウンロード：38.3） */
 export type Deliver = (bytes: Uint8Array, fileName: string) => Promise<"shared" | "downloaded" | "cancelled">;
 
@@ -74,30 +89,23 @@ export class PlacesController {
   pendingSealed = $state<{ name: string; bytes: Uint8Array; passphrase: boolean; passkey: boolean } | null>(null);
   /** 作成直後に一度だけ表示する回復コード（39.2） */
   recoveryToShow = $state<{ id: string; code: string } | null>(null);
-  /** 作業場所の一覧を読み終えたか（読む前にログインの画面と一覧を出し分けない） */
+  /** 作業場所の一覧を読み終えたか */
   ready = $state(false);
-  /**
-   * ログインの画面から「回復コード・パスフレーズで開く」を選んだ（39.3）。
-   * 選ぶと作業場所の一覧を出す。すべてロックすると（自動ロックを含む）、またログインの画面に戻る。
-   */
-  fallback = $state(false);
-  /** 直前のパスキーでのログインが失敗した（ログインの画面で回復コードを先に勧める） */
-  loginFailed = $state(false);
-  /** 回復コード・パスフレーズで開いた作業場所のうち、この配信元で使えるパスキーがないもの（登録を勧める） */
-  suggestPasskey = $state<string | null>(null);
 
   readonly vault: Vault | null;
   private readonly sealed: SealedDraftStore | null;
   private readonly now: () => Date;
+  private readonly hooks: PlaceHooks;
 
   constructor(
     private readonly ws: Workspace,
     private readonly host: StorageHost,
     private readonly deliver: Deliver,
-    opts: { vault?: Vault | null; sealed?: SealedDraftStore | null; now?: () => Date } = {},
+    opts: { vault?: Vault | null; sealed?: SealedDraftStore | null; now?: () => Date; hooks?: PlaceHooks } = {},
   ) {
     this.vault = opts.vault ?? null;
     this.sealed = opts.sealed ?? null;
+    this.hooks = opts.hooks ?? {};
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- 時刻を得るだけで、状態として持たない
     this.now = opts.now ?? (() => new Date());
   }
@@ -208,6 +216,7 @@ export class PlacesController {
         this.vault?.adopt(meta.id, keyring.key);
         this.names = { ...this.names, [meta.id]: name.trim() };
         this.recoveryToShow = { id: meta.id, code: keyring.recoveryCode };
+        await this.remember(meta.id);
       }
       await this.refresh();
       return meta;
@@ -322,6 +331,7 @@ export class PlacesController {
         vault.adopt(meta.id, key);
         this.names = { ...this.names, [meta.id]: name.trim() };
         if (recoveryCode) this.recoveryToShow = { id: meta.id, code: recoveryCode };
+        await this.remember(meta.id);
       }
       this.pendingImport = null;
       this.info = `取り込みました（${p.plan.files.length} 件${p.plan.skipped.length > 0 ? `、付属物 ${p.plan.skipped.length} 件を除外` : ""}）。`;
@@ -337,82 +347,25 @@ export class PlacesController {
   }
 
   // -------------------------------------------------------------------------
-  // 起動時のログイン（39.3）
+  // 解錠（39.3）とログイン（ADR-0011）
 
-  /** 暗号化した作業場所（読めたもの） */
-  private encryptedMetas(): WorkspaceMeta[] {
-    return this.entries.flatMap((e) => (e.state === "ok" && e.meta.keyring ? [e.meta] : []));
-  }
-
-  /**
-   * ログインの画面を出すか。暗号化した作業場所があり、どれも解錠していない間は、作業場所の一覧より先に
-   * パスキーでのログインを求める。回復コード・パスフレーズで開く道（fallback）は常に残す。
-   */
-  get loginRequired(): boolean {
-    return (
-      this.ready &&
-      this.vault !== null &&
-      !this.fallback &&
-      !this.anyUnlocked &&
-      this.current === null &&
-      this.encryptedMetas().length > 0
-    );
-  }
-
-  /** この配信元で使えるパスキーを登録した作業場所の数（0 ならパスキーでログインできない） */
-  get passkeyPlaces(): number {
-    const v = this.vault;
-    if (!v?.passkey) return 0;
-    return this.encryptedMetas().filter((m) => m.keyring?.slots.some((s) => v.usablePasskey(s))).length;
-  }
-
-  /** パスキーでログインする（1 回の認証で、選ばれたパスキーの作業場所を解錠する）。失敗しても自動では繰り返さない */
-  async loginWithPasskey(): Promise<WorkspaceMeta | null> {
-    if (!this.vault || this.busy) return null;
-    this.busy = true;
-    this.error = null;
-    this.info = null;
+  /** 解錠した作業場所の鍵をログインに覚えさせる。失敗しても解錠は続ける（次に開いたときにもう一度試す） */
+  private async remember(id: string): Promise<void> {
     try {
-      const metas = this.encryptedMetas();
-      const r = await this.vault.loginWithPasskey(
-        metas.flatMap((m) => (m.keyring ? [{ id: m.id, record: m.keyring }] : [])),
-      );
-      if (!r) {
-        this.loginFailed = true;
-        this.error = "このパスキーでは作業場所を開けませんでした。回復コードで開けます。";
-        return null;
-      }
-      this.loginFailed = false;
-      const meta = metas.find((m) => m.id === r.id);
-      if (!meta) return null;
-      const name = meta.name || r.legacyName || "";
-      this.names = { ...this.names, [r.id]: name };
-      if (r.legacyName !== null) await this.migrateLegacyName(meta, name);
-      return this.fresh(meta.id) ?? meta;
-    } catch (e) {
-      this.loginFailed = true;
-      this.error = `パスキーでログインできませんでした：${(e as Error).message}`;
-      return null;
-    } finally {
-      this.busy = false;
+      await this.hooks.unlocked?.(id);
+    } catch {
+      // ログインで開けないだけで、回復コード等では開ける
     }
   }
 
-  private fresh(id: string): WorkspaceMeta | null {
-    const e = this.entries.find((x) => x.state === "ok" && x.meta.id === id);
-    return e?.state === "ok" ? e.meta : null;
-  }
-
-  /** ログインの画面から、回復コード・パスフレーズで開く一覧へ進む */
-  useFallback(): void {
-    this.fallback = true;
-    this.error = null;
-  }
-
-  /** ログインの画面に戻る（一覧からパスキーでのログインに戻るとき） */
-  backToLogin(): void {
-    this.fallback = false;
-    this.error = null;
+  /** ログインで開いた作業場所（鍵は Vault に入っている）を、解錠済みとして扱う */
+  adoptUnlocked(ids: readonly string[]): void {
+    const names = { ...this.names };
+    for (const id of ids) {
+      const e = this.entries.find((x) => x.state === "ok" && x.meta.id === id);
+      if (e?.state === "ok" && e.meta.keyring && this.vault?.isUnlocked(id)) names[id] = e.meta.name;
+    }
+    this.names = names;
   }
 
   /** 暗号化した作業場所を解錠する（39.3） */
@@ -429,10 +382,8 @@ export class PlacesController {
       const name = meta.name || r.legacyName || "";
       this.names = { ...this.names, [meta.id]: name };
       if (r.legacyName !== null) await this.migrateLegacyName(meta, name);
-      // 次の起動からパスキーでログインできるよう、使えるパスキーがなければ登録を勧める
-      const vault = this.vault;
-      if (method.kind !== "passkey" && vault.passkey && !meta.keyring.slots.some((s) => vault.usablePasskey(s)))
-        this.suggestPasskey = meta.id;
+      // 次の起動からは、ログインだけで開けるようにする
+      await this.remember(meta.id);
       return true;
     } catch (e) {
       this.error = `解錠できませんでした：${(e as Error).message}`;
@@ -480,12 +431,6 @@ export class PlacesController {
     const { [id]: _drop, ...rest } = this.names;
     void _drop;
     this.names = rest;
-    if (this.suggestPasskey === id) this.suggestPasskey = null;
-    // すべてロックしたら、次はまたログインの画面から始める（39.3）
-    if (!this.anyUnlocked) {
-      this.fallback = false;
-      this.loginFailed = false;
-    }
     if (!kept) this.info = "ロックしました。未保存の編集は退避できませんでした（復旧ドラフトが無効です）。";
     return kept;
   }
@@ -530,7 +475,6 @@ export class PlacesController {
       if (this.current?.id === meta.id) this.current = m;
       await this.refresh();
       this.info = add.kind === "passphrase" ? "パスフレーズを設定しました。" : "パスキーを登録しました。";
-      if (add.kind === "passkey" && this.suggestPasskey === meta.id) this.suggestPasskey = null;
       return true;
     } catch (e) {
       this.error = `設定できませんでした：${(e as Error).message}`;
@@ -645,13 +589,17 @@ export class PlacesController {
     return Object.keys(this.names).length > 0;
   }
 
+  private get lockable(): boolean {
+    return this.anyUnlocked || (this.hooks.active?.() ?? false);
+  }
+
   activity(): void {
     this.lastActive = this.now().getTime();
   }
 
   /** 定期的に呼ぶ。無操作が続いたらロックする */
   async tick(): Promise<void> {
-    if (this.lockMinutes <= 0 || !this.anyUnlocked || this.busy) return;
+    if (this.lockMinutes <= 0 || !this.lockable || this.busy) return;
     if (this.lastActive === 0) this.activity();
     if (this.now().getTime() - this.lastActive >= this.lockMinutes * 60_000) await this.autoLock();
   }
@@ -668,7 +616,7 @@ export class PlacesController {
     }
     const at = this.hiddenAt;
     this.hiddenAt = null;
-    if (at === null || this.lockMinutes <= 0 || !this.anyUnlocked) return;
+    if (at === null || this.lockMinutes <= 0 || !this.lockable) return;
     const grace = Math.min(this.lockMinutes, HIDDEN_GRACE_MINUTES) * 60_000;
     if (t - at >= grace) await this.autoLock();
     else this.activity();
@@ -677,6 +625,7 @@ export class PlacesController {
   private async autoLock(): Promise<void> {
     await this.lockAll();
     this.info ??= "しばらく操作がなかったのでロックしました。";
+    this.hooks.autoLocked?.();
   }
 
   async remove(id: string): Promise<void> {
@@ -690,7 +639,10 @@ export class PlacesController {
     try {
       const r = await this.store.remove(id);
       if (!r.ok) this.error = `削除できませんでした：${r.message}`;
-      else this.vault?.forget(id);
+      else {
+        this.vault?.forget(id);
+        await this.hooks.removed?.(id).catch(() => undefined);
+      }
       await this.refresh();
     } finally {
       this.busy = false;

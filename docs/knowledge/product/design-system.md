@@ -163,9 +163,11 @@ page・surface・raised・hover・pressed は、どちらのテーマでも互�
 | `--control-gap` | 6px | 横に並べた操作の間隔 |
 | `--panel-pad` | 12px 16px | カード・パネルの内側 |
 | `--panel-pad-sm` | 8px 12px | 入れ子の枠・お知らせ・問題の一覧の内側 |
-| `--touch-target` | 44px | 指で操作する画面での最小の高さ |
+| `--touch-target` | 44px | 指の画面のメニューの項目・メニューの開閉（Apple HIG） |
+| `--touch-target-md` | 36px | 指の画面の標準のボタン・入力欄・選択欄（WCAG 2.5.8 ＋余裕） |
+| `--touch-target-sm` | 32px | 指の画面の詰めたボタン・開閉の見出し（WCAG 2.5.8） |
 
-- 指で操作する画面（`@media (pointer: coarse)`）では、ボタン・入力欄（チェックボックス・ラジオ・ファイル以外）・選択欄・開閉の見出し（`summary`）の高さを `--touch-target`（44px）以上にする（`app.css`）。見た目の余白を詰めても、iPhone・iPad で押せる高さは下がらない。部品の側で `min-height` を小さく指定した `summary` は、同じ media query で 44px に戻す。
+- 指で操作する画面（`@media (pointer: coarse)`）では、押せる高さの下限を部品の種類で分ける（[ADR-0011](../decisions/0011-passkey-first-and-compact-ui.md)）。標準のボタン・入力欄・選択欄は `--touch-target-md`（36px）、詰めたボタン（`button.compact`）と開閉の見出し（`summary`）は `--touch-target-sm`（32px）、メニューの項目と開閉は `--touch-target`（44px）。どれも WCAG 2.2 の 2.5.8（AA：24px）を床にし、44px（2.5.5 AAA・Apple HIG）は画面の端で頻繁に押す移動だけにする。
 - マウスの画面での押せる大きさは 24px 以上（WCAG 2.2 の 2.5.8）。詰めた部品でも 27px あり、「?」の説明（24px）がいちばん小さい。
 - 2026-11-08 に詰めた（標準 40px → 34px、詰め 32px → 27px、並べた操作の間隔 8px → 6px、外側のカードの余白 16px 20px → 12px 16px）。
 

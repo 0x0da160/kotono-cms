@@ -332,10 +332,10 @@
     font-size: var(--font-size-12);
     color: var(--color-fg-muted);
   }
-  /* 指で操作する画面では、開閉の見出しも 44px 以上にする（app.css と同じ） */
+  /* 指で操作する画面では、開閉の見出しを 32px 以上にする（app.css の表：WCAG 2.5.8） */
   @media (pointer: coarse) {
     .cond > summary {
-      min-height: var(--touch-target);
+      min-height: var(--touch-target-sm);
       align-items: center;
     }
   }

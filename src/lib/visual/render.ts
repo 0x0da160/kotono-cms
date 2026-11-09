@@ -185,11 +185,47 @@ export function renderTree(doc: Document, tree: Root, src: string): RenderOutput
     return null;
   };
 
+  /**
+   * 表（GFM）：編集はできない塊のまま、罫線つきの表として見せる（ADR-0011）。元の記述は data-md に持つ。
+   * セルの中身は文字・強調などの行内の記法だけで描く（innerHTML は使わない）。
+   */
+  const tableEl = (n: Extract<RootContent, { type: "table" }>): HTMLElement => {
+    const box = raw(n, true);
+    box.classList.add("v-table");
+    box.textContent = "";
+    const table = doc.createElement("table");
+    const align = n.align ?? [];
+    n.children.forEach((row, ri) => {
+      const tr = doc.createElement("tr");
+      row.children.forEach((cell, ci) => {
+        const c = doc.createElement(ri === 0 ? "th" : "td");
+        const a = align[ci];
+        if (a) c.style.textAlign = a;
+        inlineInto(c, cell.children);
+        tr.append(c);
+      });
+      if (ri === 0) {
+        const thead = doc.createElement("thead");
+        thead.append(tr);
+        table.append(thead);
+      } else {
+        let tbody = table.tBodies[0];
+        if (!tbody) {
+          tbody = doc.createElement("tbody");
+          table.append(tbody);
+        }
+        tbody.append(tr);
+      }
+    });
+    box.append(table);
+    return box;
+  };
+
   const blocks: RenderedBlock[] = [];
   let prev: HTMLElement | null = null;
   let prevEnd = 0;
   tree.children.forEach((n, i) => {
-    const el = blockEl(n) ?? raw(n, true);
+    const el = blockEl(n) ?? (n.type === "table" ? tableEl(n) : raw(n, true));
     const isLast = i === tree.children.length - 1;
     blocks.push({
       el,

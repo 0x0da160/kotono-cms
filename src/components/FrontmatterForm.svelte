@@ -490,7 +490,7 @@
     </div>
   </div>
 
-  <dl class="managed">
+  <dl class="managed grid-table">
     <dt>記事ID</dt>
     <dd data-testid="article-id">{values.id ?? "（不明）"}</dd>
     <dt>作成日時</dt>
@@ -624,17 +624,7 @@
     padding: 0 var(--space-8);
   }
   .managed {
-    display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: var(--space-2) var(--space-12);
     margin: var(--space-8) 0 var(--space-4);
     font-size: var(--font-size-14);
-  }
-  .managed dt {
-    color: var(--color-fg-muted);
-  }
-  .managed dd {
-    margin: 0;
-    overflow-wrap: anywhere;
   }
 </style>

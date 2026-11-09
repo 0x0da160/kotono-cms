@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { installFakeFs, type FakeFsApi } from "./fake-fs";
+import { menu, registerLogin } from "./login";
 
 const distHtml = resolve(import.meta.dirname, "../../dist/kotono-cms.html");
 const url = pathToFileURL(distHtml).href;
@@ -68,10 +69,11 @@ test("Git を初期化し、記事を追加・更新コミットして、ネイ�
   page.on("request", (r) => requests.push(r.url()));
   await page.addInitScript(installFakeFs, SEED);
   await page.goto(url);
+  await registerLogin(page);
   await page.getByTestId("choose-folder").click();
 
   // Git の操作は上部バーの「Git と同期」の画面にある
-  await page.getByTestId("nav-changes").click();
+  await menu(page, "nav-changes");
   await expect(page.getByTestId("git-none")).toBeVisible();
   await page.getByTestId("git-init").click();
   // 危険・不可逆な操作は既定にしない（14.1）
@@ -82,7 +84,7 @@ test("Git を初期化し、記事を追加・更新コミットして、ネイ�
   await expect(page.getByTestId("git-notice")).toContainText(".git/config は作っていません");
   await expect(page.getByTestId("git-branch")).toHaveText("main");
   await expect(page.getByTestId("git-writable")).toHaveText("可能");
-  await page.getByTestId("nav-articles").click();
+  await menu(page, "nav-articles");
   await expect(page.getByTestId("git-badge")).toHaveText("未追跡");
 
   await page.getByRole("button", { name: /最初の記事/ }).click();
@@ -126,6 +128,7 @@ test("Git を初期化し、記事を追加・更新コミットして、ネイ�
 test("プレビューで対象言語のコードをハイライトする", async ({ page }) => {
   await page.addInitScript(installFakeFs, SEED);
   await page.goto(url);
+  await registerLogin(page);
   await page.getByTestId("choose-folder").click();
   await page.getByRole("button", { name: /最初の記事/ }).click();
   await page.getByRole("tab", { name: "プレビュー" }).click();
@@ -136,12 +139,13 @@ test("プレビューで対象言語のコードをハイライトする", async
 test("キーボードで開いたコミット画面を閉じると、フォーカスは「コミット…」に戻る（14.1）", async ({ page }) => {
   await page.addInitScript(installFakeFs, SEED);
   await page.goto(url);
+  await registerLogin(page);
   await page.getByTestId("choose-folder").click();
-  await page.getByTestId("nav-changes").click();
+  await menu(page, "nav-changes");
   await page.getByTestId("git-init").click();
   await page.getByRole("button", { name: "初期化する", exact: true }).click();
   await expect(page.getByTestId("git-notice")).toContainText("初期化しました");
-  await page.getByTestId("nav-articles").click();
+  await menu(page, "nav-articles");
   await page.getByRole("button", { name: /最初の記事/ }).click();
   const commit = page.getByTestId("commit-button");
   await commit.focus();
@@ -169,8 +173,9 @@ test("Git パネルの行からコミットすると、結果の通知が見え�
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.addInitScript(installFakeFs, many);
   await page.goto(url);
+  await registerLogin(page);
   await page.getByTestId("choose-folder").click();
-  await page.getByTestId("nav-changes").click();
+  await menu(page, "nav-changes");
   await page.getByTestId("git-init").click();
   await page.getByRole("button", { name: "初期化する", exact: true }).click();
   await expect(page.getByTestId("git-notice")).toContainText("初期化しました");
@@ -190,8 +195,9 @@ test("同期の設定に、入力済みで開くトークンの作成ページ�
   page.on("request", (r) => requests.push(r.url()));
   await page.addInitScript(installFakeFs, SEED);
   await page.goto(url);
+  await registerLogin(page);
   await page.getByTestId("choose-folder").click();
-  await page.getByTestId("nav-changes").click();
+  await menu(page, "nav-changes");
   await page.getByTestId("git-init").click();
   await page.getByRole("button", { name: "初期化する", exact: true }).click();
   await expect(page.getByTestId("git-notice")).toContainText("初期化しました");

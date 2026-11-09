@@ -95,7 +95,7 @@
   {:else if git.info?.kind === "unsupported"}
     <p class="err" data-testid="git-unsupported">{git.info.message}</p>
   {:else if repo}
-    <dl class="summary">
+    <dl class="summary grid-table">
       <dt>ブランチ</dt>
       <dd data-testid="git-branch">{repo.branch ?? "（ブランチではありません）"}</dd>
       <dt>書き込み</dt>
@@ -267,14 +267,7 @@
     font-size: var(--font-size-16);
   }
   .summary {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: var(--space-2) var(--space-12);
     margin: var(--space-8) 0;
-  }
-  .summary dd {
-    margin: 0;
-    overflow-wrap: anywhere;
   }
   .blockers {
     color: var(--color-danger-fg);

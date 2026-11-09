@@ -119,24 +119,6 @@
     </div>
     {#if places.error}<p class="banner" role="alert">{places.error}</p>{/if}
     {#if places.info}<p class="banner info" role="status">{places.info}</p>{/if}
-    {#if places.suggestPasskey === meta.id}
-      <!-- 起動時のログインはパスキーで行う（39.3）。回復コードで開いた作業場所には、登録を勧める -->
-      <div class="banner info suggest" role="status" data-testid="suggest-passkey">
-        <p>次の起動からパスキーでログインできるよう、この端末でパスキーを登録してください。</p>
-        <div class="row">
-          <button
-            type="button"
-            class="primary"
-            onclick={() => places.addUnlock(meta, { kind: "passkey" })}
-            disabled={places.busy}
-            data-testid="suggest-passkey-add">パスキーを登録</button
-          >
-          <button type="button" onclick={() => (places.suggestPasskey = null)} data-testid="suggest-passkey-later"
-            >あとで</button
-          >
-        </div>
-      </div>
-    {/if}
     {#if places.shouldRemind(meta)}
       <p class="banner" role="status" data-testid="backup-remind">
         最後の書き出し・同期から {days} 日たちました。ブラウザのデータ消去に備えて、書き出すか同期してください。
@@ -249,14 +231,6 @@
   .banner.info {
     border-color: var(--color-info-border);
     background: var(--color-info-bg);
-  }
-  .suggest p {
-    margin: 0 0 var(--space-8);
-  }
-  .suggest .row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--control-gap);
   }
   .pp {
     display: flex;

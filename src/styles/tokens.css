@@ -232,8 +232,10 @@
   --control-gap: var(--space-6); /* 横に並べた操作の間隔 */
   --panel-pad: var(--space-12) var(--space-16); /* カード・パネルの内側 */
   --panel-pad-sm: var(--space-8) var(--space-12); /* 中に入れ子にした枠・お知らせの内側 */
-  --touch-target: 2.75rem; /* 指で押せる最小の高さ（44px。pointer: coarse のとき） */
-  --target-min: 1.5rem; /* マウスで押せる最小の大きさ（24px。WCAG 2.2 の 2.5.8） */
+  --touch-target: 2.75rem; /* 指で押す主な移動（メニューの項目・上部バーの開閉）の高さ（44px。Apple HIG の 44pt） */
+  --touch-target-md: 2.25rem; /* 指で押す標準のボタン・入力欄・選択欄の高さ（36px。WCAG 2.5.8 の 24px に余裕を足す） */
+  --touch-target-sm: 2rem; /* 指で押す詰めた部品（行の中・道具の帯・開閉の見出し）の高さ（32px。WCAG 2.5.8） */
+  --target-min: 1.5rem; /* 押せる最小の大きさ（24px。WCAG 2.2 の 2.5.8。マウスでも指でも下回らない） */
 
   /* 角丸 */
   --radius-sm: 4px; /* 小さな部品（等幅の囲み・つまみ） */

@@ -52,7 +52,8 @@ export const STATIC_GROUPS: readonly TokenGroup[] = [
     /*
      * 操作部品（ボタン・入力欄・選択欄）の内側の余白と、並べたときの間隔・面の余白。
      * 高さ＝文字 × 行間 ＋ 上下の余白 ＋ 枠：標準 16px で 34px、詰め 14px で 27px。
-     * 指で操作する画面では、見た目の余白は同じまま、押せる高さを --touch-target 以上にする（app.css）。
+     * 指で操作する画面では、見た目の余白は同じまま、押せる高さを部品の種類ごとの下限まで広げる（app.css・ADR-0011）。
+     * 下限の根拠：WCAG 2.2 の 2.5.8（AA：24px）を全体の床にし、画面の端で頻繁に押すものだけ Apple HIG の 44pt にする。
      */
     title: "操作部品の寸法",
     tokens: [
@@ -64,8 +65,18 @@ export const STATIC_GROUPS: readonly TokenGroup[] = [
       ["control-gap", "var(--space-6)", "横に並べた操作の間隔"],
       ["panel-pad", "var(--space-12) var(--space-16)", "カード・パネルの内側"],
       ["panel-pad-sm", "var(--space-8) var(--space-12)", "中に入れ子にした枠・お知らせの内側"],
-      ["touch-target", "2.75rem", "指で押せる最小の高さ（44px。pointer: coarse のとき）"],
-      ["target-min", "1.5rem", "マウスで押せる最小の大きさ（24px。WCAG 2.2 の 2.5.8）"],
+      [
+        "touch-target",
+        "2.75rem",
+        "指で押す主な移動（メニューの項目・上部バーの開閉）の高さ（44px。Apple HIG の 44pt）",
+      ],
+      [
+        "touch-target-md",
+        "2.25rem",
+        "指で押す標準のボタン・入力欄・選択欄の高さ（36px。WCAG 2.5.8 の 24px に余裕を足す）",
+      ],
+      ["touch-target-sm", "2rem", "指で押す詰めた部品（行の中・道具の帯・開閉の見出し）の高さ（32px。WCAG 2.5.8）"],
+      ["target-min", "1.5rem", "押せる最小の大きさ（24px。WCAG 2.2 の 2.5.8。マウスでも指でも下回らない）"],
     ],
   },
   {
