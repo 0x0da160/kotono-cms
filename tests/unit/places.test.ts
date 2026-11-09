@@ -195,6 +195,25 @@ describe("作業場所の操作（38・39.3）", () => {
     expect(places.views()[0]).toMatchObject({ locked: false, label: "ブログ" });
   });
 
+  it("保存領域（OPFS）を開けないときは理由を示し、作るを押すと黙らずに知らせる。もう一度試せる", async () => {
+    const { fs, places } = setup();
+    let fail = true;
+    await places.start(async () =>
+      fail ? { ok: false, reason: "UnknownError：一時的な失敗" } : { ok: true, root: fs.root },
+    );
+    expect(places.ready).toBe(true);
+    expect(places.store).toBeNull();
+    expect(places.storageError).toBe("UnknownError：一時的な失敗");
+    expect(await places.create("ブログ", true)).toBeNull();
+    expect(places.error).toContain("保存領域を開けていない");
+    expect(places.busy).toBe(false);
+    fail = false;
+    await places.retry();
+    expect(places.storageError).toBeNull();
+    expect(places.store).not.toBeNull();
+    expect(await places.create("ブログ", true)).not.toBeNull();
+  });
+
   it("暗号化する作業場所でも、表示名は鍵なしで読める平文で保存する", async () => {
     const { fs, places } = setup();
     await places.init(fs.root);

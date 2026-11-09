@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { strToU8, zipSync } from "fflate";
 import { MemFs, type MemDir, type MemFile } from "./support/memory-fs";
 import {
+  openOpfs,
   WorkspaceStore,
   isWorkspaceId,
   newWorkspaceId,
@@ -260,3 +261,45 @@ function limits() {
     maxDepth: 32,
   };
 }
+
+describe("OPFS を開く（38.1）", () => {
+  const noWait = async () => undefined;
+
+  it("一時的に失敗しても、間を置いて試し直す", async () => {
+    const fs = new MemFs();
+    let n = 0;
+    const host = {
+      navigator: {
+        storage: {
+          getDirectory: async () => {
+            if (++n < 3) throw Object.assign(new Error("transient"), { name: "UnknownError" });
+            return fs.root;
+          },
+        },
+      },
+    };
+    const r = await openOpfs(host, { delay: noWait });
+    expect(r.ok).toBe(true);
+    expect(n).toBe(3);
+  });
+
+  it("開けなければ、例外の名前と内容を理由として返す", async () => {
+    const host = {
+      navigator: {
+        storage: {
+          getDirectory: async () => {
+            throw Object.assign(new Error("The operation is insecure."), { name: "SecurityError" });
+          },
+        },
+      },
+    };
+    expect(await openOpfs(host, { delay: noWait })).toEqual({
+      ok: false,
+      reason: "SecurityError：The operation is insecure.",
+    });
+    expect(await openOpfs({ navigator: {} })).toEqual({
+      ok: false,
+      reason: "このブラウザは OPFS に対応していません。",
+    });
+  });
+});

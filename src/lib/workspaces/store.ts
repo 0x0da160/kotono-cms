@@ -443,15 +443,46 @@ export class WorkspaceStore {
   }
 }
 
-/** OPFS のルートを得る。使えなければ null */
-export async function opfsRoot(host: { navigator?: { storage?: { getDirectory?: () => Promise<unknown> } } }) {
-  const get = host.navigator?.storage?.getDirectory;
-  if (typeof get !== "function") return null;
-  try {
-    return (await get.call(host.navigator?.storage)) as DirHandleLike;
-  } catch {
-    return null;
+type OpfsHost = { navigator?: { storage?: { getDirectory?: () => Promise<unknown> } } };
+
+export type OpfsResult =
+  { readonly ok: true; readonly root: DirHandleLike } | { readonly ok: false; readonly reason: string };
+
+/**
+ * OPFS のルートを得る。iOS Safari では起動直後などに一時的に失敗することがあるので、間を置いて数回試す。
+ * 使えなければ、画面に出す理由（例外の名前と内容）を返す。
+ */
+export async function openOpfs(
+  host: OpfsHost,
+  opts: { attempts?: number; delay?: (ms: number) => Promise<void> } = {},
+): Promise<OpfsResult> {
+  const storage = host.navigator?.storage;
+  const get = storage?.getDirectory;
+  if (typeof get !== "function") return { ok: false, reason: "このブラウザは OPFS に対応していません。" };
+  const attempts = Math.max(1, opts.attempts ?? 3);
+  const delay = opts.delay ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  let last: unknown = null;
+  for (let i = 0; i < attempts; i++) {
+    if (i > 0) await delay(300 * 2 ** (i - 1));
+    try {
+      const root = (await get.call(storage)) as DirHandleLike | null | undefined;
+      if (root && typeof root.getDirectoryHandle === "function") return { ok: true, root };
+      last = new Error("保存領域のフォルダを受け取れませんでした。");
+    } catch (e) {
+      last = e;
+    }
   }
+  return { ok: false, reason: describeError(last) };
+}
+
+function describeError(e: unknown): string {
+  if (e instanceof Error || (typeof e === "object" && e !== null && "name" in e)) {
+    const { name, message } = e as { name?: unknown; message?: unknown };
+    const n = typeof name === "string" && name !== "Error" ? `${name}` : "";
+    const m = typeof message === "string" ? message : "";
+    return [n, m].filter((x) => x !== "").join("：") || "不明なエラー";
+  }
+  return String(e);
 }
 
 /** 「端末の外にない変更あり」の判定（38.4） */

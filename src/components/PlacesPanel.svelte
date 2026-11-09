@@ -129,7 +129,23 @@
     >
   </h2>
 
-  <StorageNotice {places} />
+  {#if places.storageError !== null}
+    <!-- 保存領域を開けないと、作業場所を作る・取り込むことができない。欄は出さず、理由とやり直しを示す -->
+    <div class="banner" role="alert" data-testid="storage-error">
+      <p><strong>ブラウザ内の保存領域（OPFS）を開けません。</strong>作業場所を作る・開くことができません。</p>
+      <p class="small">理由：{places.storageError}</p>
+      <ul class="small">
+        <li>プライベートブラウズでは使えません。通常のタブで開いてください。</li>
+        <li>iPhone・iPad では、「設定」の Safari で「すべての Cookie をブロック」がオフか確かめてください。</li>
+        <li>それでも開けないときは、Safari を終了してから開き直してください。</li>
+      </ul>
+      <button type="button" onclick={() => places.retry()} disabled={places.busy} data-testid="storage-retry"
+        >もう一度試す</button
+      >
+    </div>
+  {:else}
+    <StorageNotice {places} />
+  {/if}
 
   <!-- 解錠の失敗は、入力した欄のすぐ下に出す（パネルの先頭では目に入らない） -->
   {#if places.error && !unlockOpen}<p class="banner" role="alert" data-testid="places-error">
@@ -273,7 +289,7 @@
           <button type="button" onclick={() => places.cancelImport()}>取り消す</button>
         </div>
       </form>
-    {:else}
+    {:else if places.store}
       <form class="sub" onsubmit={create} data-testid="place-create">
         <h3>新しい作業場所</h3>
         <label>名前 <input bind:value={newName} maxlength="80" required data-testid="place-name" /></label>
@@ -385,6 +401,13 @@
     padding: var(--panel-pad-sm);
     margin: 0 0 var(--space-12);
     background: var(--color-danger-bg);
+  }
+  div.banner > :first-child {
+    margin-block-start: 0;
+  }
+  div.banner ul {
+    margin: var(--space-4) 0 var(--space-8);
+    padding-inline-start: 1.2em;
   }
   .banner.info {
     border-color: var(--color-info-border);

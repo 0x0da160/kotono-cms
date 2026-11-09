@@ -216,3 +216,28 @@ test("最初にパスキーを登録し、起動し直すとパスキーでロ�
   await page.getByTestId("unlock-run").click();
   await expect(page.getByTestId("place")).toHaveAttribute("data-locked", "false");
 });
+
+test("保存領域（OPFS）を開けないときは、理由とやり直しを示し、押しても反応しない作成欄を出さない", async ({ page }) => {
+  // 起動時の 3 回の試行はすべて失敗させ、「もう一度試す」で開けるようにする
+  await page.addInitScript(() => {
+    const st = navigator.storage;
+    const real = st.getDirectory.bind(st);
+    let n = 0;
+    st.getDirectory = () => {
+      n++;
+      if (n <= 3)
+        return Promise.reject(new DOMException("The operation failed for an unknown transient reason", "UnknownError"));
+      return real();
+    };
+  });
+  await open(page);
+  const err = page.getByTestId("storage-error");
+  await expect(err).toBeVisible();
+  await expect(err).toContainText("UnknownError");
+  await expect(page.getByTestId("place-create")).toHaveCount(0);
+  await page.getByTestId("storage-retry").click();
+  await expect(page.getByTestId("storage-error")).toHaveCount(0);
+  await page.getByTestId("place-name").fill("ブログ");
+  await page.getByTestId("place-create-run").click();
+  await expect(page.getByTestId("recovery-code-value")).toBeVisible();
+});
