@@ -7,12 +7,12 @@
 import { expect, test, type Page } from "@playwright/test";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import { installFakeFs, type FakeFsApi } from "./fake-fs";
 import { loginAgain, registerLogin } from "./login";
 
 const distHtml = resolve(import.meta.dirname, "../../dist/kotono-cms.html");
-const url = pathToFileURL(distHtml).href;
+/** localhost から配信する（パスキーは file:// では使えない：ADR-0012） */
+const url = "/kotono-cms.html";
 
 const A = "k7m2x9q";
 const IMG = "abcdefghjk.png";

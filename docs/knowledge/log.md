@@ -1,6 +1,7 @@
 # Directory Update Log
 
 ## 2026-11-09
+* **Addition**: [ADR-0012 パスキーだけのログインと、ログインの鍵でのアプリ全体の暗号化](/decisions/0012-passkey-only-login-whole-app-encryption.md) を追加。ADR-0011 の第1章（パスフレーズ・file:// での利用・作業場所ごとの鍵）を置き換えた。
 * **Addition**: [ADR-0011 起動時のパスキーでのログイン・暗号化した復旧ドラフト・詰めた画面](/decisions/0011-passkey-first-and-compact-ui.md) を追加。
 * **Update**: [Kotono CMS のアプリの外枠（シェル）](/product/app-shell.md) を、起動時のログイン・固定してスクロールで詰める上部バー・メニュー（ハンバーガー）に更新。
 * **Update**: [Kotono CMS のデザインシステム](/product/design-system.md) の押せる高さを、部品ごとの規則（WCAG 2.5.8・Apple HIG）に更新。

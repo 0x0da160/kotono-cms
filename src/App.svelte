@@ -34,7 +34,7 @@
   import { SealedDraftStore } from "./lib/drafts/sealed";
   import { openOpfs } from "./lib/workspaces/store";
   import { DraftController } from "./lib/app/drafts.svelte";
-  import { LoginController } from "./lib/app/login.svelte";
+  import { LOGIN_ID, LoginController } from "./lib/app/login.svelte";
   import { IdbLoginStore } from "./lib/login/store";
   import { GitController } from "./lib/app/git.svelte";
   import { Workspace } from "./lib/app/workspace.svelte";
@@ -71,7 +71,7 @@
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ブラウザの大域を各層の最小の型へ渡す
   const host = globalThis as any;
   const vault = new Vault(browserPasskey(host));
-  /** 起動時のログイン（ADR-0011）：何よりも先にパスキー（使えなければパスフレーズ）で認証する */
+  /** 起動時のログイン（ADR-0011・ADR-0012）：何よりも先にパスキーで認証する */
   const login = new LoginController(
     vault,
     typeof indexedDB === "undefined" ? null : new IdbLoginStore(indexedDB),
@@ -82,7 +82,7 @@
         vault,
         sealed: sealedDrafts,
         hooks: {
-          unlocked: (id) => login.rememberPlace(id),
+          login: () => (login.unlocked && login.record ? { id: LOGIN_ID, slots: login.record.keyring.slots } : null),
           removed: (id) => login.forgetPlace(id),
           autoLocked: () => void lockApp(true),
           active: () => login.unlocked,
@@ -168,8 +168,13 @@
     if (mode === "folder" && ws.root === null) await ws.loadRecent();
     if (places) {
       await placesReady;
-      // ログインで覚えていた暗号化した作業場所は、解錠済みにする
-      places.adoptUnlocked(await login.unlockPlaces());
+      // ログインの枠を持つ作業場所を解錠する。以前の版でログインの記録に覚えていた鍵は、作業場所の meta へ移す
+      const legacy = await login.unlockPlaces();
+      await places.unlockWithLogin(legacy);
+      for (const id of legacy) {
+        const e = places.entries.find((x) => x.state === "ok" && x.meta.id === id);
+        if (e?.state === "ok" && e.meta.keyring?.slots.some((s) => s.kind === "login")) await login.forgetPlace(id);
+      }
     }
   }
 
@@ -198,9 +203,10 @@
     const v = await ws.ask({
       title: "ログインを作り直します",
       message:
-        "登録したパスキー・パスフレーズ・回復コードの情報をこのブラウザから消し、登録からやり直します。このブラウザの復旧ドラフトはすべて削除します（もう読めないため）。",
+        "登録したパスキー・回復コードの情報をこのブラウザから消し、登録からやり直します。このブラウザの復旧ドラフトはすべて削除します（もう読めないため）。",
       details: [
-        "ブラウザ内の作業場所は消しません。それぞれの回復コード・パスフレーズで開けます。",
+        "ブラウザ内の作業場所は、このログインの鍵で暗号化しているため、作り直すと開けなくなります（以前の版で作り、作業場所の回復コードがあるものは、その回復コードで開けます）。書き出した .kotono も、このログインの回復コードでしか開けません。",
+        "作業場所は自動では消しません。開けなくなった作業場所は、作業場所の一覧から削除できます。",
         "パスキー管理アプリに残るパスキーは、不要なら管理アプリで削除してください。",
       ],
       buttons: [

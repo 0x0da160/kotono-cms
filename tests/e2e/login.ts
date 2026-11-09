@@ -1,20 +1,40 @@
 /**
- * E2E 用：起動時のログイン（ADR-0011）と、上部バーのメニューでの画面の切り替え。
- * file:// ではパスキーを使えないので、パスフレーズで登録・ログインする。
+ * E2E 用：起動時のログイン（ADR-0011・ADR-0012）と、上部バーのメニューでの画面の切り替え。
+ * ログインはパスキーだけなので、Chromium の仮想の認証器（PRF 対応）で登録・ログインする。
+ * file:// ではパスキーを使えないため、試験は localhost から配信して開く（playwright.config.ts の webServer）。
  */
-import { expect, type Page } from "@playwright/test";
+import { expect, type CDPSession, type Page } from "@playwright/test";
 
-export const E2E_PASSPHRASE = "e2e-passphrase-0123";
+const authenticators = new WeakMap<Page, { cdp: CDPSession; authenticatorId: string }>();
 
-/** 初回：パスフレーズで登録し、回復コードの保存を確かめて使い始める。回復コードを返す */
+/** ページに仮想の認証器を付ける（同じページには 1 回だけ）。利用者の操作なしで登録・認証を通す */
+export async function virtualAuthenticator(page: Page): Promise<{ cdp: CDPSession; authenticatorId: string }> {
+  const had = authenticators.get(page);
+  if (had) return had;
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("WebAuthn.enable");
+  const { authenticatorId } = await cdp.send("WebAuthn.addVirtualAuthenticator", {
+    options: {
+      protocol: "ctap2",
+      ctap2Version: "ctap2_1",
+      transport: "internal",
+      hasResidentKey: true,
+      hasUserVerification: true,
+      isUserVerified: true,
+      hasPrf: true,
+      automaticPresenceSimulation: true,
+    },
+  });
+  const a = { cdp, authenticatorId };
+  authenticators.set(page, a);
+  return a;
+}
+
+/** 初回：パスキーを登録し、回復コードの保存を確かめて使い始める。回復コードを返す */
 export async function registerLogin(page: Page): Promise<string> {
+  await virtualAuthenticator(page);
   await expect(page.getByTestId("login")).toHaveAttribute("data-phase", "register");
-  // パスキーを使える配信元（http://localhost）では、パスフレーズの方を選ぶ
-  const alt = page.getByTestId("login-use-passphrase");
-  if (await alt.isVisible()) await alt.click();
-  await page.getByTestId("login-new-passphrase").fill(E2E_PASSPHRASE);
-  await page.getByTestId("login-new-passphrase2").fill(E2E_PASSPHRASE);
-  await page.getByTestId("login-register-passphrase").click();
+  await page.getByTestId("login-register-passkey").click();
   const code = (await page.getByTestId("recovery-code-value").textContent()) ?? "";
   await page.getByTestId("recovery-kept").check();
   await page.getByTestId("recovery-done").click();
@@ -22,11 +42,11 @@ export async function registerLogin(page: Page): Promise<string> {
   return code;
 }
 
-/** 2 回目以降：パスフレーズでログインする */
+/** 2 回目以降：パスキーでログインする */
 export async function loginAgain(page: Page): Promise<void> {
+  await virtualAuthenticator(page);
   await expect(page.getByTestId("login")).toHaveAttribute("data-phase", "login");
-  await page.getByTestId("unlock-secret").fill(E2E_PASSPHRASE);
-  await page.getByTestId("unlock-run").click();
+  await page.getByTestId("login-passkey").click();
   await expect(page.getByTestId("login")).toHaveCount(0);
 }
 
@@ -35,4 +55,9 @@ export async function menu(page: Page, testId: string): Promise<void> {
   const item = page.getByTestId(testId);
   if (!(await item.isVisible())) await page.getByTestId("menu-toggle").click();
   await item.click();
+}
+
+/** 配信元（localhost）からの読み込み・data:・blob: を除いた、外への通信 */
+export function external(requests: readonly string[], origin: string): string[] {
+  return requests.filter((r) => !r.startsWith(origin) && !r.startsWith("data:") && !r.startsWith("blob:"));
 }

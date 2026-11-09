@@ -340,4 +340,30 @@ describe("Vault（39.2・39.4）", () => {
     const plan = planZip(must(opened).zip);
     expect(plan.ok && plan.files.map((f) => f.path)).toEqual(["content/x.md"]);
   });
+
+  it("ログインの枠で作業場所を開き、書き出し（版 2）はログインの回復コードで開ける。別の作業場所の枠への差し替えは開けない（ADR-0012）", async () => {
+    const v = new Vault(null, ITER);
+    const login = await v.prepareNew();
+    v.adopt("login", login.key);
+    const place = await v.newKey();
+    const a = "a".repeat(16);
+    const b = "b".repeat(16);
+    const slot = await v.loginSlot("login", a, place);
+    expect(slot.kind).toBe("login");
+    expect(await v.unlockWithLogin("login", a, { v: 1, slots: [slot] })).toBe(true);
+    expect(await v.unlockWithLogin("login", b, { v: 1, slots: [slot] })).toBe(false);
+
+    const sealed = await v.sealExport(a, enc("zip"), [slot], { id: "login", slots: login.record.slots });
+    const h = Vault.readExportHeader(sealed);
+    expect(h?.header.v).toBe(2);
+    // 直接の枠にはログインの枠を入れない（ほかの端末では意味がない）
+    expect(h?.header.slots).toEqual([]);
+    expect(await v.openSealedExport(sealed, { kind: "login", loginId: "login" })).not.toBeNull();
+    const other = new Vault(null, ITER);
+    expect(
+      await other.openSealedExport(sealed, { kind: "recovery", code: "AAAAA-AAAAA-AAAAA-AAAAA-AAAAA" }),
+    ).toBeNull();
+    const opened = await other.openSealedExport(sealed, { kind: "recovery", code: login.recoveryCode });
+    expect(opened && dec(opened.zip)).toBe("zip");
+  });
 });

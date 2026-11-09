@@ -9,7 +9,6 @@ import { existsSync, readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { extname, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import { installFakeFs } from "./fake-fs";
 import { loginAgain, menu, registerLogin } from "./login";
 
@@ -124,15 +123,4 @@ test("作業中は「設定」の先頭で新しい版を確かめられ、取�
   });
   expect(sw.waiting).toBe(false);
   expect(sw.active).toContain("/sw.js");
-});
-
-test("file:// で開いたときは、新しい版にする方法を「設定」で示す", async ({ page }) => {
-  await page.addInitScript(installFakeFs, SEED);
-  await page.goto(pathToFileURL(distHtml).href);
-  await registerLogin(page);
-  await page.getByTestId("choose-folder").click();
-  await menu(page, "nav-settings");
-  await expect(page.getByTestId("settings-app").getByTestId("update-unavailable")).toContainText(
-    "kotono-cms.html に差し替えてから開き直してください",
-  );
 });

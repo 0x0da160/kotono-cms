@@ -5,9 +5,11 @@
  * 端末内の「ログイン鍵」をパスキーの PRF で開く操作で、ログイン鍵は復旧ドラフトの暗号化と、
  * ブラウザ内の暗号化した作業場所の鍵を包むのに使う。
  *
- * - パスキーを使えない環境（file:// で開いたとき・PRF に対応しないとき）は、パスフレーズで同じことをする。
- * - 回復コードの枠は必ず作る（パスキー・パスフレーズを失ったときの道）。回復コードは登録時に一度だけ表示する。
- * - ログイン鍵はログイン中だけメモリに置く。ロックで捨てる。
+ * - ログインはパスキーだけ（ADR-0012）。パスフレーズはない。以前の版で作ったパスフレーズの枠は、ログインしたときに外す。
+ * - パスキーを使えない開き方（file://）では使えない。https の配信元か localhost から開くよう案内するだけにする。
+ * - 回復コードの枠は必ず作る（パスキーを失ったときの道）。回復コードは登録時に一度だけ表示する。
+ *   回復コードでログインしたあと、この配信元で使えるパスキーがなければ、パスキーの登録を求める。
+ * - ログイン鍵はログイン中だけメモリに置く。ロックで捨てる。ブラウザ内の作業場所の鍵もログイン鍵で包む。
  */
 import { accountName } from "../crypto/passkey";
 import type { UnlockMethod, Vault } from "../crypto/vault";
@@ -25,17 +27,19 @@ export type LoginPhase =
   | "loading"
   /** この環境ではログインできない（IndexedDB がない）。ログインなしで使う */
   | "unavailable"
-  /** 初回：パスキー（またはパスフレーズ）を登録する */
+  /** パスキーを使えない開き方（file://）：使えない。https の配信元か localhost から開くよう案内する */
+  | "nopasskey"
+  /** 初回：パスキーを登録する */
   | "register"
   /** 登録直後：回復コードの保存を確かめる */
   | "recovery"
-  /** 2 回目以降：パスキー（またはパスフレーズ・回復コード）で認証する */
+  /** 2 回目以降：パスキー（または回復コード）で認証する */
   | "login"
+  /** 回復コードでログインしたが、この配信元で使えるパスキーがない：パスキーを登録し直す */
+  | "passkey"
+
   /** ログイン済み */
   | "ready";
-
-export type RegisterMethod =
-  { readonly kind: "passkey" } | { readonly kind: "passphrase"; readonly passphrase: string };
 
 export class LoginController {
   /** 記録は IndexedDB へそのまま書くので、深い反応（Proxy）にしない（構造化複製できない） */
@@ -62,7 +66,8 @@ export class LoginController {
     if (!this.store) return "unavailable";
     if (!this.loaded) return "loading";
     if (this.recoveryCode !== null) return "recovery";
-    if (this.unlocked) return "ready";
+    if (!this.passkeySupported) return "nopasskey";
+    if (this.unlocked) return this.hasPasskey ? "ready" : "passkey";
     return this.record ? "login" : "register";
   }
 
@@ -82,10 +87,6 @@ export class LoginController {
     return slots.some((s) => s.kind === "passkey") && !this.hasPasskey;
   }
 
-  get hasPassphrase(): boolean {
-    return this.record?.keyring.slots.some((s) => s.kind === "passphrase") ?? false;
-  }
-
   readonly account = LOGIN_ACCOUNT;
 
   async init(): Promise<void> {
@@ -99,8 +100,8 @@ export class LoginController {
     }
   }
 
-  /** 初回の登録：ログイン鍵と回復コードの枠を作り、パスキー（またはパスフレーズ）の枠を加えて保存する */
-  async register(method: RegisterMethod): Promise<boolean> {
+  /** 初回の登録：ログイン鍵と回復コードの枠を作り、パスキーの枠を加えて保存する */
+  async register(): Promise<boolean> {
     if (!this.store || this.busy || this.record) return false;
     this.busy = true;
     this.error = null;
@@ -109,10 +110,7 @@ export class LoginController {
       this.vault.adopt(LOGIN_ID, fresh.key);
       let keyring: KeyringRecord;
       try {
-        keyring =
-          method.kind === "passkey"
-            ? await this.vault.withPasskey(LOGIN_ID, fresh.record, accountName(LOGIN_ID))
-            : await this.vault.withPassphrase(LOGIN_ID, fresh.record, method.passphrase);
+        keyring = await this.vault.withPasskey(LOGIN_ID, fresh.record, accountName(LOGIN_ID));
       } catch (e) {
         this.vault.lock(LOGIN_ID);
         throw e;
@@ -136,10 +134,10 @@ export class LoginController {
     this.recoveryCode = null;
   }
 
-  /** ログインする。失敗しても自動では繰り返さない */
+  /** ログインする（パスキーか回復コード）。失敗しても自動では繰り返さない */
   async login(method: UnlockMethod): Promise<boolean> {
     const rec = this.record;
-    if (!rec || this.busy) return false;
+    if (!rec || this.busy || method.kind === "passphrase") return false;
     this.busy = true;
     this.error = null;
     this.info = null;
@@ -150,12 +148,11 @@ export class LoginController {
         this.error =
           method.kind === "passkey"
             ? "このパスキーではログインできませんでした。回復コードでログインできます。"
-            : method.kind === "passphrase"
-              ? "パスフレーズが違います。"
-              : "回復コードが違います。";
+            : "回復コードが違います。";
         return false;
       }
       this.failed = false;
+      await this.dropPassphrase();
       await this.afterUnlock();
       return true;
     } catch (e) {
@@ -164,6 +161,19 @@ export class LoginController {
       return false;
     } finally {
       this.busy = false;
+    }
+  }
+
+  /** 以前の版で作ったパスフレーズの枠を外す（ログインはパスキーと回復コードだけ：ADR-0012） */
+  private async dropPassphrase(): Promise<void> {
+    const rec = this.record;
+    if (!rec || !rec.keyring.slots.some((s) => s.kind === "passphrase")) return;
+    const slots = rec.keyring.slots.filter((s) => s.kind !== "passphrase");
+    if (slots.length === 0) return;
+    try {
+      await this.save({ ...rec, keyring: { ...rec.keyring, slots } });
+    } catch {
+      // 外せなくてもログインは続ける（次のログインでもう一度試す）
     }
   }
 
@@ -186,8 +196,8 @@ export class LoginController {
   }
 
   /**
-   * ログインの記録を消して、登録からやり直す。パスキー・パスフレーズ・回復コードのどれも使えないときの道。
-   * ログイン鍵で暗号化した復旧ドラフトは読めなくなる（呼び出し側で削除する）。
+   * ログインの記録を消して、登録からやり直す。パスキー・回復コードのどちらも使えないときの道。
+   * ログイン鍵で暗号化した復旧ドラフトと、ログイン鍵で包んだ作業場所は読めなくなる（呼び出し側で削除する）。
    */
   async reset(): Promise<void> {
     if (!this.store) return;
@@ -199,24 +209,21 @@ export class LoginController {
   }
 
   // -------------------------------------------------------------------------
-  // ログインの方法を足す（「設定」の画面）
+  // パスキーを足す（「設定」の画面・回復コードでログインしたあと）
 
-  async addMethod(add: RegisterMethod): Promise<boolean> {
+  async addPasskey(): Promise<boolean> {
     const rec = this.record;
     if (!this.store || !rec || !this.unlocked || this.busy) return false;
     this.busy = true;
     this.error = null;
     this.info = null;
     try {
-      const keyring =
-        add.kind === "passkey"
-          ? await this.vault.withPasskey(LOGIN_ID, rec.keyring, accountName(LOGIN_ID))
-          : await this.vault.withPassphrase(LOGIN_ID, rec.keyring, add.passphrase);
+      const keyring = await this.vault.withPasskey(LOGIN_ID, rec.keyring, accountName(LOGIN_ID));
       await this.save({ ...rec, keyring });
-      this.info = add.kind === "passkey" ? "パスキーを登録しました。" : "パスフレーズを設定しました。";
+      this.info = "パスキーを登録しました。";
       return true;
     } catch (e) {
-      this.error = `設定できませんでした：${(e as Error).message}`;
+      this.error = `登録できませんでした：${(e as Error).message}`;
       return false;
     } finally {
       this.busy = false;
@@ -229,15 +236,8 @@ export class LoginController {
   }
 
   // -------------------------------------------------------------------------
-  // 暗号化した作業場所の鍵（ログインだけで開けるようにする）
-
-  /** 解錠中の作業場所の鍵を、ログイン鍵で包んで覚える */
-  async rememberPlace(placeId: string): Promise<void> {
-    const rec = this.record;
-    if (!rec || !this.unlocked || !this.vault.isUnlocked(placeId)) return;
-    const wrapped = await this.vault.wrapPlace(LOGIN_ID, placeId);
-    await this.save({ ...rec, places: { ...rec.places, [placeId]: wrapped } });
-  }
+  // 以前の版（ADR-0011）でログインの記録に覚えていた作業場所の鍵。ADR-0012 からは作業場所の meta の
+  // ログインの枠に置くので、ここからは読むだけ（開いたら meta へ移し、ここから外す）
 
   async forgetPlace(placeId: string): Promise<void> {
     const rec = this.record;

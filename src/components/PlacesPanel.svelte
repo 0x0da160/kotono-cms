@@ -5,22 +5,19 @@
   import type { WorkspaceMeta } from "../lib/workspaces/store";
   import type { UnlockMethod } from "../lib/crypto/vault";
   import { accountName } from "../lib/crypto/passkey";
-  import RecoveryCodeNotice from "./RecoveryCodeNotice.svelte";
   import UnlockForm from "./UnlockForm.svelte";
   import StorageNotice from "./StorageNotice.svelte";
 
   let { places, ws }: { places: PlacesController; ws: Workspace } = $props();
 
   let newName = $state("");
-  let encrypt = $state(true);
   let importName = $state("");
-  let importEncrypt = $state(true);
   let unlocking = $state<string | null>(null);
   let fileInput: HTMLInputElement | undefined = $state();
 
   const views = $derived(places.views());
   /** 解錠の入力欄を開いている行があるか（あれば、エラーはその欄の下に出す） */
-  const unlockOpen = $derived(views.some((v) => v.locked && v.id === unlocking) && places.recoveryToShow === null);
+  const unlockOpen = $derived(views.some((v) => v.locked && v.id === unlocking));
 
   $effect(() => {
     if (places.pendingImport) importName = places.pendingImport.name;
@@ -28,11 +25,10 @@
 
   async function create(e: SubmitEvent) {
     e.preventDefault();
-    const m = await places.create(newName, encrypt && places.vault !== null);
+    const m = await places.create(newName);
     if (!m) return;
     newName = "";
-    // 回復コードを表示している間は開かない（控えたことを確かめてから開く：39.2）
-    if (!places.recoveryToShow) await places.open(m);
+    await places.open(m);
   }
 
   async function onFile(e: Event) {
@@ -44,8 +40,8 @@
 
   async function confirmImport(e: SubmitEvent) {
     e.preventDefault();
-    const m = await places.confirmImport(importName, importEncrypt);
-    if (m && !places.recoveryToShow) await places.open(m);
+    const m = await places.confirmImport(importName);
+    if (m) await places.open(m);
   }
 
   async function unlockAndOpen(meta: WorkspaceMeta, method: UnlockMethod) {
@@ -67,6 +63,8 @@
       );
       if (since !== null) details.push(`書き出し・同期していない変更があります（${since} 日前から）。`);
       if (m.keyring) details.push("暗号化した作業場所です。書き出しがなければ、削除後は誰も内容を戻せません。");
+      if (v.locked)
+        details.push("このログインでは開けない作業場所です（ログインを作り直す前の鍵で暗号化しています）。");
     } else details.push("作成・取り込みの途中で止まった作業場所です。");
     details.push("削除前の退避（退避領域）は残しますが、退避領域もブラウザのデータ消去から守られません。");
     const ok = await ws.ask({
@@ -88,7 +86,7 @@
       const v = await ws.ask({
         title: "書き出しの形式",
         message:
-          "既定では暗号化して書き出します（.kotono）。別の端末やデスクトップ版でも、回復コードかパスフレーズで開けます。平文の zip は誰でも中身を読めます。",
+          "既定では暗号化して書き出します（.kotono）。別の端末でも、このログインの回復コード（またはこのログインで登録した、同期しているパスキー）で開けます。平文の zip は誰でも中身を読めます。",
         buttons: [
           { label: "暗号化して書き出す", value: "sealed", variant: "primary" },
           { label: "平文の zip にする", value: "plain" },
@@ -112,7 +110,7 @@
     return accountName(id);
   }
 
-  function hasSlot(meta: WorkspaceMeta, kind: "passphrase" | "passkey"): boolean {
+  function hasSlot(meta: WorkspaceMeta, kind: "recovery" | "passphrase" | "passkey"): boolean {
     return meta.keyring?.slots.some((s) => s.kind === kind) ?? false;
   }
 
@@ -153,18 +151,11 @@
     </p>{/if}
   {#if places.info}<p class="banner info" role="status" data-testid="places-info">{places.info}</p>{/if}
 
-  {#if places.recoveryToShow}
-    {@const rid = places.recoveryToShow.id}
-    <RecoveryCodeNotice
-      code={places.recoveryToShow.code}
-      account={recoveryAccount(rid)}
-      ondone={async () => {
-        const id = places.recoveryToShow?.id;
-        places.recoveryToShow = null;
-        const e = places.entries.find((x) => x.state === "ok" && x.meta.id === id);
-        if (e?.state === "ok") await places.open(e.meta);
-      }}
-    />
+  {#if places.needsLogin}
+    <p class="banner info" role="status" data-testid="places-need-login">
+      ブラウザ内の作業場所は、起動時のログイン（パスキー）の鍵で暗号化します。ログインしていないため、作業場所を作る・開くことはできません。https
+      の配信元から開いてログインしてください。
+    </p>
   {:else}
     {#if views.length > 0}
       <ul class="places" data-testid="places-list">
@@ -188,7 +179,9 @@
                 {#if e.meta.lastSyncAt}・同期：{fmt(e.meta.lastSyncAt)}{/if}
               </p>
               <div class="actions">
-                {#if v.locked}
+                {#if v.locked && !hasSlot(e.meta, "recovery")}
+                  <!-- ログインの枠だけの作業場所：解錠の方法はログインだけ -->
+                {:else if v.locked}
                   <button
                     type="button"
                     class={unlocking === v.id ? "" : "primary"}
@@ -210,9 +203,6 @@
                     disabled={places.busy}
                     data-testid="place-export">書き出す</button
                   >
-                  {#if e.meta.keyring}
-                    <button type="button" onclick={() => places.lock(v.id)} data-testid="place-lock">ロック</button>
-                  {/if}
                 {/if}
                 <button
                   type="button"
@@ -222,11 +212,17 @@
                   data-testid="place-remove">削除</button
                 >
               </div>
-              {#if v.locked && unlocking !== v.id}
+              {#if v.locked && !hasSlot(e.meta, "recovery")}
+                <p class="muted small" data-testid="place-other-login">
+                  {places.needsLogin
+                    ? "ログインすると開けます。"
+                    : "このログインでは開けません。ログインを作り直す前の鍵で暗号化した作業場所です。書き出しがあれば、その時のログインの回復コードで取り込めます。"}
+                </p>
+              {:else if v.locked && unlocking !== v.id}
                 <p class="muted small">
                   {e.state === "ok" && e.meta.name
-                    ? "内容は暗号化されています。解錠すると開けます。"
-                    : "名前と内容は暗号化されています。解錠すると表示されます。"}
+                    ? "以前の版で作った作業場所です。作業場所の回復コードで一度解錠すると、次からはログインだけで開けます。"
+                    : "名前と内容は暗号化されています。作業場所の回復コードで解錠すると表示されます。"}
                 </p>
               {/if}
               {#if v.locked && unlocking === v.id}
@@ -256,7 +252,11 @@
       <div class="sub" data-testid="import-sealed">
         <h3>暗号化した書き出しを開く</h3>
         <p class="small">
-          「{places.pendingSealed.name}」を開くには、作成時の回復コードかパスフレーズを入力してください。
+          「{places.pendingSealed
+            .name}」は、別の端末（または作り直す前のログイン）で書き出したものです。書き出した端末のログインの回復コードを入力してください。以前の版で書き出したものは、作業場所の回復コード{places
+            .pendingSealed.passphrase
+            ? "かパスフレーズ"
+            : ""}で開けます。
         </p>
         <UnlockForm
           busy={places.busy}
@@ -275,29 +275,22 @@
           {#if p.plan.strippedRoot}<li>先頭のフォルダ「{p.plan.strippedRoot}」を外して展開します。</li>{/if}
           <li>{p.plan.hasGit ? "Git の履歴（.git）を含みます。" : "Git の履歴（.git）は含まれていません。"}</li>
           {#if p.plan.skipped.length > 0}<li>OS の付属物 {p.plan.skipped.length} 件は取り込みません。</li>{/if}
-          {#if p.sealed}<li>暗号化した書き出しと同じ鍵（回復コード・パスフレーズ）を引き継ぎます。</li>{/if}
+          {#if places.vault}<li>このログインの鍵で暗号化して保存します。</li>{/if}
         </ul>
         <label>作業場所の名前 <input bind:value={importName} maxlength="80" required data-testid="import-name" /></label
         >
-        {#if !p.sealed && places.vault}
-          <label class="check"
-            ><input type="checkbox" bind:checked={importEncrypt} /> 暗号化する（推奨。回復コードを表示します）</label
-          >
-        {/if}
         <div class="actions">
           <button type="submit" class="primary" disabled={places.busy} data-testid="import-run">取り込む</button>
           <button type="button" onclick={() => places.cancelImport()}>取り消す</button>
         </div>
       </form>
-    {:else if places.store}
+    {:else if places.store && !places.needsLogin}
       <form class="sub" onsubmit={create} data-testid="place-create">
         <h3>新しい作業場所</h3>
         <label>名前 <input bind:value={newName} maxlength="80" required data-testid="place-name" /></label>
-        {#if places.vault}
-          <label class="check"
-            ><input type="checkbox" bind:checked={encrypt} data-testid="place-encrypt" /> 暗号化する（推奨。回復コードを表示します）</label
-          >
-        {/if}
+        {#if places.vault}<p class="small muted">
+            ログインの鍵で暗号化して保存します。作業場所ごとの回復コード・パスキーはありません。
+          </p>{/if}
         <div class="actions">
           <button type="submit" class="primary" disabled={places.busy} data-testid="place-create-run">作る</button>
         </div>
@@ -381,10 +374,6 @@
     flex-direction: column;
     gap: var(--space-4);
     margin-block: var(--space-8);
-  }
-  label.check {
-    flex-direction: row;
-    align-items: center;
   }
   input:not([type="checkbox"]) {
     font: inherit;

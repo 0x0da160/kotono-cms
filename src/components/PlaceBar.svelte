@@ -1,10 +1,8 @@
 <script lang="ts">
-  import HelpTip from "./HelpTip.svelte";
   import Download from "@lucide/svelte/icons/download";
   import { LOCK_MINUTE_CHOICES, type PlacesController } from "../lib/app/places.svelte";
   import type { Workspace } from "../lib/app/workspace.svelte";
   import type { GitController } from "../lib/app/git.svelte";
-  import { PASSPHRASE_MIN } from "../lib/crypto/vault";
   import type { WorkspaceMeta } from "../lib/workspaces/store";
   import type { Snippet } from "svelte";
 
@@ -29,12 +27,8 @@
     part?: "status" | "settings";
   } = $props();
 
-  let pass1 = $state("");
-  let pass2 = $state("");
   const days = $derived(places.remindDays(meta));
   const encrypted = $derived(meta.keyring !== null);
-  const hasPassphrase = $derived(meta.keyring?.slots.some((s) => s.kind === "passphrase") ?? false);
-  const passkeys = $derived(meta.keyring?.slots.filter((s) => s.kind === "passkey").length ?? 0);
 
   /** 書き出し前に、未保存・未コミットを示す（38.3） */
   async function exportNow() {
@@ -45,7 +39,7 @@
     const v = await ws.ask({
       title: "作業場所を書き出します",
       message: encrypted
-        ? "既定では暗号化して書き出します（.kotono）。別の端末やデスクトップ版でも、回復コードかパスフレーズで開けます。平文の zip は誰でも中身を読めます。"
+        ? "既定では暗号化して書き出します（.kotono）。別の端末でも、このログインの回復コード（またはこのログインで登録した、同期しているパスキー）で開けます。平文の zip は誰でも中身を読めます。"
         : "作業場所を .git を含めて zip にします。共有シートまたはダウンロードで保存先を選んでください。",
       details,
       buttons: encrypted
@@ -62,35 +56,6 @@
     });
     if (v === "cancel") return;
     await places.export(meta, v === "plain");
-  }
-
-  async function removePasskeys() {
-    const v = await ws.ask({
-      title: "登録済みのパスキーを外します",
-      message: `この作業場所に登録したパスキー ${passkeys} 件を、解錠の方法から外します。回復コード${hasPassphrase ? "・パスフレーズ" : ""}では今まで通り開けます。外したあと、使うパスキーを登録し直してください。`,
-      details: [
-        "パスキー自体はパスワードアプリや 1Password に残ります。不要なら、そちらで削除してください。",
-        "複数のパスキーを同時に登録し直すと、1Password などでも開けるようになります。",
-      ],
-      buttons: [
-        { label: "外す", value: "remove", variant: "danger" },
-        { label: "キャンセル", value: "cancel" },
-      ],
-      initial: "cancel",
-    });
-    if (v === "remove") await places.removePasskeys(meta);
-  }
-
-  async function setPassphrase(e: SubmitEvent) {
-    e.preventDefault();
-    if (pass1 !== pass2) {
-      places.error = "確認のパスフレーズが一致しません。";
-      return;
-    }
-    if (await places.addUnlock(meta, { kind: "passphrase", passphrase: pass1 })) {
-      pass1 = "";
-      pass2 = "";
-    }
   }
 </script>
 
@@ -128,52 +93,10 @@
   </div>
 {:else if encrypted}
   <section class="card settings" aria-labelledby="place-settings-heading" data-testid="place-settings">
-    <h2 id="place-settings-heading">解錠の方法と自動ロック</h2>
+    <h2 id="place-settings-heading">自動ロック</h2>
     <p class="small muted">
-      回復コードは常に使えます。{hasPassphrase ? "パスフレーズを設定済みです。" : ""}{passkeys > 0
-        ? `パスキー ${passkeys} 件を登録済みです。`
-        : ""}
+      作業場所は起動時のログインの鍵で暗号化しています。ロックするとログインの画面に戻り、パスキーか回復コードでログインし直すと開けます。
     </p>
-    <form onsubmit={setPassphrase} class="pp">
-      <label
-        >{hasPassphrase ? "パスフレーズを変える" : "パスフレーズを設定"}（{PASSPHRASE_MIN} 文字以上）
-        <input
-          type="password"
-          bind:value={pass1}
-          autocomplete="new-password"
-          minlength={PASSPHRASE_MIN}
-          required
-        /></label
-      >
-      <label
-        >確認 <input
-          type="password"
-          bind:value={pass2}
-          autocomplete="new-password"
-          minlength={PASSPHRASE_MIN}
-          required
-        /></label
-      >
-      <button type="submit" disabled={places.busy}>設定する</button>
-    </form>
-    {#if places.vault?.passkey}
-      <div class="passkeys">
-        <button
-          type="button"
-          onclick={() => places.addUnlock(meta, { kind: "passkey" })}
-          disabled={places.busy}
-          data-testid="add-passkey">パスキーを登録</button
-        >
-        {#if passkeys > 0}
-          <button type="button" onclick={removePasskeys} disabled={places.busy} data-testid="remove-passkeys"
-            >登録済みのパスキーを外す</button
-          >
-        {/if}
-        <HelpTip label="パスキー"
-          >パスキーはこの配信元（{location.hostname}）でだけ使えます。配信元を移したら登録し直してください。</HelpTip
-        >
-      </div>
-    {/if}
     <label class="row"
       >自動ロック
       <select bind:value={places.lockMinutes} data-testid="lock-minutes">
@@ -207,12 +130,6 @@
     margin: 0 0 var(--space-8);
     font-size: var(--font-size-18);
   }
-  .passkeys {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--control-gap);
-    align-items: center;
-  }
   .unsynced {
     font-size: var(--font-size-14);
   }
@@ -232,13 +149,6 @@
     border-color: var(--color-info-border);
     background: var(--color-info-bg);
   }
-  .pp {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-8);
-    align-items: end;
-    margin-block: var(--space-8);
-  }
   label {
     display: flex;
     flex-direction: column;
@@ -251,7 +161,6 @@
     gap: var(--control-gap);
     margin-top: var(--space-8);
   }
-  input,
   select {
     font: inherit;
     font-size: var(--font-size-16);
