@@ -24,7 +24,7 @@ table{{border-collapse:collapse;font-size:13px}} td,th{{padding:6px 12px;border-
 .sw{{display:inline-block;width:16px;height:16px;border-radius:4px;vertical-align:middle;border:1px solid var(--line)}}
 </style></head><body><main>
 <h1>Kotono CMS ロゴ</h1>
-<p>デザインシステム 0.4.0 のブランド色と 4px グリッドに合わせたアプリアイコンとロゴタイプ。マークは参考画像の輪郭を測って再現。文字は Inter（可変フォントの太さ 740、表示用の字形 opsz 32）をアウトライン化した図形で、フォントの導入は不要。</p>
+<p>デザインシステム 0.4.0 のブランド色と 4px グリッドに合わせたアプリアイコンとロゴタイプ。シンボルは 24 単位の正方格子で一から作図（縦棒 7.5、すき間 2、腕の角度 25°、腕の太さ 7、角丸 1.5）。文字は Inter（可変フォントの太さ 740、表示用の字形 opsz 32）をアウトライン化した図形で、フォントの導入は不要。</p>
 
 <h2>ロゴタイプ</h2>
 <div class="card paper"><p class="lbl">カラー（kotono-logotype.svg）</p>{sz('kotono-logotype.svg',h=96)}</div>
@@ -35,12 +35,12 @@ table{{border-collapse:collapse;font-size:13px}} td,th{{padding:6px 12px;border-
 
 <h2>アプリアイコン</h2>
 <div class="card page"><p class="lbl">kotono-icon.svg／kotono-icon-mono.svg／kotono-mark.svg</p>{sz('kotono-icon.svg',192)}{sz('kotono-icon-mono.svg',128)}{sz('kotono-mark.svg',h=96)}</div>
-<div class="card page px" style="margin-top:12px"><p class="lbl">小サイズ用（左から 64px 通常、32px 専用版、16px 専用版。専用版はすき間を広げ、1px でもつぶれないようにしてある）</p>{sz('kotono-icon.svg',64)}{sz('kotono-icon-32.svg',32)}{sz('kotono-icon-16.svg',16)}<span style="width:24px"></span>{sz('kotono-icon-32.svg',128)}{sz('kotono-icon-16.svg',128)}</div>
+<div class="card page px" style="margin-top:12px"><p class="lbl">小サイズ用（左から 64px 通常、32px 専用版、16px 専用版。専用版は縦棒とすき間を画素の整数倍にしてある）</p>{sz('kotono-icon.svg',64)}{sz('kotono-icon-32.svg',32)}{sz('kotono-icon-16.svg',16)}<span style="width:24px"></span>{sz('kotono-icon-32.svg',128)}{sz('kotono-icon-16.svg',128)}</div>
 
 <h2>余白と寸法</h2>
 <div class="card paper"><div class="clear">{sz('kotono-logotype.svg',h=96)}</div></div>
 <ul>
-<li>基準の大きさ（viewBox）は高さ 32。マークの高さ 32（<code>space-32</code>）、マークと文字の間 10（<code>space-10</code>）、大文字の高さ 20（上端 4、ベースライン 24）。マークは参考画像と同じく文字より下側に深く出る。</li>
+<li>基準の大きさ（viewBox）は高さ 32。シンボルの高さ 32（<code>space-32</code>）、シンボルと文字の間 12（<code>space-12</code>）、大文字の高さ 22（上端 4、ベースライン 26）。シンボルは小文字の重心に合わせて、上に 4、下に 6 はみ出す。</li>
 <li>周囲の余白はマークの高さの半分（基準の大きさで 16＝<code>space-16</code>）以上。上の破線がその範囲。</li>
 <li>最小サイズ：ロゴタイプは高さ 20px。アイコンは 48px 以上で kotono-icon.svg、24〜47px で kotono-icon-32.svg、23px 以下で kotono-icon-16.svg。</li>
 </ul>
