@@ -387,6 +387,40 @@ test("上部バーは固定してスクロールで詰め、画面の切り替�
   expect(await bar.evaluate((el) => (el as HTMLElement).offsetHeight)).toBeLessThanOrEqual(tall);
 });
 
+test("上部バーを詰めても、境目の辺りで詰める・戻すを繰り返さない（ちらつかない）。メニューの開閉はアイコンだけ", async ({
+  page,
+}) => {
+  await page.goto(url);
+  await registerLogin(page);
+  const toggle = page.getByTestId("menu-toggle");
+  await expect(toggle).toHaveAccessibleName("メニュー");
+  await expect(toggle).toHaveText("");
+  const bar = page.getByTestId("app-bar");
+  // 説明文のある最初の画面（詰めると高さが大きく変わる）。短いページ（少しだけスクロールできる）と長めのページで確かめる
+  for (const height of [620, 400]) {
+    await page.setViewportSize({ width: 390, height });
+    await page.evaluate(() => scrollTo(0, 0));
+    await expect(bar).not.toHaveClass(/compact/);
+    await bar.evaluate((el) => {
+      const w = window as unknown as { __flips: boolean[]; __flipsObserver?: MutationObserver };
+      w.__flipsObserver?.disconnect();
+      w.__flips = [];
+      w.__flipsObserver = new MutationObserver(() => w.__flips.push(el.classList.contains("compact")));
+      w.__flipsObserver.observe(el, { attributes: true, attributeFilter: ["class"] });
+    });
+    const docH = await page.evaluate(() => document.documentElement.scrollHeight);
+    await page.mouse.move(200, height - 60);
+    for (let i = 0; i < 25; i++) await page.mouse.wheel(0, 2);
+    await expect(bar).toHaveClass(/compact/);
+    // 詰めてもページの高さは変わらない（位置が戻らない）
+    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(docH);
+    expect(await page.evaluate(() => scrollY)).toBeGreaterThan(24);
+    for (let i = 0; i < 40; i++) await page.mouse.wheel(0, -2);
+    await expect(bar).not.toHaveClass(/compact/);
+    expect(await page.evaluate(() => (window as unknown as { __flips: boolean[] }).__flips)).toEqual([true, false]);
+  }
+});
+
 test("キーボードだけで記事を開き、保存できる（14.1）", async ({ page }) => {
   await launch(page);
   await page.getByRole("button", { name: /最初の記事/ }).focus();
