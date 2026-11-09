@@ -241,11 +241,11 @@
 
 <style>
   .sync {
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-lg);
     padding: var(--space-12);
     margin-top: var(--space-12);
-    background: var(--color-surface);
+    background: var(--color-bg-surface);
   }
   h3 {
     margin: 0 0 var(--space-8);
@@ -257,16 +257,18 @@
   }
   .notice {
     font-size: var(--font-size-14);
-    border-inline-start: 3px solid var(--color-border);
+    border-inline-start: 3px solid var(--color-border-subtle);
     padding-inline-start: var(--space-8);
     margin: 0 0 var(--space-8);
   }
-  .notice[data-kind="error"],
+  .notice[data-kind="error"] {
+    border-color: var(--color-danger-border);
+  }
   .notice[data-kind="warn"] {
-    border-color: var(--color-ng);
+    border-color: var(--color-warning-border);
   }
   .notice[data-kind="ok"] {
-    border-color: var(--color-ok);
+    border-color: var(--color-success-border);
   }
   .actions {
     display: flex;
@@ -319,7 +321,7 @@
     font-size: var(--font-size-16);
     line-height: var(--control-line-height);
     padding: var(--control-pad-y) var(--space-8);
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-md);
     background: transparent;
     color: inherit;
@@ -330,7 +332,7 @@
     margin: 0;
   }
   .conflicts li {
-    border-top: 1px solid var(--color-border);
+    border-top: 1px solid var(--color-border-subtle);
     padding-block: var(--space-8);
   }
   .path {

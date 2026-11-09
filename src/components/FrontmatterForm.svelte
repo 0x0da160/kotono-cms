@@ -507,7 +507,7 @@
 
 <style>
   .form {
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-lg);
     padding: var(--panel-pad);
     margin: 0;
@@ -577,16 +577,16 @@
     display: flex;
     flex-direction: column;
     font-size: var(--font-size-13);
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
   }
   .hint {
     margin: 0;
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
     font-size: var(--font-size-13);
   }
   .err {
     margin: 0;
-    color: var(--color-ng);
+    color: var(--color-danger-fg);
     font-size: var(--font-size-14);
   }
   .err::before {
@@ -595,7 +595,7 @@
   }
   .warn {
     margin: 0;
-    color: var(--color-ng);
+    color: var(--color-warning-fg);
     font-size: var(--font-size-13);
   }
   .chips {
@@ -609,7 +609,7 @@
   .chips li {
     display: inline-flex;
     align-items: center;
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-pill);
     padding-inline-start: var(--space-8);
   }
@@ -631,7 +631,7 @@
     font-size: var(--font-size-14);
   }
   .managed dt {
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
   }
   .managed dd {
     margin: 0;

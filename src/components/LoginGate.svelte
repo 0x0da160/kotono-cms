@@ -66,8 +66,8 @@
 
 <style>
   .card {
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
+    background: var(--color-bg-surface);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-lg);
     padding: var(--panel-pad);
     margin-block-end: var(--space-12);
@@ -81,7 +81,7 @@
     margin: 0 0 var(--space-12);
   }
   .fallback {
-    border-top: 1px solid var(--color-border);
+    border-top: 1px solid var(--color-border-subtle);
     margin-top: var(--space-16);
     padding-top: var(--space-12);
   }
@@ -89,13 +89,15 @@
     margin-bottom: var(--space-8);
   }
   .banner {
-    border: 1px solid var(--color-ng);
+    border: 1px solid var(--color-danger-border);
     border-radius: var(--radius-md);
     padding: var(--panel-pad-sm);
     margin: var(--space-12) 0 0;
+    background: var(--color-danger-bg);
   }
   .banner.info {
-    border-color: var(--color-border);
+    border-color: var(--color-info-border);
+    background: var(--color-info-bg);
   }
   .small {
     font-size: var(--font-size-14);

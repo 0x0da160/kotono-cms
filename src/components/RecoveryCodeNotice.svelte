@@ -125,7 +125,7 @@
 
 <style>
   .recovery {
-    border: 2px solid var(--color-focus);
+    border: 2px solid var(--color-focus-ring);
     border-radius: var(--radius-lg);
     padding: var(--panel-pad);
     margin-block: var(--space-12);
@@ -153,7 +153,7 @@
     font-size: var(--font-size-16);
     line-height: var(--control-line-height);
     padding: var(--control-pad-y) var(--space-8);
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-md);
     background: transparent;
     color: inherit;
@@ -185,6 +185,6 @@
     font-size: var(--font-size-14);
   }
   .warn {
-    color: var(--color-ng);
+    color: var(--color-warning-fg);
   }
 </style>

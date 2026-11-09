@@ -210,7 +210,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-8);
-    border-top: 1px solid var(--color-border);
+    border-top: 1px solid var(--color-border-subtle);
     padding-top: var(--space-12);
   }
   .head {
@@ -247,7 +247,7 @@
     flex-wrap: wrap;
     gap: var(--space-6) var(--space-8);
     align-items: center;
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-md);
     padding: var(--space-6) var(--space-8);
   }
@@ -274,13 +274,13 @@
     max-width: 16rem;
     max-height: 12rem;
     object-fit: contain;
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-subtle);
   }
   li[data-status="failed"] .badge {
-    border-color: var(--color-ng);
+    border-color: var(--color-danger-border);
   }
   .err {
-    color: var(--color-ng);
+    color: var(--color-danger-fg);
     margin: 0;
   }
 </style>

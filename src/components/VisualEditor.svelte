@@ -501,7 +501,7 @@
   .sep {
     width: 1px;
     align-self: stretch;
-    background: var(--color-border);
+    background: var(--color-border-subtle);
     margin-inline: var(--space-2);
   }
   .link-row {
@@ -516,9 +516,11 @@
     min-width: 18rem;
   }
   .surface {
-    border: 1px solid var(--color-field-border);
+    border: 1px solid var(--color-border-control);
     border-radius: var(--radius-md);
-    background: var(--color-surface);
+    background: var(--color-editor-bg);
+    color: var(--color-editor-fg);
+    caret-color: var(--color-editor-caret);
     padding: var(--space-12) var(--space-16);
     min-height: max(20rem, calc(100dvh - 18rem));
     font-weight: var(--font-weight-regular);
@@ -528,12 +530,19 @@
     cursor: text;
   }
   .surface:focus-visible {
-    outline: 2px solid var(--color-focus);
+    outline: 2px solid var(--color-focus-ring);
     outline-offset: 1px;
   }
+  .surface :global(::selection) {
+    background: var(--color-editor-selection-bg);
+    color: var(--color-editor-selection-fg);
+  }
+  /* 読み取り専用：薄くせず（opacity は文字のコントラストを下げる）、沈んだ面と点線の枠で示す */
   .surface[aria-readonly="true"] {
     cursor: default;
-    opacity: 0.8;
+    background: var(--color-bg-sunken);
+    color: var(--color-fg-default);
+    border-style: dashed;
   }
   .surface :global(p),
   .surface :global(li),
@@ -561,11 +570,12 @@
   .surface :global(blockquote) {
     margin: 0 0 0.75em;
     padding-left: var(--space-16);
-    border-left: 4px solid var(--color-border);
-    color: var(--color-muted);
+    border-left: 4px solid var(--color-border-subtle);
+    color: var(--color-fg-muted);
   }
   .surface :global(pre) {
-    background: var(--color-bg);
+    background: var(--color-code-bg);
+    color: var(--color-code-fg);
     padding: var(--space-8) var(--space-12);
     border-radius: var(--radius-md);
     white-space: pre-wrap;
@@ -575,12 +585,13 @@
   .surface :global(code) {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "BIZ UDGothic", monospace;
     font-size: 0.9em;
-    background: var(--color-bg);
+    background: var(--color-code-bg);
+    color: var(--color-code-fg);
     border-radius: var(--radius-sm);
     padding: 0 0.2em;
   }
   .surface :global(a) {
-    color: var(--color-focus);
+    color: var(--color-focus-ring);
     text-decoration: underline;
     cursor: text;
   }
@@ -605,10 +616,10 @@
   .surface :global(.v-img-ph),
   .surface :global(.v-raw),
   .surface :global(.v-raw-inline) {
-    border: 1px dashed var(--color-border);
+    border: 1px dashed var(--color-border-subtle);
     border-radius: var(--radius-sm);
-    color: var(--color-muted);
-    background: var(--color-bg);
+    color: var(--color-fg-muted);
+    background: var(--color-bg-page);
     font-size: 0.875em;
   }
   .surface :global(.v-img-ph) {
@@ -628,6 +639,6 @@
   }
   .err {
     margin: 0;
-    color: var(--color-ng);
+    color: var(--color-danger-fg);
   }
 </style>

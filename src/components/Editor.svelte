@@ -627,11 +627,11 @@
   .more > summary {
     list-style: none;
     cursor: pointer;
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-md);
     padding: var(--control-pad-y) var(--control-pad-x);
     line-height: var(--control-line-height);
-    background: var(--color-surface);
+    background: var(--color-bg-surface);
     white-space: nowrap;
   }
   .more > summary::-webkit-details-marker {
@@ -654,8 +654,8 @@
     gap: var(--space-2);
     min-width: 14rem;
     padding: var(--space-4);
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
+    background: var(--color-bg-surface);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-1);
   }
@@ -696,7 +696,7 @@
       grid-row: 1;
       margin: 0;
       border: none;
-      border-inline-start: 1px solid var(--color-border);
+      border-inline-start: 1px solid var(--color-border-subtle);
       border-radius: 0;
       padding: 0 0 0 var(--space-12);
     }
@@ -735,8 +735,10 @@
     margin-inline-start: -1px;
   }
   .seg button[aria-pressed="true"] {
+    background: var(--color-accent-subtle);
+    color: var(--color-accent-text);
     font-weight: var(--font-weight-strong);
-    box-shadow: inset 0 -3px 0 var(--color-focus);
+    box-shadow: inset 0 -3px 0 var(--color-accent);
   }
   .repairs {
     display: flex;
@@ -762,11 +764,11 @@
     overflow-wrap: anywhere;
   }
   .untitled {
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
   }
   .ids {
     margin: 0;
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
     font-size: var(--font-size-14);
     display: flex;
     gap: var(--space-8);
@@ -781,7 +783,7 @@
     font-size: var(--font-size-13);
   }
   .axis {
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
   }
   .toolbar {
     display: flex;
@@ -791,8 +793,8 @@
   .notice {
     border-radius: var(--radius-md);
     padding: var(--panel-pad-sm);
-    border: 1px solid var(--color-border);
-    background: var(--color-surface);
+    border: 1px solid var(--color-border-subtle);
+    background: var(--color-bg-surface);
   }
   .notice p {
     margin: 0;
@@ -803,19 +805,22 @@
     font-size: var(--font-size-14);
   }
   .notice.error {
-    border-color: var(--color-ng);
+    border-color: var(--color-danger-border);
+    background: var(--color-danger-bg);
   }
   .notice.error p::before {
     content: "⚠ ";
   }
   .notice.ok {
-    border-color: var(--color-ok);
+    border-color: var(--color-success-border);
+    background: var(--color-success-bg);
   }
   .notice.ok p::before {
     content: "✓ ";
   }
   .notice.warn {
-    border-color: var(--color-ng);
+    border-color: var(--color-warning-border);
+    background: var(--color-warning-bg);
   }
   .notice.warn p::before {
     content: "! ";
@@ -845,12 +850,13 @@
     min-width: 1.5rem;
     min-height: 1.5rem;
     line-height: 1;
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
   }
   .problems {
-    border: 1px solid var(--color-ng);
+    border: 1px solid var(--color-danger-border);
     border-radius: var(--radius-md);
     padding: var(--panel-pad-sm);
+    background: var(--color-danger-bg);
   }
   .problems ul {
     margin: var(--space-4) 0 0;
@@ -860,23 +866,27 @@
   .tabs {
     display: flex;
     gap: var(--space-4);
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border-subtle);
   }
   .tabs button {
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-subtle);
     border-bottom: none;
     border-radius: var(--radius-md) var(--radius-md) 0 0;
-    background: var(--color-bg);
+    background: var(--color-bg-page);
     padding: var(--control-pad-y) var(--space-12);
     color: inherit;
     font: inherit;
     line-height: var(--control-line-height);
     cursor: pointer;
   }
+  .tabs button:not([aria-selected="true"]):hover {
+    background: var(--color-bg-hover);
+  }
   .tabs button[aria-selected="true"] {
-    background: var(--color-surface);
+    background: var(--color-accent-subtle);
+    color: var(--color-accent-text);
     font-weight: var(--font-weight-strong);
-    box-shadow: inset 0 -3px 0 var(--color-focus);
+    box-shadow: inset 0 calc(-1 * var(--border-width-edge)) 0 var(--color-accent);
   }
   .panel {
     display: flex;
@@ -898,27 +908,35 @@
     font-weight: var(--font-weight-regular);
     resize: vertical;
     tab-size: 4;
+    background: var(--color-editor-bg);
+    color: var(--color-editor-fg);
+    caret-color: var(--color-editor-caret);
+  }
+  textarea::selection {
+    background: var(--color-editor-selection-bg);
+    color: var(--color-editor-selection-fg);
   }
   .readonly {
-    border: 1px solid var(--color-ng);
+    border: 1px solid var(--color-warning-border);
     border-radius: var(--radius-md);
     padding: var(--panel-pad-sm);
     margin: 0;
+    background: var(--color-warning-bg);
   }
   .err {
     margin: 0;
-    color: var(--color-ng);
+    color: var(--color-danger-fg);
   }
   .op {
     margin: 0;
     font-size: var(--font-size-14);
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
   }
   .ed-foot {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-4) var(--space-16);
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
     font-size: var(--font-size-13);
   }
   .small {
@@ -937,9 +955,9 @@
       position: sticky;
       top: 0;
       z-index: var(--z-sticky);
-      background: var(--color-bg);
+      background: var(--color-bg-page);
       padding-block: var(--space-4) var(--space-6);
-      border-bottom: 1px solid var(--color-border);
+      border-bottom: 1px solid var(--color-border-subtle);
     }
     .editor :global(*) {
       scroll-margin-top: calc(var(--sticky-h, 0px) + var(--space-8));

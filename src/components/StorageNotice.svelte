@@ -58,7 +58,7 @@
     font-size: var(--font-size-14);
   }
   .note.warn {
-    border-inline-start: 3px solid var(--color-ng);
+    border-inline-start: 3px solid var(--color-warning-border);
     padding-inline-start: var(--space-8);
   }
   .note .muted {

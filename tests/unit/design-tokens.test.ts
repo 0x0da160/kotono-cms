@@ -2,7 +2,17 @@ import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { contrastRatio, hexToOklab, oklabToHex } from "../../src/lib/design/oklab";
-import { CONTRAST_RULES, HUES, SCALES, SEMANTIC, semanticHex } from "../../src/lib/design/palette";
+import {
+  BRAND,
+  CONTRAST_RULES,
+  EFFECTS,
+  FAMILIES,
+  LEVELS,
+  PALETTE,
+  SEMANTIC,
+  semanticHex,
+  swatch,
+} from "../../src/lib/design/palette";
 import { renderTokensCss } from "../../src/lib/design/tokens";
 
 const ROOT = join(import.meta.dirname, "../..");
@@ -33,32 +43,57 @@ describe("Oklab の変換", () => {
   });
 });
 
-describe("パレット", () => {
-  it.each(HUES.map((h) => [h.name, h] as const))("%s の段は明度で等間隔", (_name, hue) => {
-    const scale = SCALES.get(hue.name) ?? [];
-    expect(scale.length).toBeGreaterThan(5);
-    for (let i = 1; i < scale.length; i++) {
-      expect((scale[i - 1]?.L ?? 0) - (scale[i]?.L ?? 0)).toBeCloseTo(hue.step, 6);
+describe("パレット（デザインシステム 0.4.0）", () => {
+  it("ブランド6色は OKLCH の入力値から承認済みの HEX を再現する", () => {
+    for (const [k, b] of Object.entries(BRAND)) expect(swatch(`brand-${k}`).hex).toBe(b.hex);
+  });
+
+  it("8 系列 × 11 段 ＋ 追加 4 段 ＋ ブランド 6 ＋ 白・黒 の 100 項目", () => {
+    expect(PALETTE).toHaveLength(FAMILIES.length * LEVELS.length + 4 + 6 + 2);
+    expect(new Set(PALETTE.map((s) => s.name)).size).toBe(PALETTE.length);
+  });
+
+  it("段の明度は名目の値どおり（8 ビットに丸めた後で 0.005 以内）で、彩度は目標を超えない", () => {
+    for (const s of PALETTE) {
+      expect(Math.abs(hexToOklab(s.hex).L - s.L)).toBeLessThan(0.005);
+      expect(s.C).toBeLessThanOrEqual(s.requestedC + 1e-9);
     }
-    // 8 ビットに丸めた後の実際の色でも、明度は名目の値から 0.005 以内（色域の外に出ていない）
-    for (const s of scale) expect(Math.abs(hexToOklab(s.hex).L - s.L)).toBeLessThan(0.005);
   });
 
-  it("有彩色の段は無彩色の段と同じ明度に並ぶ", () => {
-    const neutral = new Set((SCALES.get("neutral") ?? []).map((s) => s.L));
-    for (const hue of HUES) for (const s of SCALES.get(hue.name) ?? []) expect(neutral.has(s.L)).toBe(true);
+  it("デザインシステムの生成器と同じ値になる（代表の段）", () => {
+    // design-system 0.4.0 の palette.csv の値
+    expect(swatch("neutral-100").hex).toBe("#f0eeeb");
+    expect(swatch("neutral-975").hex).toBe("#151412");
+    expect(swatch("petrol-800").hex).toBe("#005b88");
+    expect(swatch("warning-800").hex).toBe("#734c00");
+    expect(swatch("danger-950").hex).toBe("#470005");
   });
 
-  it("意味の色はすべてパレットの段を指す", () => {
+  it("意味の色はすべてパレットを指し、ライトとダークで同じ名前を持つ", () => {
     for (const theme of ["light", "dark"] as const) {
       for (const s of SEMANTIC) expect(semanticHex(s.name, theme)).toMatch(/^#[0-9a-f]{6}$/);
     }
+    expect(new Set(SEMANTIC.map((s) => s.name)).size).toBe(SEMANTIC.length);
+    for (const e of EFFECTS) for (const t of ["light", "dark"] as const) expect(swatch(e[t].color)).toBeTruthy();
+  });
+
+  it("面の段（page・surface・raised・hover・pressed）はどのテーマでも互いに異なる", () => {
+    for (const theme of ["light", "dark"] as const) {
+      const hexes = ["bg-page", "bg-surface", "bg-raised", "bg-hover", "bg-pressed"].map((n) => semanticHex(n, theme));
+      expect(new Set(hexes).size).toBe(5);
+    }
+  });
+
+  it("検査対象は 178 組（ライト・ダークで 356 組）で、重複がない", () => {
+    const pairs = CONTRAST_RULES.flatMap((r) => r.on.map((bg) => `${r.fg}|${bg}`));
+    expect(new Set(pairs).size).toBe(pairs.length);
+    expect(pairs).toHaveLength(178);
   });
 
   const cases = (["light", "dark"] as const).flatMap((theme) =>
     CONTRAST_RULES.flatMap((r) => r.on.map((bg) => [theme, r.fg, bg, r.min] as const)),
   );
-  it.each(cases)("%s：%s は %s に対して %s:1 以上（WCAG 2.1 AA）", (theme, fg, bg, min) => {
+  it.each(cases)("%s：%s は %s に対して %s:1 以上", (theme, fg, bg, min) => {
     expect(contrastRatio(semanticHex(fg, theme), semanticHex(bg, theme))).toBeGreaterThanOrEqual(min);
   });
 });
@@ -70,7 +105,7 @@ describe("tokens.css", () => {
     expect(readFileSync(TOKENS_CSS, "utf8")).toBe(expected);
   });
 
-  it("部品のスタイルに色を直接書かず、旧い短い変数名も使わない", () => {
+  it("部品のスタイルに色を直接書かず、パレットや旧い変数名も使わない", () => {
     const files = [
       join(ROOT, "src/app.css"),
       join(ROOT, "src/App.svelte"),
@@ -86,7 +121,7 @@ describe("tokens.css", () => {
       return styles.flatMap((css) =>
         [
           ...css.matchAll(
-            /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|var\(--(?:bg|surface|text|muted|border|field-border|ok|ng|focus|on-accent)\)/g,
+            /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|var\(--palette-|var\(--color-(?:bg|surface|text|muted|border|field-border|ok|ng|focus)\)|var\(--(?:bg|surface|text|muted|border|field-border|ok|ng|focus|on-accent)\)/g,
           ),
         ].map((m) => `${f}: ${m[0]}`),
       );
