@@ -10,7 +10,7 @@
   import PenLine from "@lucide/svelte/icons/pen-line";
   import Settings from "@lucide/svelte/icons/settings";
   import X from "@lucide/svelte/icons/x";
-  import { onMount, untrack } from "svelte";
+  import { flushSync, onMount, untrack } from "svelte";
   import AppUpdate from "./components/AppUpdate.svelte";
   import ArticleList from "./components/ArticleList.svelte";
   import CommitDialog from "./components/CommitDialog.svelte";
@@ -275,12 +275,53 @@
   function onAnyScroll(e: Event) {
     const t = e.target;
     let y: number;
-    if (t === document || t === document.documentElement || t === document.body) y = scrollY;
-    else if (t instanceof HTMLElement && t.closest("main")) y = t.scrollTop;
-    else return;
-    if (y > 24) compact = true;
-    else if (y < 4) compact = false;
+    let page = false;
+    if (t === document || t === document.documentElement || t === document.body) {
+      y = scrollY;
+      page = true;
+    } else if (t instanceof HTMLElement && t.closest("main")) {
+      y = t.scrollTop;
+      // 広い画面（画面の中の領域がスクロールする）では、足した余白は要らない（画面の幅を変えたとき）
+      barEl?.style.removeProperty("--app-bar-shrink");
+    } else return;
+    if (y > 24) setCompact(true, page);
+    else if (y < 4) setCompact(false, page);
   }
+
+  /**
+   * 上部バーを詰める・戻す。ページ全体がスクロールするときは、縮んだ高さの分だけ上部バーの下の余白を足し、
+   * ページの中での高さを変えない。変えると、縮んだ分だけ下の内容が上へずれてスクロールの位置が戻り
+   * （ブラウザのスクロールの固定、または短いページの末尾で）、4px を下回って戻す → 伸びて 24px を超えて詰める、
+   * を繰り返してちらつく（説明文のある最初の画面では高さが 30〜50px 変わり、24px と 4px の差より大きい）。
+   */
+  function setCompact(on: boolean, page: boolean) {
+    if (on === compact || !barEl) return;
+    const bar = barEl;
+    const root = document.documentElement;
+    if (on) {
+      const before = bar.offsetHeight;
+      // 縮んだ高さを測る間も、ページの高さを減らさず（短いページで位置が 0 に戻らないよう、先に多めの余白を足す）、
+      // スクロールの固定（縮んだ分だけ位置を戻す）も止める
+      root.style.overflowAnchor = "none";
+      if (page) bar.style.setProperty("--app-bar-shrink", `${before}px`);
+      flushSync(() => (compact = true));
+      if (page) bar.style.setProperty("--app-bar-shrink", `${Math.max(0, before - bar.offsetHeight)}px`);
+      void bar.offsetHeight;
+      root.style.removeProperty("overflow-anchor");
+    } else {
+      bar.style.removeProperty("--app-bar-shrink");
+      flushSync(() => (compact = false));
+    }
+  }
+
+  // 最初の画面と作業台では上部バーの高さが違うので、移ったら詰めるのをやめる（足した余白が合わなくなる）
+  $effect(() => {
+    void workbench;
+    untrack(() => {
+      barEl?.style.removeProperty("--app-bar-shrink");
+      compact = false;
+    });
+  });
 
   onMount(() => {
     document.addEventListener("scroll", onAnyScroll, { capture: true, passive: true });
@@ -384,7 +425,9 @@
       aria-expanded={menuOpen}
       aria-controls="app-menu"
       onclick={toggleMenu}
-      data-testid="menu-toggle"><Menu /><span class="menu-label">メニュー</span></button
+      aria-label="メニュー"
+      title="メニュー"
+      data-testid="menu-toggle"><Menu aria-hidden="true" /></button
     >
   {/if}
   <HelpDialog bind:this={help} button={!menuAvailable} />
@@ -717,8 +760,10 @@
     padding: var(--space-8) var(--gutter);
     background: var(--color-bg-surface);
     border-bottom: 1px solid var(--color-border-subtle);
-    margin-bottom: var(--space-12);
-    transition: padding var(--duration-fast) var(--easing-standard);
+    /* --app-bar-shrink：詰めて縮んだ高さ（ページ全体がスクロールするとき。setCompact を参照） */
+    margin-bottom: calc(var(--space-12) + var(--app-bar-shrink, 0px));
+    /* 高さ（余白）は動かさない：動かすと、縮む途中の高さで余白を足すことになり、ずれが残る */
+    transition: box-shadow var(--duration-fast) var(--easing-standard);
   }
   .brand {
     min-width: 0;
@@ -732,7 +777,7 @@
   }
   .app-bar.workbench {
     padding-block: var(--space-4);
-    margin-bottom: 0;
+    margin-bottom: var(--app-bar-shrink, 0px);
   }
   .app-bar.workbench h1 {
     font-size: var(--font-size-18);
@@ -771,12 +816,19 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  /* メニューの開閉はアイコンだけ（名前は aria-label と title の「メニュー」）。正方形にする */
   .menu-toggle {
     margin-inline-start: auto;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     font-size: var(--font-size-14);
-    padding: var(--control-pad-y-sm) var(--control-pad-x-sm);
+    padding: var(--space-4);
+  }
+  .menu-toggle :global(svg.lucide-icon) {
+    margin: 0;
+    width: 1.25rem;
+    height: 1.25rem;
   }
   .folder-name + .menu-toggle {
     margin-inline-start: 0;
@@ -1057,7 +1109,7 @@
       display: none;
     }
   }
-  /* とても狭い画面（iPhone の縦）：場所の名前は外し（メニューと画面の中にある）、メニューの文字は残す */
+  /* とても狭い画面（iPhone の縦）：場所の名前は外し（メニューと画面の中にある）、メニューの開閉は右端に寄せる */
   @media (max-width: 30rem) {
     .folder-name {
       display: none;
