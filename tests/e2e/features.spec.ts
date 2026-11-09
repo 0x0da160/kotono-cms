@@ -1,5 +1,5 @@
 /**
- * file:// で起動した成果物の、プレビュー・画像・複製・削除・復旧ドラフト（14・16・17・18・19・33）。
+ * localhost から配信した成果物の、プレビュー・画像・複製・削除・復旧ドラフト（14・16・17・18・19・33）。
  *
  * フォルダはページ内の疑似実装（fake-fs.ts）。実フォルダ・権限・実ディスク・シンボリックリンクは
  * 検証していない（TG01・TG05・TG06）。IndexedDB はヘッドレス Chromium の実装を使う。
@@ -7,12 +7,12 @@
 import { expect, test, type Page } from "@playwright/test";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import { installFakeFs, type FakeFsApi } from "./fake-fs";
-import { loginAgain, menu, registerLogin } from "./login";
+import { external, loginAgain, menu, registerLogin } from "./login";
 
 const distHtml = resolve(import.meta.dirname, "../../dist/kotono-cms.html");
-const url = pathToFileURL(distHtml).href;
+/** localhost から配信する（パスキーは file:// では使えない：ADR-0012） */
+const url = "/kotono-cms.html";
 
 const A = "k7m2x9q";
 /** 1×1 の PNG（デコード可能） */
@@ -112,9 +112,7 @@ test("プレビューはスクリプトを動かさず、生 HTML を文字で�
   expect(await page.evaluate(() => (window as unknown as { __pwned?: number }).__pwned)).toBeUndefined();
   // サンドボックス：スクリプト・同一オリジンを許可しない
   await expect(page.getByTestId("preview-frame")).toHaveAttribute("sandbox", "");
-  expect(requests.filter((r) => !r.startsWith("file:") && !r.startsWith("data:") && !r.startsWith("blob:"))).toEqual(
-    [],
-  );
+  expect(external(requests, new URL(page.url()).origin)).toEqual([]);
   expect(errors.filter((e) => !/Blocked script execution in 'about:srcdoc'/.test(e))).toEqual([]);
 });
 
@@ -314,7 +312,7 @@ test("復旧ドラフトは「設定」で無効にでき、無効の間は退�
   await menu(page, "nav-settings");
   const card = page.getByTestId("draft-settings");
   await expect(card).toContainText("状態：有効");
-  await expect(card.getByTestId("draft-encryption")).toContainText("パスフレーズ");
+  await expect(card.getByTestId("draft-encryption")).toContainText("パスキー");
   await card.getByRole("button", { name: "無効にする…" }).click();
   await page.getByRole("button", { name: "無効にして既存を保持" }).click();
   await expect(card).toContainText("状態：無効（復旧退避なし）");

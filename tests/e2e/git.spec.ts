@@ -1,5 +1,5 @@
 /**
- * file:// で起動した成果物の Git 機能（仕様 20〜22）。ブラウザの圧縮・ハッシュ API で書いた
+ * localhost から配信した成果物の Git 機能（仕様 20〜22）。ブラウザの圧縮・ハッシュ API で書いた
  * Git メタデータを取り出し、ネイティブ Git で整合性を確かめる（TG02 の一部）。
  *
  * フォルダはページ内の疑似実装（fake-fs.ts）。実フォルダでの File System Access API の挙動
@@ -10,12 +10,12 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import { installFakeFs, type FakeFsApi } from "./fake-fs";
-import { menu, registerLogin } from "./login";
+import { external, menu, registerLogin } from "./login";
 
 const distHtml = resolve(import.meta.dirname, "../../dist/kotono-cms.html");
-const url = pathToFileURL(distHtml).href;
+/** localhost から配信する（パスキーは file:// では使えない：ADR-0012） */
+const url = "/kotono-cms.html";
 const A = "k7m2x9q";
 const article = (title: string) =>
   `---\nid: "${A}"\ntitle: "${title}"\nslug: "first"\nstatus: "draft"\ncreatedAt: "2026-11-03T22:08:00+09:00"\nupdatedAt: "2026-11-03T22:08:00+09:00"\npublishedAt: null\ntags: []\ncover: null\n---\n本文\n\n\`\`\`ts\nconst x = 1;\n\`\`\`\n`;
@@ -120,9 +120,7 @@ test("Git を初期化し、記事を追加・更新コミットして、ネイ�
   expect(status).toBe("?? README.md\n");
   expect(author).toBe("山田 太郎 <taro@example.com>\n");
   expect(errors).toEqual([]);
-  expect(requests.filter((u) => !u.startsWith("file:") && !u.startsWith("data:") && !u.startsWith("blob:"))).toEqual(
-    [],
-  );
+  expect(external(requests, new URL(page.url()).origin)).toEqual([]);
 });
 
 test("プレビューで対象言語のコードをハイライトする", async ({ page }) => {
@@ -220,7 +218,5 @@ test("同期の設定に、入力済みで開くトークンの作成ページ�
   expect(href.searchParams.get("contents")).toBe("write");
 
   // リンクを出すだけで、github.com とは通信しない
-  expect(requests.filter((u) => !u.startsWith("file:") && !u.startsWith("data:") && !u.startsWith("blob:"))).toEqual(
-    [],
-  );
+  expect(external(requests, new URL(page.url()).origin)).toEqual([]);
 });

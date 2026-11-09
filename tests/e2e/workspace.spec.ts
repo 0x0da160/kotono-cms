@@ -1,13 +1,13 @@
 /**
  * ブラウザ内の作業場所（仕様 3.2 第38・39章）。OPFS は安全な配信元が要るため、dist を localhost から配信して開く。
- * iPhone の画面幅で、作成・回復コード・記事の保存・ロックと解錠・暗号化した書き出しと取り込みを通す。
+ * iPhone の画面幅で、作成・記事の保存・ロックとログイン・暗号化した書き出しと取り込みを通す。
  * Chromium での確認であり、iOS Safari 実機（TG13〜15）の代替ではない。
  */
 import { createServer, type Server } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, resolve } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
-import { loginAgain, menu, registerLogin } from "./login";
+import { loginAgain, menu, registerLogin, virtualAuthenticator } from "./login";
 
 const DIST = resolve(import.meta.dirname, "../../dist");
 const TYPES: Record<string, string> = {
@@ -44,47 +44,30 @@ test.afterAll(() => {
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
-/** 開いて、起動時のログインを登録する（既定はパスフレーズ。passkey なら仮想の認証器で登録） */
-async function open(page: Page, how: "passphrase" | "passkey" = "passphrase"): Promise<string> {
+/** 開いて、起動時のログイン（パスキー）を登録する。ログインの回復コードを返す */
+async function open(page: Page): Promise<string> {
   await page.goto(`${base}/kotono-cms.html?storage=workspace`);
   // 何よりも先にログイン（パスキーの登録）を求める。作業場所の一覧はまだ出さない
   await expect(page.getByTestId("login")).toHaveAttribute("data-phase", "register");
   await expect(page.getByTestId("places")).toHaveCount(0);
-  let code: string;
-  if (how === "passkey") {
-    await page.getByTestId("login-register-passkey").click();
-    code = (await page.getByTestId("recovery-code-value").textContent()) ?? "";
-    await page.getByTestId("recovery-kept").check();
-    await page.getByTestId("recovery-done").click();
-  } else code = await registerLogin(page);
+  const code = await registerLogin(page);
   await expect(page.getByTestId("places")).toBeVisible();
   return code;
 }
 
-test("作業場所を作り、記事を保存し、ロックと解錠、暗号化した書き出しと取り込みができる（38・39）", async ({
+test("作業場所はログインの鍵で暗号化し、作業場所ごとの回復コードなしで作って開ける。暗号化した書き出しは別の端末でログインの回復コードで取り込める（38・39、ADR-0012）", async ({
   page,
   browser,
 }) => {
-  await open(page);
+  const code = await open(page);
+  expect(code).toMatch(/^[A-Z2-7]{5}(-[A-Z2-7]{5}){4}$/);
   await expect(page.getByTestId("env-summary")).toContainText("必要なAPIを備えています");
+  // 暗号化するかを選ぶ欄はない
+  await expect(page.getByTestId("place-encrypt")).toHaveCount(0);
   await page.getByTestId("place-name").fill("ブログ");
   await page.getByTestId("place-create-run").click();
-  const code = (await page.getByTestId("recovery-code-value").textContent()) ?? "";
-  expect(code).toMatch(/^[A-Z2-7]{5}(-[A-Z2-7]{5}){4}$/);
-  await expect(page.getByTestId("recovery-done")).toBeDisabled();
-  // パスワード管理に保存させる欄（ユーザー名と新しいパスワード）に回復コードが入っている
-  const save = page.getByTestId("recovery-save-field");
-  await expect(save).toHaveAttribute("autocomplete", "new-password");
-  await expect(save).toHaveValue(code);
-  await expect(page.getByTestId("recovery-account")).toHaveAttribute("autocomplete", "username");
-  await expect(page.getByTestId("recovery-account")).toHaveValue(/^kotono-[0-9a-z-]{8}$/);
-  await page.getByTestId("recovery-kept").check();
-  // 書き換えられた回復コードは保存させない
-  await save.fill("abc");
-  await expect(page.getByTestId("recovery-done")).toBeDisabled();
-  await save.fill(code.toLowerCase());
-  await expect(page.getByTestId("recovery-done")).toBeEnabled();
-  await page.getByTestId("recovery-done").click();
+  // 作業場所ごとの回復コードは出さずに、そのまま開く
+  await expect(page.getByTestId("recovery-code")).toHaveCount(0);
   await expect(page.getByTestId("folder-name")).toHaveText("作業場所：ブログ");
 
   await page.getByRole("button", { name: "新規作成" }).click();
@@ -112,22 +95,17 @@ test("作業場所を作り、記事を保存し、ロックと解錠、暗号�
   expect(names).not.toContain("index.md");
   expect(names).not.toContain("PLAINTEXT");
 
-  // ロックすると、起動時と同じログインの画面に戻る
+  // ロックすると、起動時と同じログインの画面に戻る。ログインしただけで作業場所も開ける
   await menu(page, "app-lock");
   await expect(page.getByTestId("login")).toHaveAttribute("data-phase", "login");
   await expect(page.getByTestId("places")).toHaveCount(0);
-  // パスキーを登録していないので、パスキーでのログインは出さない
-  await expect(page.getByTestId("login-passkey")).toHaveCount(0);
+  // パスフレーズの欄はない
+  await expect(page.getByRole("radio", { name: "パスフレーズ" })).toHaveCount(0);
   await loginAgain(page);
-  // ログインしただけで、暗号化した作業場所も開ける（作業場所ごとの解錠は要らない）
   await expect(page.getByTestId("place")).toHaveAttribute("data-locked", "false");
-  // 作業場所だけをロックすると、作業場所の回復コードで解錠できる
-  await page.getByTestId("place-lock").click();
-  await expect(page.getByTestId("place")).toHaveAttribute("data-locked", "true");
-  await page.getByTestId("place-unlock").click();
-  await expect(page.getByTestId("unlock-secret")).toHaveAttribute("autocomplete", "current-password");
-  await page.getByTestId("unlock-secret").fill(code.toLowerCase());
-  await page.getByTestId("unlock-run").click();
+  // 作業場所ごとのロック・解錠はない
+  await expect(page.getByTestId("place-lock")).toHaveCount(0);
+  await page.getByTestId("place-open").click();
   await expect(page.getByTestId("article-row").filter({ hasText: "iPhone の記事" })).toBeVisible();
 
   const dl = page.waitForEvent("download");
@@ -139,13 +117,14 @@ test("作業場所を作り、記事を保存し、ロックと解錠、暗号�
   expect(bytes.subarray(0, 15).toString()).toBe("KOTONO-EXPORT/1");
   expect(bytes.includes(Buffer.from("iPhone の記事"))).toBe(false);
 
-  // 別の端末（新しいプロファイル）で取り込む
+  // 別の端末（新しいプロファイル・別のログイン）で、書き出した端末のログインの回復コードで取り込む
   const other = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const p2 = await other.newPage();
   await open(p2);
   await p2
     .getByTestId("import-file")
     .setInputFiles({ name: "blog.kotono", mimeType: "application/octet-stream", buffer: bytes });
+  await expect(p2.getByTestId("import-sealed")).toBeVisible();
   await p2.getByTestId("unlock-secret").fill(code);
   await p2.getByTestId("unlock-run").click();
   await expect(p2.getByTestId("import-confirm")).toBeVisible();
@@ -156,36 +135,13 @@ test("作業場所を作り、記事を保存し、ロックと解錠、暗号�
   await other.close();
 });
 
-/** Chromium の仮想の認証器（PRF 対応）。パスキーの登録・認証を、利用者の操作なしで通す */
-async function virtualAuthenticator(page: Page) {
-  const cdp = await page.context().newCDPSession(page);
-  await cdp.send("WebAuthn.enable");
-  const { authenticatorId } = await cdp.send("WebAuthn.addVirtualAuthenticator", {
-    options: {
-      protocol: "ctap2",
-      ctap2Version: "ctap2_1",
-      transport: "internal",
-      hasResidentKey: true,
-      hasUserVerification: true,
-      isUserVerified: true,
-      hasPrf: true,
-      automaticPresenceSimulation: true,
-    },
-  });
-  return { cdp, authenticatorId };
-}
-
-test("最初にパスキーを登録し、起動し直すとパスキーでログインして作業場所を開ける。失敗したら回復コードでログインできる（ADR-0011）", async ({
+test("起動し直すとパスキーでログインして作業場所を開ける。パスキーが見つからなければ自動で繰り返さず、回復コードでログインできる（ADR-0011）", async ({
   page,
 }) => {
+  const loginCode = await open(page);
   const { cdp, authenticatorId } = await virtualAuthenticator(page);
-  const loginCode = await open(page, "passkey");
   await page.getByTestId("place-name").fill("ブログ");
   await page.getByTestId("place-create-run").click();
-  // 作業場所の回復コード。パスキーはログインで登録済みなので、ここでは登録を勧めない
-  await expect(page.getByTestId("recovery-add-passkey")).toHaveCount(0);
-  await page.getByTestId("recovery-kept").check();
-  await page.getByTestId("recovery-done").click();
   await expect(page.getByTestId("folder-name")).toHaveText("作業場所：ブログ");
 
   // 起動し直すと、何よりも先にパスキーでのログインを求める
@@ -239,5 +195,5 @@ test("保存領域（OPFS）を開けないときは、理由とやり直しを�
   await expect(page.getByTestId("storage-error")).toHaveCount(0);
   await page.getByTestId("place-name").fill("ブログ");
   await page.getByTestId("place-create-run").click();
-  await expect(page.getByTestId("recovery-code-value")).toBeVisible();
+  await expect(page.getByTestId("folder-name")).toHaveText("作業場所：ブログ");
 });

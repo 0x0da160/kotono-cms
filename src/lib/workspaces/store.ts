@@ -49,6 +49,14 @@ export type KeySlot =
       readonly wrapped: string;
       /** 登録した配信元のホスト名（RP ID）。古い枠にはない */
       readonly rpId?: string;
+    }
+  | {
+      /**
+       * 起動時のログインの鍵で包んだデータ鍵（ADR-0012）。追加認証データに作業場所 ID を含むので、
+       * 別の作業場所の枠に差し替えても開けない。ログインを作り直すと開けなくなる
+       */
+      readonly kind: "login";
+      readonly wrapped: string;
     };
 
 export interface WorkspaceMeta {
@@ -183,6 +191,7 @@ export function validKeyring(v: unknown): boolean {
         B64URL.test(o["prfSalt"]) &&
         (o["rpId"] === undefined || (typeof o["rpId"] === "string" && o["rpId"].length <= 253))
       );
+    if (o["kind"] === "login") return true;
     return false;
   });
 }
@@ -258,7 +267,8 @@ export async function removeTreeContents(dir: DirHandleLike, prefix = ""): Promi
 
 export interface CreateOptions {
   readonly name: string;
-  readonly keyring?: KeyringRecord | null;
+  /** 鍵の情報。作業場所 ID で決まる枠（ログインの枠）は、ID を受け取る関数で渡す */
+  readonly keyring?: KeyringRecord | null | ((id: string) => Promise<KeyringRecord>);
   /** 中身を用意してから meta を書く（取り込み：38.2）。失敗すれば meta を書かない */
   readonly fill?: (dir: DirHandleLike, id: string) => Promise<void>;
 }
@@ -356,7 +366,7 @@ export class WorkspaceStore {
     // 作ったばかりのフォルダが空であることを確かめる（既存の再利用をしない：5.3）
     if (!(await isEmptyDir(dir))) throw new WorkspaceStoreError("作業場所のフォルダが空ではありません。");
     await opts.fill?.(dir, id);
-    const keyring = opts.keyring ?? null;
+    const keyring = typeof opts.keyring === "function" ? await opts.keyring(id) : (opts.keyring ?? null);
     const meta: WorkspaceMeta = {
       v: 1,
       id,

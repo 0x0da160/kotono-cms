@@ -1,5 +1,5 @@
 /**
- * file:// で起動した dist/kotono-cms.html の編集フロー（仕様 3.1・7・12・13・14・23）。
+ * localhost から配信した dist/kotono-cms.html の編集フロー（仕様 3.1・7・12・13・14・23）。
  *
  * フォルダはページ内の疑似実装（fake-fs.ts）で差し替えている。実フォルダ・権限ダイアログ・
  * 実ディスクへの書き込みは検証していない（TG01・TG06 は未検証）。
@@ -7,12 +7,12 @@
 import { expect, test, type Page } from "@playwright/test";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import { installFakeFs, type FakeFsApi } from "./fake-fs";
-import { registerLogin } from "./login";
+import { external, registerLogin } from "./login";
 
 const distHtml = resolve(import.meta.dirname, "../../dist/kotono-cms.html");
-const url = pathToFileURL(distHtml).href;
+/** localhost から配信する（パスキーは file:// では使えない：ADR-0012） */
+const url = "/kotono-cms.html";
 
 const A = "k7m2x9q";
 const B = "p4c8n6w";
@@ -76,7 +76,7 @@ test("フォルダを選ぶと記事一覧を表示し、不正・不完全な�
   await page.getByPlaceholder("キーワードで検索").fill("SECOND");
   await expect(page.getByTestId("list-summary")).toHaveText("1件 / 全4件");
   // 自動通信なし（16.3・32.2）
-  expect(requests.filter((r) => !r.startsWith("blob:"))).toEqual([url]);
+  expect(external(requests, new URL(page.url()).origin)).toEqual([]);
   expect(errors).toEqual([]);
 });
 

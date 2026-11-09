@@ -5,6 +5,9 @@
  * - DK は回復コード（必須）・パスフレーズ（任意）・パスキーの PRF（任意）でそれぞれ包んで meta に置く。
  * - 暗号化した書き出し（`.kotono`）は、包んだ DK（回復コード・パスフレーズ・パスキーの枠）と、
  *   DK から作った書き出し用の鍵で暗号化した zip からなる。別の端末では回復コード等で開ける。
+ * - ADR-0012 から、作業場所の DK は起動時のログインの鍵で包む（作業場所ごとの回復コード・パスキーはない）。
+ *   書き出し（ヘッダーの版 2）には、ログインの枠（回復コード・パスキー）と、ログインの鍵で包んだ DK を入れる。
+ *   別の端末では、書き出した端末のログインの回復コード（または同期したパスキー）で開ける。
  */
 import type { DirHandleLike } from "../fs/types";
 import { validKeyring, type KeyringRecord, type KeySlot } from "../workspaces/store";
@@ -37,6 +40,8 @@ const TOKEN_AAD = te.encode("kotono-cms/meta/token");
 const DRAFT_AAD = te.encode("kotono-cms/draft");
 /** ログイン鍵で作業場所のデータ鍵を包むときの追加認証データ（作業場所 ID を足す：ADR-0011） */
 const PLACE_AAD = te.encode("kotono-cms/login/place");
+/** 書き出し（版 2）で、書き出した端末のログインの鍵で DK を包むときの追加認証データ */
+const EXPORT_DK_AAD = te.encode("kotono-cms/export/dk");
 const EXPORT_MAGIC = te.encode("KOTONO-EXPORT/1\n");
 export const PASSPHRASE_MIN = 10;
 
@@ -71,9 +76,20 @@ export interface UnlockResult {
   readonly legacyName: string | null;
 }
 
-export interface SealedExportHeader {
-  readonly v: 1;
-  readonly slots: readonly KeySlot[];
+export type SealedExportHeader =
+  | { readonly v: 1; readonly slots: readonly KeySlot[] }
+  | {
+      readonly v: 2;
+      /** DK を直接包んだ枠（以前の版の作業場所の回復コード等）。なければ空 */
+      readonly slots: readonly KeySlot[];
+      /** 書き出した端末のログインの枠（ログインの鍵を包む）と、ログインの鍵で包んだ DK */
+      readonly login: { readonly slots: readonly KeySlot[]; readonly wrapped: string };
+    };
+
+/** 書き出しを開く方法の一覧（画面の出し分け） */
+export function exportMethods(h: SealedExportHeader): { passphrase: boolean; passkey: boolean } {
+  const all = h.v === 2 ? [...h.slots, ...h.login.slots] : h.slots;
+  return { passphrase: all.some((s) => s.kind === "passphrase"), passkey: all.some((s) => s.kind === "passkey") };
 }
 
 export class Vault {
@@ -117,6 +133,38 @@ export class Vault {
     if (!dk || dk.length !== 32) return false;
     this.open.set(placeId, { dk, keys: await deriveDataKeys(dk) });
     return true;
+  }
+
+  /** 新しい作業場所の DK（ADR-0012：回復コードの枠は作らない。ログインの枠で包む） */
+  async newKey(): Promise<Unlocked> {
+    const dk = randomBytes(32);
+    return { dk, keys: await deriveDataKeys(dk) };
+  }
+
+  /** ログイン鍵（loginId で解錠中）で、作業場所の DK を包んだ枠を作る（ADR-0012） */
+  async loginSlot(loginId: string, placeId: string, key: Unlocked): Promise<KeySlot> {
+    const login = this.need(loginId);
+    return { kind: "login", wrapped: b64u(await aesEncrypt(login.keys.meta, key.dk, placeAad(placeId))) };
+  }
+
+  /** 解錠中の作業場所の DK を、ログイン鍵で包んだ枠を作る（以前の版の作業場所に足す） */
+  loginSlotFor(loginId: string, placeId: string): Promise<KeySlot> {
+    return this.loginSlot(loginId, placeId, this.need(placeId));
+  }
+
+  /** 枠にログインの枠があるか */
+  static hasLoginSlot(record: KeyringRecord | null): boolean {
+    return record?.slots.some((s) => s.kind === "login") ?? false;
+  }
+
+  /** ログインの枠で作業場所を解錠する。ログインの枠がない・開けない（別のログインの枠）なら false */
+  async unlockWithLogin(loginId: string, placeId: string, record: KeyringRecord): Promise<boolean> {
+    if (!this.open.has(loginId)) return false;
+    for (const s of record.slots) {
+      if (s.kind !== "login") continue;
+      if (await this.unwrapPlace(loginId, placeId, s.wrapped)) return true;
+    }
+    return false;
   }
 
   lockAll(): void {
@@ -337,9 +385,25 @@ export class Vault {
   // -------------------------------------------------------------------------
   // 暗号化した書き出し（38.3・39.4）
 
-  async sealExport(id: string, zip: Uint8Array, slots: readonly KeySlot[]): Promise<Uint8Array> {
+  /**
+   * 暗号化して書き出す（版 2）。DK を直接包んだ枠（以前の版の作業場所の回復コード等）と、
+   * ログインの枠・ログインの鍵で包んだ DK をヘッダーに入れる（ADR-0012）
+   */
+  async sealExport(
+    id: string,
+    zip: Uint8Array,
+    slots: readonly KeySlot[],
+    login?: { readonly id: string; readonly slots: readonly KeySlot[] },
+  ): Promise<Uint8Array> {
     const k = this.need(id);
-    const header: SealedExportHeader = { v: 1, slots };
+    const direct = slots.filter((s) => s.kind !== "login");
+    let header: SealedExportHeader;
+    if (login) {
+      const lk = this.need(login.id);
+      const wrapped = b64u(await aesEncrypt(lk.keys.meta, k.dk, EXPORT_DK_AAD));
+      // ログインのパスフレーズの枠（以前の版）は入れない（ログインはパスキーと回復コードだけ：ADR-0012）
+      header = { v: 2, slots: direct, login: { slots: login.slots.filter((s) => s.kind !== "passphrase"), wrapped } };
+    } else header = { v: 1, slots: direct };
     const h = te.encode(JSON.stringify(header));
     const body = await aesEncrypt(k.keys.exportKey, zip, h);
     const out = new Uint8Array(EXPORT_MAGIC.length + 4 + h.length + body.length);
@@ -367,22 +431,56 @@ export class Vault {
     } catch {
       return null;
     }
-    const r = v as { v?: unknown; slots?: unknown };
+    const r = v as { v?: unknown; slots?: unknown; login?: unknown };
     // 枠の形式は meta と同じ規則で検査する（未信頼入力：38.2）
-    if (r.v !== 1 || !validKeyring({ v: 1, slots: r.slots })) return null;
-    return { header: { v: 1, slots: r.slots as KeySlot[] }, raw, body: bytes.slice(EXPORT_MAGIC.length + 4 + len) };
+    const slotsOk = (x: unknown, empty: boolean) =>
+      (empty && Array.isArray(x) && x.length === 0) || validKeyring({ v: 1, slots: x });
+    const body = bytes.slice(EXPORT_MAGIC.length + 4 + len);
+    if (r.v === 1 && slotsOk(r.slots, false)) return { header: { v: 1, slots: r.slots as KeySlot[] }, raw, body };
+    if (r.v !== 2 || !slotsOk(r.slots, true)) return null;
+    const l = r.login as { slots?: unknown; wrapped?: unknown } | null;
+    if (typeof l !== "object" || l === null || !slotsOk(l.slots, false)) return null;
+    if (typeof l.wrapped !== "string" || !/^[A-Za-z0-9_-]{1,512}$/.test(l.wrapped)) return null;
+    const header: SealedExportHeader = {
+      v: 2,
+      slots: r.slots as KeySlot[],
+      login: { slots: l.slots as KeySlot[], wrapped: l.wrapped },
+    };
+    return { header, raw, body };
   }
 
-  /** 暗号化した書き出しを開く。開けなければ null */
+  /**
+   * 暗号化した書き出しを開く。開けなければ null。
+   * method が "login" なら、いまのログインの鍵（loginId で解錠中）で開けるか試す（同じ端末で書き出したもの）
+   */
   async openSealedExport(
     bytes: Uint8Array,
-    method: UnlockMethod,
+    method: UnlockMethod | { readonly kind: "login"; readonly loginId: string },
   ): Promise<{ zip: Uint8Array; key: Unlocked; slots: readonly KeySlot[] } | null> {
     const r = Vault.readExportHeader(bytes);
     if (!r) return null;
-    const key = await this.unlockSlots(r.header.slots, method);
+    const h = r.header;
+    let key: Unlocked | null = null;
+    if (method.kind === "login") {
+      const lk = this.open.get(method.loginId);
+      if (h.v === 2 && lk) key = await this.unwrapExportDk(lk, h.login.wrapped);
+    } else {
+      // 直接の枠（以前の版の作業場所の回復コード等）を先に試し、だめならログインの枠で開く
+      const direct = h.slots.filter((s) => s.kind === method.kind);
+      if (direct.length > 0) key = await this.unlockSlots(direct, method).catch(() => null);
+      if (!key && h.v === 2) {
+        const lk = await this.unlockSlots(h.login.slots, method);
+        if (lk) key = await this.unwrapExportDk(lk, h.login.wrapped);
+      }
+    }
     if (!key) return null;
     const zip = await aesDecrypt(key.keys.exportKey, r.body, r.raw);
-    return zip ? { zip, key, slots: r.header.slots } : null;
+    return zip ? { zip, key, slots: h.slots } : null;
+  }
+
+  private async unwrapExportDk(login: Unlocked, wrapped: string): Promise<Unlocked | null> {
+    const b = fromB64u(wrapped);
+    const dk = b ? await aesDecrypt(login.keys.meta, b, EXPORT_DK_AAD) : null;
+    return dk && dk.length === 32 ? { dk, keys: await deriveDataKeys(dk) } : null;
   }
 }

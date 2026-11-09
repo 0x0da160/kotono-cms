@@ -15,9 +15,8 @@ import {
   type WorkspaceMeta,
 } from "../workspaces/store";
 import { exportZip, extractZip, planZip, type ZipPlan } from "../workspaces/zip";
-import { Vault, type Unlocked, type UnlockMethod } from "../crypto/vault";
-import { accountName } from "../crypto/passkey";
-import type { KeySlot } from "../workspaces/store";
+import { Vault, exportMethods, type Unlocked, type UnlockMethod } from "../crypto/vault";
+import type { KeyringRecord, KeySlot } from "../workspaces/store";
 import { SEALED_WS_PREFIX, type SealedDraftStore } from "../drafts/sealed";
 
 export const DEFAULT_LOCK_MINUTES = 15;
@@ -50,12 +49,15 @@ export interface PlaceView {
 }
 
 /**
- * 起動時のログイン（ADR-0011）とのつなぎ。暗号化した作業場所の鍵をログイン鍵で包んで覚え、
- * ログインしただけで開けるようにする。自動ロックではログインもロックする。
+ * 起動時のログイン（ADR-0011・ADR-0012）とのつなぎ。作業場所の鍵はログイン鍵で包んで meta に置き
+ * （ログインの枠）、ログインしただけで開けるようにする。自動ロックではログインもロックする。
  */
 export interface PlaceHooks {
-  /** 作業場所を解錠した（作成・取り込み・解錠） */
-  readonly unlocked?: (id: string) => Promise<void>;
+  /**
+   * ログイン中なら、Vault の中のログイン鍵の ID と、書き出しに入れるログインの枠。ログインしていなければ null
+   * （作業場所を作る・取り込む・開くにはログインが要る）
+   */
+  readonly login?: () => { readonly id: string; readonly slots: readonly KeySlot[] } | null;
   /** 作業場所を削除した */
   readonly removed?: (id: string) => Promise<void>;
   /** 無操作で自動ロックした */
@@ -88,8 +90,6 @@ export class PlacesController {
   } | null>(null);
   /** 暗号化した書き出しの解錠待ち（38.2・39.4） */
   pendingSealed = $state<{ name: string; bytes: Uint8Array; passphrase: boolean; passkey: boolean } | null>(null);
-  /** 作成直後に一度だけ表示する回復コード（39.2） */
-  recoveryToShow = $state<{ id: string; code: string } | null>(null);
   /** 作業場所の一覧を読み終えたか */
   ready = $state(false);
 
@@ -225,33 +225,58 @@ export class PlacesController {
     return d !== null && d >= BACKUP_REMIND_DAYS;
   }
 
-  async create(name: string, encrypted: boolean): Promise<WorkspaceMeta | null> {
+  /** ログイン中なら Vault の中のログイン鍵の ID */
+  private get loginId(): string | null {
+    return this.hooks.login?.()?.id ?? null;
+  }
+
+  /** 作業場所を作る・取り込めるか。鍵を扱えるのにログインしていなければ理由を返す */
+  get needsLogin(): boolean {
+    return this.vault !== null && this.loginId === null;
+  }
+
+  /** DK をログインの枠で包んだ鍵の情報（作業場所 ID で決まる） */
+  private loginKeyring(key: Unlocked, extra: readonly KeySlot[] = []): (id: string) => Promise<KeyringRecord> {
+    const vault = this.vault;
+    const lid = this.loginId;
+    return async (id) => {
+      if (!vault || !lid) throw new Error("ログインしていません。");
+      return { v: 1, slots: [...extra.filter((s) => s.kind !== "login"), await vault.loginSlot(lid, id, key)] };
+    };
+  }
+
+  /**
+   * 作業場所を作る。鍵を扱える環境では、常に暗号化してログインの鍵で包む（ADR-0012：作業場所ごとの回復コードはない）
+   */
+  async create(name: string): Promise<WorkspaceMeta | null> {
     if (this.busy) return null;
     if (!this.store) {
       // 黙って何もしないと、押しても反応しないように見える
       this.error = "ブラウザ内の保存領域を開けていないため、作業場所を作れません。";
       return null;
     }
+    if (this.needsLogin) {
+      this.error = "ログインしていないため、作業場所を作れません。";
+      return null;
+    }
     this.busy = true;
     this.error = null;
     try {
       const vault = this.vault;
-      const keyring = encrypted && vault ? await vault.prepareNew() : null;
+      const key = vault ? await vault.newKey() : null;
       const meta = await this.store.create({
         name,
-        keyring: keyring?.record ?? null,
+        keyring: key ? this.loginKeyring(key) : null,
         // 記事の置き場所を用意しておく（初回フォルダ準備を省く：3.1）
         fill: async (dir, id) => {
-          const t = keyring && vault ? await vault.wrapDir(dir, id, keyring.key) : dir;
+          const t = key && vault ? await vault.wrapDir(dir, id, key) : dir;
           const c = await t.getDirectoryHandle("content", { create: true });
           await c.getDirectoryHandle("articles", { create: true });
         },
       });
-      if (keyring) {
-        this.vault?.adopt(meta.id, keyring.key);
+      if (key) {
+        this.vault?.adopt(meta.id, key);
         this.names = { ...this.names, [meta.id]: name.trim() };
-        this.recoveryToShow = { id: meta.id, code: keyring.recoveryCode };
-        await this.remember(meta.id);
       }
       await this.refresh();
       return meta;
@@ -285,8 +310,16 @@ export class PlacesController {
         this.error = "暗号化した書き出しの形式が違います（壊れている可能性があります）。";
         return;
       }
-      const has = (k: string) => h.header.slots.some((x) => x.kind === k);
-      this.pendingSealed = { name: base, bytes, passphrase: has("passphrase"), passkey: has("passkey") };
+      // 同じログインで書き出したもの（この端末で書き出した）なら、そのまま開ける
+      const lid = this.loginId;
+      if (lid) {
+        const r = await this.vault.openSealedExport(bytes, { kind: "login", loginId: lid }).catch(() => null);
+        if (r) {
+          this.planImport(base, r.zip, { key: r.key, slots: r.slots });
+          return;
+        }
+      }
+      this.pendingSealed = { name: base, bytes, ...exportMethods(h.header) };
       return;
     }
     this.planImport(base, bytes, null);
@@ -314,7 +347,7 @@ export class PlacesController {
     try {
       const r = await this.vault.openSealedExport(p.bytes, method);
       if (!r) {
-        this.error = "開けませんでした。回復コード・パスフレーズを確かめてください。";
+        this.error = "開けませんでした。書き出した端末のログインの回復コードを確かめてください。";
         return false;
       }
       this.pendingSealed = null;
@@ -333,29 +366,23 @@ export class PlacesController {
     this.pendingSealed = null;
   }
 
-  /** 新しい作業場所へ展開する。完成するまで meta を書かない（38.2） */
-  async confirmImport(name: string, encrypted: boolean): Promise<WorkspaceMeta | null> {
+  /** 新しい作業場所へ展開する。完成するまで meta を書かない（38.2）。ログインの鍵で包んで暗号化する */
+  async confirmImport(name: string): Promise<WorkspaceMeta | null> {
     const p = this.pendingImport;
     if (!this.store || !p || this.busy) return null;
+    if (this.needsLogin) {
+      this.error = "ログインしていないため、取り込めません。";
+      return null;
+    }
     this.busy = true;
     this.error = null;
     try {
       const vault = this.vault;
-      let key: Unlocked | null = null;
-      let record = null;
-      let recoveryCode: string | null = null;
-      if (vault && p.sealed) {
-        key = p.sealed.key;
-        record = vault.keyringFor(p.sealed.slots);
-      } else if (vault && encrypted) {
-        const k = await vault.prepareNew();
-        key = k.key;
-        record = k.record;
-        recoveryCode = k.recoveryCode;
-      }
+      // 暗号化した書き出しは同じ鍵のまま（以前の版の回復コード等の枠も残す）。zip は新しい鍵で暗号化する
+      const key = vault ? (p.sealed?.key ?? (await vault.newKey())) : null;
       const meta = await this.store.create({
         name,
-        keyring: record,
+        keyring: key ? this.loginKeyring(key, p.sealed?.slots ?? []) : null,
         fill: async (dir, id) => {
           const target = key && vault ? await vault.wrapDir(dir, id, key) : dir;
           const r = await extractZip(p.bytes, target, p.plan);
@@ -365,8 +392,6 @@ export class PlacesController {
       if (key && vault) {
         vault.adopt(meta.id, key);
         this.names = { ...this.names, [meta.id]: name.trim() };
-        if (recoveryCode) this.recoveryToShow = { id: meta.id, code: recoveryCode };
-        await this.remember(meta.id);
       }
       this.pendingImport = null;
       this.info = `取り込みました（${p.plan.files.length} 件${p.plan.skipped.length > 0 ? `、付属物 ${p.plan.skipped.length} 件を除外` : ""}）。`;
@@ -384,23 +409,44 @@ export class PlacesController {
   // -------------------------------------------------------------------------
   // 解錠（39.3）とログイン（ADR-0011）
 
-  /** 解錠した作業場所の鍵をログインに覚えさせる。失敗しても解錠は続ける（次に開いたときにもう一度試す） */
-  private async remember(id: string): Promise<void> {
-    try {
-      await this.hooks.unlocked?.(id);
-    } catch {
-      // ログインで開けないだけで、回復コード等では開ける
-    }
-  }
-
-  /** ログインで開いた作業場所（鍵は Vault に入っている）を、解錠済みとして扱う */
-  adoptUnlocked(ids: readonly string[]): void {
+  /**
+   * ログインしたら、ログインの枠を持つ作業場所を解錠する。以前の版（ADR-0011）でログインの記録に覚えていた鍵で
+   * 開いた作業場所（legacy）は、meta にログインの枠を足す。開けた作業場所の ID を返す
+   */
+  async unlockWithLogin(legacy: readonly string[] = []): Promise<string[]> {
+    const vault = this.vault;
+    const lid = this.loginId;
+    if (!vault || !lid) return [];
     const names = { ...this.names };
-    for (const id of ids) {
-      const e = this.entries.find((x) => x.state === "ok" && x.meta.id === id);
-      if (e?.state === "ok" && e.meta.keyring && this.vault?.isUnlocked(id)) names[id] = e.meta.name;
+    const out: string[] = [];
+    for (const e of this.entries) {
+      if (e.state !== "ok" || !e.meta.keyring) continue;
+      const m = e.meta;
+      const keyring = e.meta.keyring;
+      const ok = vault.isUnlocked(m.id) || (await vault.unlockWithLogin(lid, m.id, keyring).catch(() => false));
+      if (!ok) continue;
+      names[m.id] = m.name;
+      out.push(m.id);
+      if (legacy.includes(m.id) || !Vault.hasLoginSlot(keyring)) await this.addLoginSlot(m);
     }
     this.names = names;
+    return out;
+  }
+
+  /** 解錠中の作業場所の meta に、ログインの枠を足す（以前の版の作業場所。失敗しても解錠は続ける） */
+  private async addLoginSlot(meta: WorkspaceMeta): Promise<void> {
+    const vault = this.vault;
+    const lid = this.loginId;
+    if (!this.store || !vault || !lid || !meta.keyring || !vault.isUnlocked(meta.id)) return;
+    try {
+      const slots = meta.keyring.slots.filter((s) => s.kind !== "login");
+      const slot = await vault.loginSlotFor(lid, meta.id);
+      const m = await this.store.update(meta.id, { keyring: { ...meta.keyring, slots: [...slots, slot] } });
+      if (this.current?.id === meta.id) this.current = m;
+      await this.refresh();
+    } catch {
+      // 次にログインしたときにもう一度試す
+    }
   }
 
   /** 暗号化した作業場所を解錠する（39.3） */
@@ -418,7 +464,8 @@ export class PlacesController {
       this.names = { ...this.names, [meta.id]: name };
       if (r.legacyName !== null) await this.migrateLegacyName(meta, name);
       // 次の起動からは、ログインだけで開けるようにする
-      await this.remember(meta.id);
+      const e = this.entries.find((x) => x.state === "ok" && x.meta.id === meta.id);
+      await this.addLoginSlot(e?.state === "ok" ? e.meta : meta);
       return true;
     } catch (e) {
       this.error = `解錠できませんでした：${(e as Error).message}`;
@@ -472,51 +519,6 @@ export class PlacesController {
 
   async lockAll(): Promise<void> {
     for (const id of Object.keys(this.names)) await this.lock(id);
-  }
-
-  /** 登録済みのパスキーをすべて外す（登録し直す前に使う。回復コードの枠は残る） */
-  async removePasskeys(meta: WorkspaceMeta): Promise<boolean> {
-    if (!this.store || !this.vault || !meta.keyring || this.busy) return false;
-    this.busy = true;
-    this.error = null;
-    try {
-      const m = await this.store.update(meta.id, { keyring: this.vault.withoutPasskeys(meta.keyring) });
-      if (this.current?.id === meta.id) this.current = m;
-      await this.refresh();
-      this.info = "パスキーの登録を外しました。使うパスキーを登録し直してください。";
-      return true;
-    } catch (e) {
-      this.error = `外せませんでした：${(e as Error).message}`;
-      return false;
-    } finally {
-      this.busy = false;
-    }
-  }
-
-  /** パスフレーズ・パスキーを加える（39.2） */
-  async addUnlock(
-    meta: WorkspaceMeta,
-    add: { kind: "passphrase"; passphrase: string } | { kind: "passkey" },
-  ): Promise<boolean> {
-    if (!this.store || !this.vault || !meta.keyring || this.busy) return false;
-    this.busy = true;
-    this.error = null;
-    try {
-      const rec =
-        add.kind === "passphrase"
-          ? await this.vault.withPassphrase(meta.id, meta.keyring, add.passphrase)
-          : await this.vault.withPasskey(meta.id, meta.keyring, accountName(meta.id));
-      const m = await this.store.update(meta.id, { keyring: rec });
-      if (this.current?.id === meta.id) this.current = m;
-      await this.refresh();
-      this.info = add.kind === "passphrase" ? "パスフレーズを設定しました。" : "パスキーを登録しました。";
-      return true;
-    } catch (e) {
-      this.error = `設定できませんでした：${(e as Error).message}`;
-      return false;
-    } finally {
-      this.busy = false;
-    }
   }
 
   /** 作業場所を開く。暗号化した作業場所は解錠済みであること */
@@ -595,7 +597,8 @@ export class PlacesController {
       let bytes = r.bytes;
       let ext = "zip";
       if (meta.keyring && !plain && this.vault) {
-        bytes = await this.vault.sealExport(meta.id, bytes, meta.keyring.slots);
+        const login = this.hooks.login?.() ?? undefined;
+        bytes = await this.vault.sealExport(meta.id, bytes, meta.keyring.slots, login);
         ext = "kotono";
       }
       const label = meta.name || this.names[meta.id] || "workspace";
