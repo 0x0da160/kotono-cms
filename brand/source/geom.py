@@ -61,3 +61,22 @@ def kmark2(P):
     else:
         tip=line_isect(cut0,-s,bot0,s); lo=[a,(R,1-h),(R,1),tip]
     return stem,up,lo
+# Traced from the reference (normalised to mark height 1, origin = stem top-left)
+K3=dict(
+ stem=[(0,0),(0.285,0),(0.285,1),(0,1)], stem_r=[0.08,0.04,0.04,0.08],
+ up=[(0.347,0.293),(0.974,-0.048),(0.974,0.264),(0.347,0.617)], up_r=[0.035,0.09,0.04,0.015],
+ lo=[(0.383,0.647),(0.622,0.517),(0.974,0.705),(0.974,1.047),(0.383,0.730)], lo_r=[0.04,0.02,0.04,0.09,0.04],
+)
+def kmark3_d(x0,y0,H,K=K3):
+    T=lambda pts:[(x0+x*H,y0+y*H) for x,y in pts]
+    return ''.join(rounded(T(K[n]),[r*H for r in K[n+'_r']]) for n in ('stem','up','lo'))
+
+def k_small(a,b,K=K3):
+    """widen stem gap by a and arm gap by b for small sizes"""
+    L=0.347; R=0.974; L2=L+a
+    sx=lambda x: L2+(x-L)*(R-L2)/(R-L)
+    K=dict(K)
+    K['up']=[(sx(x),y) for x,y in K3['up']]
+    lo=[(sx(x),y) for x,y in K3['lo']]
+    lo[0]=(lo[0][0],lo[0][1]+b); lo[1]=(lo[1][0],lo[1][1]+b)
+    K['lo']=lo; return K

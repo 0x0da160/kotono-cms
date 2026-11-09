@@ -5,6 +5,7 @@ from fontTools.pens.svgPathPen import SVGPathPen
 from fontTools.pens.transformPen import TransformPen
 from fontTools.pens.basePen import BasePen
 D='/usr/share/fonts/opentype/inter/'
+import os
 class Font:
     def __init__(s,name):
         s.path=D+name; s.tt=TTFont(s.path); s.gs=s.tt.getGlyphSet()

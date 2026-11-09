@@ -14,13 +14,18 @@
 | `kotono-logotype-mono.svg`     | ロゴタイプ（モノクロ、Ink）                         |
 | `kotono-logotype-reversed.svg` | ロゴタイプ（反転、Paper）                           |
 
-- 文字は Inter Display（Kotono は Bold、CMS は同じ大きさの SemiBold）をアウトライン化した図形。フォントの導入は不要。
-- ロゴタイプの基準寸法：マーク高さ 32（space-32）、マークと文字の間 8（space-8）、大文字の高さ 20。周囲の余白はマーク高さの半分（space-16）以上。
-- 字詰め：フォントのカーニングに加え、全体 −8/2048em、o–t −28、t–o −8、C–M −14。Kotono と CMS の間は字面間 0.25em。
+- K マークは参考画像の輪郭を測って再現した図形。
+- 文字は Inter（可変フォントの太さ 740、opsz 32）をアウトライン化した図形。Kotono と CMS は同じ大きさ・同じ太さ。フォントの導入は不要。
+- ロゴタイプの基準寸法：マーク高さ 32（space-32）、マークと文字の間 10（space-10）、大文字の高さ 20（上端 4、ベースライン 24）。周囲の余白はマーク高さの半分（space-16）以上。
+- 字詰め：フォントのカーニングに加え、全体 −6/2048em、o–t −24、t–o −8、C–M −12。Kotono と CMS の間は字面間 0.25em。
 
 ## 再生成
 
-`source/` の Python スクリプトで生成している（fonttools と uharfbuzz、Inter 4.0 の OTF が必要）。
+`source/` の Python スクリプトで生成している（fonttools と uharfbuzz が必要）。先に Inter 4.1 の `InterVariable.ttf` から太さ 740・opsz 32 の静的フォントを `source/InterD-740.ttf` として作る。
+
+```sh
+python3 -c "from fontTools.ttLib import TTFont; from fontTools.varLib import instancer; instancer.instantiateVariableFont(TTFont('InterVariable.ttf'), {'wght': 740, 'opsz': 32}).save('brand/source/InterD-740.ttf')"
+```
 
 ```sh
 cd brand/source && python3 final.py .. && python3 preview.py .. ../preview.html

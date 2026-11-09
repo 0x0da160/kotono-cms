@@ -24,7 +24,7 @@ table{{border-collapse:collapse;font-size:13px}} td,th{{padding:6px 12px;border-
 .sw{{display:inline-block;width:16px;height:16px;border-radius:4px;vertical-align:middle;border:1px solid var(--line)}}
 </style></head><body><main>
 <h1>Kotono CMS ロゴ</h1>
-<p>デザインシステム 0.4.0 のブランド色と 4px グリッドに合わせたアプリアイコンとロゴタイプ。文字は Inter Display（Bold／SemiBold）をアウトライン化した図形で、フォントの導入は不要。</p>
+<p>デザインシステム 0.4.0 のブランド色と 4px グリッドに合わせたアプリアイコンとロゴタイプ。マークは参考画像の輪郭を測って再現。文字は Inter（可変フォントの太さ 740、表示用の字形 opsz 32）をアウトライン化した図形で、フォントの導入は不要。</p>
 
 <h2>ロゴタイプ</h2>
 <div class="card paper"><p class="lbl">カラー（kotono-logotype.svg）</p>{sz('kotono-logotype.svg',h=96)}</div>
@@ -35,12 +35,12 @@ table{{border-collapse:collapse;font-size:13px}} td,th{{padding:6px 12px;border-
 
 <h2>アプリアイコン</h2>
 <div class="card page"><p class="lbl">kotono-icon.svg／kotono-icon-mono.svg／kotono-mark.svg</p>{sz('kotono-icon.svg',192)}{sz('kotono-icon-mono.svg',128)}{sz('kotono-mark.svg',h=96)}</div>
-<div class="card page px" style="margin-top:12px"><p class="lbl">小サイズ用（左から 64px 通常、32px 専用版、16px 専用版。専用版は縦の線を画素に合わせ、すき間を広げてある）</p>{sz('kotono-icon.svg',64)}{sz('kotono-icon-32.svg',32)}{sz('kotono-icon-16.svg',16)}<span style="width:24px"></span>{sz('kotono-icon-32.svg',128)}{sz('kotono-icon-16.svg',128)}</div>
+<div class="card page px" style="margin-top:12px"><p class="lbl">小サイズ用（左から 64px 通常、32px 専用版、16px 専用版。専用版はすき間を広げ、1px でもつぶれないようにしてある）</p>{sz('kotono-icon.svg',64)}{sz('kotono-icon-32.svg',32)}{sz('kotono-icon-16.svg',16)}<span style="width:24px"></span>{sz('kotono-icon-32.svg',128)}{sz('kotono-icon-16.svg',128)}</div>
 
 <h2>余白と寸法</h2>
 <div class="card paper"><div class="clear">{sz('kotono-logotype.svg',h=96)}</div></div>
 <ul>
-<li>基準の大きさ（viewBox）は高さ 32。マークの高さ 32（<code>space-32</code>）、マークと文字の間 8（<code>space-8</code>）、大文字の高さ 20。</li>
+<li>基準の大きさ（viewBox）は高さ 32。マークの高さ 32（<code>space-32</code>）、マークと文字の間 10（<code>space-10</code>）、大文字の高さ 20（上端 4、ベースライン 24）。マークは参考画像と同じく文字より下側に深く出る。</li>
 <li>周囲の余白はマークの高さの半分（基準の大きさで 16＝<code>space-16</code>）以上。上の破線がその範囲。</li>
 <li>最小サイズ：ロゴタイプは高さ 20px。アイコンは 48px 以上で kotono-icon.svg、24〜47px で kotono-icon-32.svg、23px 以下で kotono-icon-16.svg。</li>
 </ul>
@@ -55,8 +55,8 @@ table{{border-collapse:collapse;font-size:13px}} td,th{{padding:6px 12px;border-
 
 <h2>字詰め</h2>
 <ul>
-<li>Kotono は Inter Display Bold、CMS は同じ大きさの SemiBold。CMS は大文字用の字間（<code>cpsp</code>）を使用。</li>
-<li>フォントのカーニング（K–o −81 など）に加え、表示サイズ向けに全体を −8／2048em 詰め、t の左右の空きを補正（o–t −28、t–o −8）、C の開口部ぶん C–M を −14。</li>
+<li>Kotono と CMS は同じ大きさ・同じ太さ（740）。CMS は大文字用の字間（<code>cpsp</code>）を使用。</li>
+<li>フォントのカーニング（K–o −81）に加え、表示サイズ向けに全体を −6／2048em 詰め、t の左右の空きを補正（o–t −24、t–o −8）、C の開口部ぶん C–M を −12。</li>
 <li>Kotono と CMS の間は字面から字面まで 0.25em。</li>
 </ul>
 </main></body></html>'''
