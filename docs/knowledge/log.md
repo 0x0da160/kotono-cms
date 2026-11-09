@@ -1,6 +1,9 @@
 # Directory Update Log
 
 ## 2026-11-09
+* **Addition**: [ADR-0011 起動時のパスキーでのログイン・暗号化した復旧ドラフト・詰めた画面](/decisions/0011-passkey-first-and-compact-ui.md) を追加。
+* **Update**: [Kotono CMS のアプリの外枠（シェル）](/product/app-shell.md) を、起動時のログイン・固定してスクロールで詰める上部バー・メニュー（ハンバーガー）に更新。
+* **Update**: [Kotono CMS のデザインシステム](/product/design-system.md) の押せる高さを、部品ごとの規則（WCAG 2.5.8・Apple HIG）に更新。
 * **Addition**: [ADR-0010 デザインシステム 0.4.0 の導入](/decisions/0010-design-system-0-4.md) を追加。
 * **Update**: [Kotono CMS のデザインシステム](/product/design-system.md) を 0.4.0 に更新（パレット・面の段・意味の色・状態色・操作状態・影と暗幕）。
 * **Update**: [ADR-0007](/decisions/0007-design-system-oklab.md) のパレットと意味の色は ADR-0010 で置き換えた。

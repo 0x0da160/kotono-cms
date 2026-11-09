@@ -1,13 +1,16 @@
 <script lang="ts">
-  /** 画面に常に出していた長めの説明をまとめたヘルプ。上部バーの「ヘルプ」から開く */
+  /** 画面に常に出していた長めの説明をまとめたヘルプ。上部バーの「ヘルプ」（作業中はメニューの「ヘルプ」）から開く */
   import CircleQuestionMark from "@lucide/svelte/icons/circle-question-mark";
   import X from "@lucide/svelte/icons/x";
+
+  /** button：開くボタンを自分で出す。false なら呼び出し側が show() で開く */
+  let { button = true }: { button?: boolean } = $props();
 
   let el: HTMLDialogElement | undefined = $state();
   let opener: HTMLElement | null = null;
 
-  function show() {
-    opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  export function show(from?: HTMLElement | null) {
+    opener = from ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     el?.showModal();
   }
 
@@ -17,9 +20,9 @@
   }
 </script>
 
-<button type="button" class="help-open" onclick={show} data-testid="help-open"
-  ><CircleQuestionMark aria-hidden="true" />ヘルプ</button
->
+{#if button}<button type="button" class="help-open" onclick={() => show()} data-testid="help-open"
+    ><CircleQuestionMark aria-hidden="true" />ヘルプ</button
+  >{/if}
 
 <dialog bind:this={el} onclose={onClose} aria-labelledby="help-title" class="help" data-testid="help-dialog">
   <div class="top">
@@ -31,8 +34,8 @@
   <section>
     <h3>画面の構成</h3>
     <p>
-      フォルダ（作業場所）を開くと、上部に「記事」「Git
-      と同期」「設定」が並びます。「記事」では左に記事の一覧、右に編集中の記事を表示します。画面の幅が狭いときは「一覧」と「編集」を切り替えて使います。画面を切り替えても、編集中の内容はそのまま残ります。
+      フォルダ（作業場所）を開くと、上部の右端の「メニュー」から「記事」「Git
+      と同期」「設定」を切り替えられます。「記事」では左に記事の一覧、右に編集中の記事を表示します。画面の幅が狭いときは「一覧」と「編集」を切り替えて使います。画面を切り替えても、編集中の内容はそのまま残ります。
     </p>
   </section>
 

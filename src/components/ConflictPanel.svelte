@@ -85,7 +85,7 @@
     読み込み後に、ディスク上の <code>index.md</code> が CMS 以外で変更されました。自動マージ・強制上書きはしません。編集中の原文を退避してから、ディスク版を読み込むか、外部で内容を確認してください。
   </p>
 
-  <table class="versions">
+  <table class="versions grid-table">
     <thead>
       <tr><th scope="col">版</th><th scope="col">取得時点</th><th scope="col">内容識別子（SHA-256）</th></tr>
     </thead>
@@ -122,7 +122,7 @@
 
   <details>
     <summary>標準メタデータの差分</summary>
-    <table class="meta">
+    <table class="meta grid-table">
       <thead
         ><tr
           ><th scope="col">項目</th><th scope="col">基準版</th><th scope="col">ディスク</th><th scope="col">編集中</th

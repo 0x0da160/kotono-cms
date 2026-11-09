@@ -254,7 +254,6 @@
   const draftLabel = $derived.by(() => {
     const m = ws.drafts?.mode ?? "unavailable";
     if (m === "unavailable") return "復旧退避なし（この環境ではブラウザ内に退避できません）";
-    if (m === "undecided") return "復旧退避なし（ブラウザ内復旧ドラフトは未設定）";
     if (m !== "enabled") return "復旧退避なし（ブラウザ内復旧ドラフトは無効）";
     if (readOnly) return "復旧退避：対象外（読み取り専用）";
     if (!session.dirty) return "復旧退避：未保存の編集なし";
@@ -283,7 +282,7 @@
   oncompositionstart={() => (composing = session.composing = true)}
   oncompositionend={() => (composing = session.composing = false)}
 >
-  <div class="ed-sticky" bind:this={stickyEl}>
+  <div class="ed-sticky" bind:this={stickyEl} data-sticky-chrome>
     <header class="ed-head">
       <div class="ed-title">
         <h2 id="editor-heading">

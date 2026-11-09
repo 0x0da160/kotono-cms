@@ -6,6 +6,8 @@ import "fake-indexeddb/auto";
 import { IDBFactory } from "fake-indexeddb";
 import { describe, expect, it } from "vitest";
 import { DraftController } from "../../src/lib/app/drafts.svelte";
+import { LoginController } from "../../src/lib/app/login.svelte";
+import { MemoryLoginStore } from "../../src/lib/login/store";
 import { PlacesController, type Deliver } from "../../src/lib/app/places.svelte";
 import { Workspace } from "../../src/lib/app/workspace.svelte";
 import { encodeUtf8, sha256Hex } from "../../src/lib/core/bytes";
@@ -130,6 +132,38 @@ describe("暗号化した復旧ドラフト（39.1）", () => {
     await base.put({ ...stored, ws: `e:${b}`, seq: 2 });
     const listed = await sealed.list();
     expect(listed.map((r) => r.ws)).toEqual([`e:${a}`]);
+  });
+
+  it("実フォルダのドラフトもログイン鍵で暗号化し、ログインしていない間は読み書きしない（ADR-0011）", async () => {
+    const { base, sealed, vault } = setup();
+    await sealed.setEnabled(true);
+    // 以前の版の平文のドラフト
+    await base.put(await rec("folder-1", "以前の本文"));
+    expect(await sealed.list()).toHaveLength(0);
+    await expect(sealed.put(await rec("folder-1", "x", { seq: 2 }))).rejects.toThrow("ログイン");
+    vault.adopt("login", (await vault.prepareNew()).key);
+    expect(await sealed.setDefault(vault.draftSealer("login"))).toBe(1);
+    const raw = JSON.stringify(await base.list());
+    expect(raw).not.toContain("以前の本文");
+    expect(raw).not.toContain("k7m2x9q");
+    const back = await sealed.list();
+    expect(back).toHaveLength(1);
+    expect(back[0]).toMatchObject({ ws: "folder-1", key: "a:k7m2x9q", text: "以前の本文" });
+    await sealed.put(await rec("folder-1", "新しい本文", { seq: 3 }));
+    expect(JSON.stringify(await base.list())).not.toContain("新しい本文");
+    expect((await sealed.list()).map((r) => r.text)).toContain("新しい本文");
+    await sealed.setDefault(null);
+    expect(await sealed.list()).toHaveLength(0);
+  });
+
+  it("復旧ドラフトは既定で有効（未設定は有効、無効にしたら無効のまま）", async () => {
+    const { drafts, sealed } = setup();
+    await drafts.init();
+    expect(drafts.mode).toBe("enabled");
+    await drafts.disable(false);
+    const again = new DraftController(sealed, "t");
+    await again.init();
+    expect(again.mode).toBe("disabled");
   });
 });
 
@@ -309,124 +343,132 @@ describe("作業場所の操作（38・39.3）", () => {
   });
 });
 
-describe("起動時のログイン（39.3）", () => {
-  /** 暗号化した作業場所を 2 つ作り、それぞれにパスキーを 1 件ずつ登録して、すべてロックした状態から起動し直す */
-  async function twoPlaces() {
-    const pk = fakePasskey();
-    const a = setup({ passkey: pk.api });
-    await a.places.init(a.fs.root);
-    const codes: string[] = [];
-    for (const name of ["ブログ", "日記"]) {
-      const m = await a.places.create(name, true);
-      if (!m) throw new Error(a.places.error ?? "create");
-      codes.push(a.places.recoveryToShow?.code ?? "");
-      a.places.recoveryToShow = null;
-      expect(await a.places.addUnlock(m, { kind: "passkey" })).toBe(true);
-    }
-    // 同じ保存領域・同じパスキーで起動し直す（鍵はメモリにしかないので、すべてロック中になる）
-    const b = setup({ passkey: pk.api });
-    expect(b.places.loginRequired).toBe(false);
-    await b.places.init(a.fs.root);
-    return { pk, places: b.places, ws: b.ws, codes };
+describe("起動時のログイン（ADR-0011）", () => {
+  function withLogin(opts: { passkey?: PasskeyApi; fs?: MemFs; idb?: IDBFactory; store?: MemoryLoginStore } = {}) {
+    const idb = opts.idb ?? new IDBFactory();
+    const sealed = new SealedDraftStore(new IdbDraftStore(idb));
+    const drafts = new DraftController(sealed, "t");
+    const ws = new Workspace(undefined, { drafts, md: inlineMdService, processor: null });
+    const fs = opts.fs ?? new MemFs("opfs");
+    const vault = new Vault(opts.passkey ?? null, 100_000);
+    const store = opts.store ?? new MemoryLoginStore();
+    const login = new LoginController(vault, store, sealed);
+    let autoLocked = 0;
+    const places = new PlacesController(ws, {}, async () => "downloaded", {
+      vault,
+      sealed,
+      hooks: {
+        unlocked: (id) => login.rememberPlace(id),
+        removed: (id) => login.forgetPlace(id),
+        autoLocked: () => {
+          autoLocked++;
+          login.lock();
+        },
+        active: () => login.unlocked,
+      },
+    });
+    return { idb, sealed, drafts, ws, fs, vault, store, login, places, autoLocked: () => autoLocked };
   }
 
-  it("暗号化した作業場所があれば、一覧より先にログインを求め、選んだパスキーの作業場所を開く", async () => {
-    const { pk, places, ws } = await twoPlaces();
-    expect(places.loginRequired).toBe(true);
-    expect(places.passkeyPlaces).toBe(2);
-    pk.state.pick = 1;
-    const m = await places.loginWithPasskey();
-    // 1 回の認証で、両方の作業場所のパスキーを候補にする
-    expect(pk.state.asked).toBe(1);
-    expect(pk.state.lastAllowed).toBe(2);
-    expect(m && places.names[m.id]).toBe("日記");
-    expect(places.loginRequired).toBe(false);
-    if (!m) return;
-    await places.open(m);
-    expect(ws.rootName).toBe("日記");
-    // ほかの作業場所はロックしたまま
-    expect(places.views().filter((v) => v.locked)).toHaveLength(1);
-  });
-
-  it("パスキーが取り消し・失敗なら自動で繰り返さず、回復コードで開く道を示す", async () => {
-    const { pk, places, codes } = await twoPlaces();
-    pk.state.pick = null;
-    expect(await places.loginWithPasskey()).toBeNull();
-    expect(pk.state.asked).toBe(1);
-    expect(places.loginFailed).toBe(true);
-    expect(places.error).toContain("回復コード");
-    expect(places.loginRequired).toBe(true);
-    // 回復コードで開く一覧へ進む
-    places.useFallback();
-    expect(places.loginRequired).toBe(false);
-    expect(places.error).toBeNull();
-    const e = places.entries.find((x) => x.state === "ok" && x.meta.keyring);
-    if (e?.state !== "ok") throw new Error("entry");
-    // どちらの作業場所かは一覧の順による。どちらかの回復コードで開ける
-    let ok = false;
-    for (const c of codes) ok ||= await places.unlock(e.meta, { kind: "recovery", code: c });
-    expect(ok).toBe(true);
-    // 失敗のあとも、パスキーの要求は 1 回のまま
-    expect(pk.state.asked).toBe(1);
-    // パスキーは登録済みなので、登録は勧めない
-    expect(places.suggestPasskey).toBeNull();
-  });
-
-  it("すべてロックすると（自動ロックを含む）、またログインの画面に戻る", async () => {
-    const { pk, places } = await twoPlaces();
-    pk.state.pick = 0;
-    const m = await places.loginWithPasskey();
-    if (!m) throw new Error(places.error ?? "login");
-    await places.open(m);
-    await places.lock(m.id);
-    expect(places.loginRequired).toBe(true);
-    // 回復コードの一覧に進んでからロックしても、ログインの画面に戻る
-    places.useFallback();
-    pk.state.pick = 0;
-    const m2 = await places.loginWithPasskey();
-    if (!m2) throw new Error("login");
-    await places.lockAll();
-    expect(places.fallback).toBe(false);
-    expect(places.loginRequired).toBe(true);
-  });
-
-  it("パスキーのない作業場所は回復コードで開き、パスキーの登録を勧める", async () => {
+  it("パスキーで登録すると、暗号化した作業場所はログインだけで開ける（作業場所ごとの解錠は要らない）", async () => {
     const pk = fakePasskey();
-    const a = setup({ passkey: pk.api });
+    const a = withLogin({ passkey: pk.api });
+    await a.login.init();
+    expect(a.login.phase).toBe("register");
+    expect(await a.login.register({ kind: "passkey" })).toBe(true);
+    expect(a.login.phase).toBe("recovery");
+    a.login.confirmRecovery();
+    expect(a.login.phase).toBe("ready");
     await a.places.init(a.fs.root);
     const m = await a.places.create("ブログ", true);
+    if (!m) throw new Error(a.places.error ?? "create");
+    expect(Object.keys(a.store.rec?.places ?? {})).toEqual([m.id]);
+
+    // 起動し直す：ログインの記録と保存領域は同じ。鍵はメモリにしかない
+    const b = withLogin({ passkey: pk.api, fs: a.fs, store: a.store });
+    await b.login.init();
+    expect(b.login.phase).toBe("login");
+    expect(b.login.hasPasskey).toBe(true);
+    await b.places.init(a.fs.root);
+    expect(b.places.views()[0]?.locked).toBe(true);
+    expect(await b.login.login({ kind: "passkey" })).toBe(true);
+    b.places.adoptUnlocked(await b.login.unlockPlaces());
+    expect(b.places.views()[0]?.locked).toBe(false);
+    await b.places.open(m);
+    expect(b.ws.rootName).toBe("ブログ");
+    expect(pk.state.asked).toBe(1);
+  });
+
+  it("回復コードで解錠した以前の作業場所は、次からログインだけで開ける", async () => {
+    const a = withLogin();
+    await a.places.init(a.fs.root);
+    // ログインの前の版で作った暗号化した作業場所（ログインの記録に鍵がない）
+    const m = await a.places.create("日記", true);
     if (!m) throw new Error("create");
     const code = a.places.recoveryToShow?.code ?? "";
-    a.places.recoveryToShow = null;
     await a.places.lock(m.id);
-    expect(a.places.loginRequired).toBe(true);
-    // パスキーでのログインはできないので、要求もしない
-    expect(a.places.passkeyPlaces).toBe(0);
-    a.places.useFallback();
-    const fresh = a.places.entries.find((e) => e.state === "ok" && e.meta.id === m.id);
-    if (fresh?.state !== "ok") throw new Error("entry");
-    expect(await a.places.unlock(fresh.meta, { kind: "recovery", code })).toBe(true);
-    expect(a.places.suggestPasskey).toBe(m.id);
-    expect(await a.places.addUnlock(fresh.meta, { kind: "passkey" })).toBe(true);
-    expect(a.places.suggestPasskey).toBeNull();
-    expect(a.places.passkeyPlaces).toBe(1);
-    expect(pk.state.asked).toBe(0);
+    await a.login.init();
+    expect(await a.login.register({ kind: "passphrase", passphrase: "correct horse battery" })).toBe(true);
+    a.login.confirmRecovery();
+    const e = a.places.entries.find((x) => x.state === "ok" && x.meta.id === m.id);
+    if (e?.state !== "ok") throw new Error("entry");
+    expect(await a.places.unlock(e.meta, { kind: "recovery", code })).toBe(true);
+    expect(Object.keys(a.store.rec?.places ?? {})).toEqual([m.id]);
+    a.login.lock();
+    await a.places.lockAll();
+    expect(await a.login.login({ kind: "passphrase", passphrase: "wrong passphrase!!" })).toBe(false);
+    expect(a.login.error).toContain("パスフレーズ");
+    expect(await a.login.login({ kind: "passphrase", passphrase: "correct horse battery" })).toBe(true);
+    expect(await a.login.unlockPlaces()).toEqual([m.id]);
   });
 
-  it("暗号化した作業場所がなければ、ログインを求めない", async () => {
-    const { fs, places } = setup({ passkey: fakePasskey().api });
-    await places.init(fs.root);
-    expect(places.loginRequired).toBe(false);
-    await places.create("平文", false);
-    expect(places.loginRequired).toBe(false);
+  it("パスキーの取り消し・失敗では自動で繰り返さず、回復コードでログインできる", async () => {
+    const pk = fakePasskey();
+    const a = withLogin({ passkey: pk.api });
+    await a.login.init();
+    await a.login.register({ kind: "passkey" });
+    const code = a.login.recoveryCode ?? "";
+    a.login.confirmRecovery();
+    a.login.lock();
+    pk.state.pick = null;
+    expect(await a.login.login({ kind: "passkey" })).toBe(false);
+    expect(a.login.failed).toBe(true);
+    expect(a.login.error).toContain("回復コード");
+    expect(pk.state.asked).toBe(1);
+    expect(await a.login.login({ kind: "recovery", code: code.toLowerCase() })).toBe(true);
+    expect(pk.state.asked).toBe(1);
   });
 
-  it("別の配信元で登録したパスキーしかなければ、要求せずに回復コードを案内する", async () => {
-    const { places } = await twoPlaces();
-    const other = new Vault(fakePasskey("other.example").api, 100_000);
-    const metas = places.entries.flatMap((e) => (e.state === "ok" && e.meta.keyring ? [e.meta] : []));
-    await expect(
-      other.loginWithPasskey(metas.map((m) => ({ id: m.id, record: m.keyring ?? { v: 1, slots: [], name: "" } }))),
-    ).rejects.toThrow("回復コードで開き");
+  it("無操作で自動ロックすると、ログインもロックする（作業場所がなくても）", async () => {
+    let t = Date.parse("2026-11-09T00:00:00Z");
+    const a = withLogin();
+    await a.login.init();
+    await a.login.register({ kind: "passphrase", passphrase: "correct horse battery" });
+    a.login.confirmRecovery();
+    // 時刻を差し替えた PlacesController を作り直す
+    const places = new PlacesController(a.ws, {}, async () => "downloaded", {
+      vault: a.vault,
+      now: () => new Date(t),
+      hooks: { active: () => a.login.unlocked, autoLocked: () => a.login.lock() },
+    });
+    await places.init(a.fs.root);
+    places.activity();
+    t += 16 * 60_000;
+    await places.tick();
+    expect(a.login.unlocked).toBe(false);
+    expect(a.login.phase).toBe("login");
+  });
+
+  it("作業場所を消すと、ログインの記録からも鍵を消す", async () => {
+    const a = withLogin();
+    await a.login.init();
+    await a.login.register({ kind: "passphrase", passphrase: "correct horse battery" });
+    a.login.confirmRecovery();
+    await a.places.init(a.fs.root);
+    const m = await a.places.create("x", true);
+    if (!m) throw new Error("create");
+    expect(Object.keys(a.store.rec?.places ?? {})).toHaveLength(1);
+    await a.places.remove(m.id);
+    expect(Object.keys(a.store.rec?.places ?? {})).toHaveLength(0);
   });
 });

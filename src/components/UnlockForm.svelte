@@ -8,6 +8,7 @@
     passphrase,
     passkey,
     onunlock,
+    submitLabel = "解錠",
   }: {
     busy: boolean;
     /** 回復コードをパスワード管理から自動入力させるときのユーザー名 */
@@ -15,6 +16,7 @@
     passphrase: boolean;
     passkey: boolean;
     onunlock: (m: UnlockMethod) => unknown;
+    submitLabel?: string;
   } = $props();
 
   let kind = $state<"recovery" | "passphrase">("recovery");
@@ -78,7 +80,7 @@
     ><input type="checkbox" bind:checked={show} data-testid="unlock-show" /> 入力内容を表示</label
   >
   <button type="submit" class={passkey ? "" : "primary"} disabled={busy || secret === ""} data-testid="unlock-run"
-    >{busy ? "確認中…" : "解錠"}</button
+    >{busy ? "確認中…" : submitLabel}</button
   >
 </form>
 

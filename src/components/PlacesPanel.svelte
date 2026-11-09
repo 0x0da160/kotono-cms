@@ -112,11 +112,6 @@
     return accountName(id);
   }
 
-  async function addPasskeyTo(id: string): Promise<boolean> {
-    const e = places.entries.find((x) => x.state === "ok" && x.meta.id === id);
-    return e?.state === "ok" ? places.addUnlock(e.meta, { kind: "passkey" }) : false;
-  }
-
   function hasSlot(meta: WorkspaceMeta, kind: "passphrase" | "passkey"): boolean {
     return meta.keyring?.slots.some((s) => s.kind === kind) ?? false;
   }
@@ -136,12 +131,6 @@
 
   <StorageNotice {places} />
 
-  {#if places.fallback && !places.anyUnlocked && places.passkeyPlaces > 0}
-    <p class="small" data-testid="back-to-login">
-      <button type="button" class="link" onclick={() => places.backToLogin()}>パスキーでログインに戻る</button>
-    </p>
-  {/if}
-
   <!-- 解錠の失敗は、入力した欄のすぐ下に出す（パネルの先頭では目に入らない） -->
   {#if places.error && !unlockOpen}<p class="banner" role="alert" data-testid="places-error">
       {places.error}
@@ -153,7 +142,6 @@
     <RecoveryCodeNotice
       code={places.recoveryToShow.code}
       account={recoveryAccount(rid)}
-      passkey={places.vault?.passkey ? () => addPasskeyTo(rid) : null}
       ondone={async () => {
         const id = places.recoveryToShow?.id;
         places.recoveryToShow = null;

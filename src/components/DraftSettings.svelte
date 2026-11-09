@@ -1,16 +1,19 @@
 <script lang="ts">
   import HelpTip from "./HelpTip.svelte";
-  import { tick } from "svelte";
   import type { DraftController } from "../lib/app/drafts.svelte";
+  import type { LoginController } from "../lib/app/login.svelte";
   import type { Workspace } from "../lib/app/workspace.svelte";
 
   let {
     ws,
     dc,
+    login = null,
     variant = "footer",
   }: {
     ws: Workspace;
     dc: DraftController;
+    /** 起動時のログイン（暗号化の鍵の出どころを示す）。ログインできない環境では null */
+    login?: LoginController | null;
     /** footer：最初の画面のフッターに畳んで出す。page：「設定」の画面に開いて出す（docs/knowledge/product/app-shell.md） */
     variant?: "footer" | "page";
   } = $props();
@@ -19,38 +22,12 @@
     dc.mode === "enabled" ? "有効" : dc.mode === "disabled" ? "無効（復旧退避なし）" : "利用できません",
   );
 
-  /**
-   * 初回の設定を閉じたら、設定の移り先へフォーカスを移す。ページの先頭に飛ばさない。
-   * 最初の画面ではフッターの「復旧ドラフト」、作業中は上部バーの「設定」（設定の画面は閉じているため）。
-   */
-  async function focusSettings() {
-    await tick();
-    const summary = document.querySelector<HTMLElement>('[data-testid="draft-settings-summary"]');
-    if (summary?.checkVisibility?.()) {
-      summary.focus();
-      return;
-    }
-    document.querySelector<HTMLElement>('[data-testid="nav-settings"]')?.focus();
-    ws.announce("復旧ドラフトの設定は、上部の「設定」からいつでも変えられます。");
-  }
-
   async function enable() {
     await dc.enable();
     await ws.attachDrafts();
-    // 同意の前から開いていた未保存の編集も、同意の後は退避の対象にする
+    // 有効にする前から開いていた未保存の編集も、退避の対象にする
     if (ws.session) dc.onEdit(ws.session);
     ws.announce("ブラウザ内復旧ドラフトを有効にしました。");
-  }
-
-  async function enableFirst() {
-    await enable();
-    await focusSettings();
-  }
-
-  async function decline() {
-    await dc.disable(false);
-    ws.announce("ブラウザ内復旧ドラフトを無効にしました。");
-    await focusSettings();
   }
 
   async function turnOff() {
@@ -93,12 +70,17 @@
 </script>
 
 {#snippet explanation()}
-  <p class="small">
-    暗号化はしません。このブラウザのプロファイルにアクセスできる人は読める可能性があります。共有の端末では有効にしないでください。<HelpTip
-      label="復旧ドラフトの保存内容と期間"
+  <p class="small" data-testid="draft-encryption">
+    {login?.record?.keyring.slots.some((x) => x.kind === "passkey")
+      ? "起動時のログイン（パスキー）で開く鍵で暗号化して置きます。"
+      : login?.record
+        ? "起動時のログイン（パスフレーズ）で開く鍵で暗号化して置きます。"
+        : "暗号化して置きます。"}ロック中は読み書きしません。<HelpTip label="復旧ドラフトの保存内容と期間"
       ><span class="tip-p">保存先はこのブラウザの内部（IndexedDB）です。リポジトリのフォルダには書き込みません。</span
       ><span class="tip-p"
-        >保存する内容：編集中の原文、記事ID、編集の番号、元ファイルのハッシュ、退避時刻。画像やリポジトリ全体は保存しません。</span
+        >保存する内容：編集中の原文、記事ID、元ファイルのハッシュ（ここまでを暗号化）、編集の番号、退避時刻、大きさ。画像やリポジトリ全体は保存しません。</span
+      ><span class="tip-p"
+        >ログインの鍵を失うと（パスキー・パスフレーズ・回復コードのどれも使えない）、暗号化した復旧ドラフトは誰も読めません。</span
       ><span class="tip-p"
         >次回同じフォルダを開いたときに見分けるため、選んだフォルダの参照（ハンドル）も保存します。この参照を保存しても、次回の書き込みが許可されるわけではありません。</span
       ><span class="tip-p"
@@ -110,50 +92,38 @@
   </p>
 {/snippet}
 
-{#if dc.mode === "undecided"}
-  <section class="card consent" aria-labelledby="consent-heading" data-testid="draft-consent">
-    <h2 id="consent-heading">ブラウザ内復旧ドラフトを有効にしますか</h2>
-    <p>未保存の編集をブラウザの中に自動で退避します。タブを閉じたりブラウザが落ちたりしても、次回復旧できます。</p>
+{#snippet body()}
+  {#if dc.reason}<p class="small">{dc.reason}</p>{/if}
+  {#if dc.mode === "unavailable"}
+    <p class="small">
+      この環境ではブラウザ内に退避できません。未保存の編集は「原文をコピー」「原文をダウンロード」で手動で退避してください。
+    </p>
+  {:else}
     {@render explanation()}
+    <p class="small">保存中のドラフト：{dc.records.length}件</p>
     <div class="buttons">
-      <button type="button" class="primary" onclick={enableFirst} data-testid="draft-enable">有効にする（推奨）</button>
-      <button type="button" onclick={decline}>今は有効にしない</button>
+      {#if dc.mode === "enabled"}
+        <button type="button" onclick={turnOff} disabled={dc.busy}>無効にする…</button>
+      {:else}
+        <button type="button" onclick={enable} disabled={dc.busy}>有効にする</button>
+      {/if}
+      <button type="button" class="danger" onclick={removeAll} disabled={dc.busy || dc.records.length === 0}
+        >すべて削除…</button
+      >
     </div>
+  {/if}
+{/snippet}
+{#if variant === "page"}
+  <section class="card page" aria-labelledby="draft-settings-heading" data-testid="draft-settings">
+    <h2 id="draft-settings-heading">復旧ドラフト</h2>
+    <p class="state">状態：{modeLabel}</p>
+    {@render body()}
   </section>
 {:else}
-  {#snippet body()}
-    {#if dc.reason}<p class="small">{dc.reason}</p>{/if}
-    {#if dc.mode === "unavailable"}
-      <p class="small">
-        この環境ではブラウザ内に退避できません。未保存の編集は「原文をコピー」「原文をダウンロード」で手動で退避してください。
-      </p>
-    {:else}
-      {@render explanation()}
-      <p class="small">保存中のドラフト：{dc.records.length}件</p>
-      <div class="buttons">
-        {#if dc.mode === "enabled"}
-          <button type="button" onclick={turnOff} disabled={dc.busy}>無効にする…</button>
-        {:else}
-          <button type="button" onclick={enable} disabled={dc.busy}>有効にする</button>
-        {/if}
-        <button type="button" class="danger" onclick={removeAll} disabled={dc.busy || dc.records.length === 0}
-          >すべて削除…</button
-        >
-      </div>
-    {/if}
-  {/snippet}
-  {#if variant === "page"}
-    <section class="card page" aria-labelledby="draft-settings-heading" data-testid="draft-settings">
-      <h2 id="draft-settings-heading">復旧ドラフト</h2>
-      <p class="state">状態：{modeLabel}</p>
-      {@render body()}
-    </section>
-  {:else}
-    <details class="settings">
-      <summary data-testid="draft-settings-summary">復旧ドラフト：{modeLabel}</summary>
-      {@render body()}
-    </details>
-  {/if}
+  <details class="settings">
+    <summary data-testid="draft-settings-summary">復旧ドラフト：{modeLabel}</summary>
+    {@render body()}
+  </details>
 {/if}
 
 <style>
@@ -166,13 +136,6 @@
   }
   .state {
     margin: 0 0 var(--space-4);
-  }
-  .consent {
-    border: 1px solid var(--color-focus-ring);
-    border-radius: var(--radius-lg);
-    padding: var(--panel-pad);
-    margin-bottom: var(--space-12);
-    background: var(--color-bg-surface);
   }
   h2 {
     margin: 0 0 var(--space-4);
@@ -195,7 +158,7 @@
   }
   @media (pointer: coarse) {
     .settings summary {
-      min-height: var(--touch-target);
+      min-height: var(--touch-target-sm);
     }
   }
 </style>

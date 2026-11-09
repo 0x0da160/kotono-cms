@@ -160,6 +160,53 @@ code,
   overflow-wrap: anywhere;
 }
 
+/*
+ * 表の形の並び（項目名と値・行と列）：罫線（グリッド線）で行と列の区切りを示す（ADR-0011）。
+ * dl.grid-table は dt・dd を交互に並べる 2 列の表。table は外枠・セルの罫線と見出しの面を持つ。
+ */
+dl.grid-table {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+dl.grid-table > dt,
+dl.grid-table > dd {
+  margin: 0;
+  padding: var(--space-4) var(--space-8);
+  border-top: 1px solid var(--color-border-subtle);
+  overflow-wrap: anywhere;
+}
+
+dl.grid-table > dt {
+  background: var(--color-bg-sunken);
+  color: var(--color-fg-muted);
+  border-inline-end: 1px solid var(--color-border-subtle);
+}
+
+dl.grid-table > :nth-child(-n + 2) {
+  border-top: none;
+}
+
+table.grid-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+table.grid-table :is(th, td) {
+  border: 1px solid var(--color-border-subtle);
+  padding: var(--space-4) var(--space-8);
+  text-align: start;
+  vertical-align: top;
+}
+
+table.grid-table thead th {
+  background: var(--color-bg-sunken);
+  font-weight: var(--font-weight-strong);
+}
+
 .muted {
   color: var(--color-fg-muted);
 }
@@ -233,10 +280,18 @@ svg.lucide-icon {
 }
 
 /*
- * iPhone・iPad（指で操作する画面：仕様 3.2 第2.1節）。
- * - 入力欄の文字を 16px 以上にして、フォーカス時の自動拡大を防ぐ。
- * - ボタン・入力欄・選択欄・開閉の見出しの押せる高さを 44px（--touch-target）以上にする。
- *   マウスの画面では余白を詰めるが（--control-pad-*）、指の画面では高さが下がらない。
+ * iPhone・iPad（指で操作する画面：仕様 3.2 第2.1節）。押せる高さの下限は部品の種類で分ける（ADR-0011）。
+ * どれも WCAG 2.2 の 2.5.8（AA：24px）を床にし、44px（Apple HIG）は画面の端で頻繁に押す移動だけにする。
+ *
+ * | 部品                                         | 下限 | 準拠する規則                                   |
+ * | -------------------------------------------- | ---- | ---------------------------------------------- |
+ * | メニューの項目・上部バーのメニューの開閉     | 44px | Apple HIG（44pt）。画面の端・片手で押す        |
+ * | 標準のボタン・入力欄・選択欄                 | 36px | WCAG 2.5.8 の 24px ＋余裕。入力欄の文字 16px   |
+ * | 詰めたボタン（行の中・道具の帯）・開閉の見出し | 32px | WCAG 2.5.8（24px）。隣とは 6px 以上あける      |
+ * | チェックボックス・ラジオ                     | 20px | WCAG 2.5.8 の例外（ラベル全体で押せる）        |
+ *
+ * - 入力欄の文字を 16px 以上にして、フォーカス時の自動拡大を防ぐ（iOS Safari）。
+ * - マウスの画面では余白を詰めるが（--control-pad-*）、指の画面では高さが下限を下回らない。
  */
 html {
   -webkit-text-size-adjust: 100%;
@@ -252,9 +307,12 @@ html {
   }
   button,
   select,
-  summary,
   input:not([type="checkbox"], [type="radio"], [type="file"], [type="hidden"]) {
-    min-height: var(--touch-target);
+    min-height: var(--touch-target-md);
+  }
+  summary,
+  button.compact {
+    min-height: var(--touch-target-sm);
   }
   input[type="checkbox"],
   input[type="radio"] {

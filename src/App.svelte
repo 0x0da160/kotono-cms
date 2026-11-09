@@ -5,6 +5,8 @@
   import GitBranch from "@lucide/svelte/icons/git-branch";
   import List from "@lucide/svelte/icons/list";
   import Lock from "@lucide/svelte/icons/lock";
+  import Menu from "@lucide/svelte/icons/menu";
+  import CircleQuestionMark from "@lucide/svelte/icons/circle-question-mark";
   import PenLine from "@lucide/svelte/icons/pen-line";
   import Settings from "@lucide/svelte/icons/settings";
   import X from "@lucide/svelte/icons/x";
@@ -19,7 +21,8 @@
   import DraftSettings from "./components/DraftSettings.svelte";
   import Editor from "./components/Editor.svelte";
   import RecoveryPanel from "./components/RecoveryPanel.svelte";
-  import LoginGate from "./components/LoginGate.svelte";
+  import LoginScreen from "./components/LoginScreen.svelte";
+  import LoginSettings from "./components/LoginSettings.svelte";
   import PlacesPanel from "./components/PlacesPanel.svelte";
   import PlaceBar from "./components/PlaceBar.svelte";
   import SyncPanel from "./components/SyncPanel.svelte";
@@ -31,6 +34,8 @@
   import { SealedDraftStore } from "./lib/drafts/sealed";
   import { opfsRoot } from "./lib/workspaces/store";
   import { DraftController } from "./lib/app/drafts.svelte";
+  import { LoginController } from "./lib/app/login.svelte";
+  import { IdbLoginStore } from "./lib/login/store";
   import { GitController } from "./lib/app/git.svelte";
   import { Workspace } from "./lib/app/workspace.svelte";
   import { IdbDraftStore } from "./lib/drafts/store";
@@ -65,12 +70,27 @@
   ws.git = git.hooks;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ブラウザの大域を各層の最小の型へ渡す
   const host = globalThis as any;
+  const vault = new Vault(browserPasskey(host));
+  /** 起動時のログイン（ADR-0011）：何よりも先にパスキー（使えなければパスフレーズ）で認証する */
+  const login = new LoginController(
+    vault,
+    typeof indexedDB === "undefined" ? null : new IdbLoginStore(indexedDB),
+    sealedDrafts,
+  );
   const places = inPlaces
     ? new PlacesController(ws, host, browserDeliver(host), {
-        vault: new Vault(browserPasskey(host)),
+        vault,
         sealed: sealedDrafts,
+        hooks: {
+          unlocked: (id) => login.rememberPlace(id),
+          removed: (id) => login.forgetPlace(id),
+          autoLocked: () => void lockApp(true),
+          active: () => login.unlocked,
+        },
       })
     : null;
+  /** ログインの画面を出している間は、ほかの画面を出さない */
+  const gated = $derived(supported && login.phase !== "ready" && login.phase !== "unavailable");
   const sync = new SyncController(ws, git, places);
   const pwa = new PwaController(host);
   // フォルダを開いたとき・一覧を読み直したときに Git 状態を取り直す（23.2：自動監視はしない）
@@ -113,14 +133,16 @@
   }
 
   let workerProbe: "pending" | "ok" | "failed" = $state("pending");
+  let placesReady: Promise<void> = Promise.resolve();
   onMount(() => {
     void probeWorker().then((ok) => (workerProbe = ok ? "ok" : "failed"));
     void pwa.start();
-    if (supported) void drafts.init();
-    // 前回のフォルダ：権限が残っていればそのまま開く。残っていなければ「前回のフォルダを開く」を示す（ADR-0005）
-    if (mode === "folder") void ws.loadRecent();
+    if (supported) {
+      void drafts.init();
+      void login.init();
+    }
     if (places) {
-      void opfsRoot(host).then(async (root) => {
+      placesReady = opfsRoot(host).then(async (root) => {
         if (root) await places.init(root);
         else places.error = "ブラウザ内の保存領域（OPFS）を開けません。";
       });
@@ -135,6 +157,144 @@
     }
   });
 
+  /** ログインしたら（ログインできない環境では最初から）、フォルダ・作業場所を開く準備をする */
+  $effect(() => {
+    if (!supported || gated || login.phase === "loading") return;
+    untrack(() => void afterLogin());
+  });
+
+  async function afterLogin() {
+    // ログインの画面が消えてフォーカスを失ったら、画面の中身へ移す（キーボードの位置を見失わせない）
+    if (document.activeElement === document.body || document.activeElement === null)
+      document.getElementById("main")?.focus();
+    // 前回のフォルダ：権限が残っていればそのまま開く。残っていなければ「前回のフォルダを開く」を示す（ADR-0005）
+    if (mode === "folder" && ws.root === null) await ws.loadRecent();
+    if (places) {
+      await placesReady;
+      // ログインで覚えていた暗号化した作業場所は、解錠済みにする
+      places.adoptUnlocked(await login.unlockPlaces());
+    }
+  }
+
+  /**
+   * ロックする（ログインの画面に戻る）。未保存の編集は、復旧ドラフトへ退避してから閉じる。
+   * 退避できないとき（ドラフトが無効など）は、手動のロックなら閉じる前に確かめる。
+   */
+  async function lockApp(auto = false) {
+    menuOpen = false;
+    if (places) await places.lockAll();
+    if (ws.root) {
+      const s = ws.session;
+      let kept = true;
+      if (s?.dirty && s.readOnlyReason === null) {
+        await drafts.flush(s).catch(() => undefined);
+        kept = s.draft.kind === "saved" && s.draft.revision === s.revision;
+      }
+      if (!kept && !auto && !(await ws.confirmLeave("ロックする前に、未保存の編集をどうしますか。"))) return;
+      ws.close();
+    }
+    login.lock();
+  }
+
+  /** ログインを作り直す（どの方法でもログインできないとき） */
+  async function resetLogin() {
+    const v = await ws.ask({
+      title: "ログインを作り直します",
+      message:
+        "登録したパスキー・パスフレーズ・回復コードの情報をこのブラウザから消し、登録からやり直します。このブラウザの復旧ドラフトはすべて削除します（もう読めないため）。",
+      details: [
+        "ブラウザ内の作業場所は消しません。それぞれの回復コード・パスフレーズで開けます。",
+        "パスキー管理アプリに残るパスキーは、不要なら管理アプリで削除してください。",
+      ],
+      buttons: [
+        { label: "作り直す", value: "reset", variant: "danger" },
+        { label: "キャンセル", value: "cancel" },
+      ],
+      initial: "cancel",
+    });
+    if (v !== "reset") return;
+    const on = drafts.mode === "enabled";
+    await drafts.disable(true);
+    if (on) await drafts.enable();
+    await login.reset();
+  }
+
+  // ---------------------------------------------------------------------------
+  // 上部バー：スクロールで詰める・メニュー（docs/knowledge/product/app-shell.md）
+
+  let menuOpen = $state(false);
+  let compact = $state(false);
+  let menuToggle: HTMLButtonElement | undefined = $state();
+  let menuEl: HTMLElement | undefined = $state();
+  let barEl: HTMLElement | undefined = $state();
+  let help: { show: (from?: HTMLElement | null) => void } | undefined = $state();
+  /** メニューを出せるか（ログインの前は出さない。ヘルプはボタンで出す） */
+  const menuAvailable = $derived(supported && !gated);
+
+  const sectionLabel = $derived(
+    section === "changes" ? "Git と同期" : section === "settings" ? "設定" : pane === "editor" ? "記事・編集" : "記事",
+  );
+
+  function toggleMenu() {
+    menuOpen = !menuOpen;
+    if (menuOpen) queueMicrotask(() => menuEl?.querySelector<HTMLElement>("button:not(:disabled)")?.focus());
+  }
+
+  function closeMenu(refocus = true) {
+    if (!menuOpen) return;
+    menuOpen = false;
+    if (refocus) menuToggle?.focus();
+  }
+
+  function pick(s: Section, p?: "list" | "editor") {
+    go(s, p);
+    closeMenu();
+  }
+
+  function onMenuKeydown(e: KeyboardEvent) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeMenu();
+    }
+  }
+
+  function onDocPointer(e: PointerEvent) {
+    if (!menuOpen) return;
+    const t = e.target as Node | null;
+    if (t && (menuEl?.contains(t) || menuToggle?.contains(t))) return;
+    closeMenu(false);
+  }
+
+  /**
+   * スクロールしたら上部バーを詰める。狭い画面はページ全体、広い画面は一覧・編集の領域がスクロールする。
+   * 行き来でちらつかないよう、詰めるのは 24px より下、戻すのは 4px より上に来たとき。
+   */
+  function onAnyScroll(e: Event) {
+    const t = e.target;
+    let y: number;
+    if (t === document || t === document.documentElement || t === document.body) y = scrollY;
+    else if (t instanceof HTMLElement && t.closest("main")) y = t.scrollTop;
+    else return;
+    if (y > 24) compact = true;
+    else if (y < 4) compact = false;
+  }
+
+  onMount(() => {
+    document.addEventListener("scroll", onAnyScroll, { capture: true, passive: true });
+    // 上部バーの高さ（固定した上部バーの下に、フォーカスした部品が隠れないようにする）
+    const ro =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(() =>
+            document.documentElement.style.setProperty("--app-bar-h", `${barEl?.offsetHeight ?? 0}px`),
+          );
+    if (barEl) ro?.observe(barEl);
+    return () => {
+      document.removeEventListener("scroll", onAnyScroll, { capture: true });
+      ro?.disconnect();
+    };
+  });
+
   async function updateApp() {
     if (!(await ws.confirmLeave("新しい版に切り替える前に、未保存の編集をどうしますか。"))) return;
     pwa.apply();
@@ -143,12 +303,6 @@
   async function reloadApp() {
     if (!(await ws.confirmLeave("ページを読み込み直す前に、未保存の編集をどうしますか。"))) return;
     location.reload();
-  }
-
-  /** ログインで解錠した作業場所を開く */
-  async function openPlace(id: string) {
-    const e = places?.entries.find((x) => x.state === "ok" && x.meta.id === id);
-    if (places && e?.state === "ok") await places.open(e.meta);
   }
 
   function onActivity() {
@@ -188,7 +342,10 @@
     onActivity();
     onKeydown(e);
   }}
-  onpointerdown={onActivity}
+  onpointerdown={(e) => {
+    onActivity();
+    onDocPointer(e);
+  }}
   onbeforeunload={onBeforeUnload}
 />
 
@@ -203,93 +360,134 @@
 {/snippet}
 
 <a class="skip" href="#main">本文へ移動</a>
-<!-- 上部バー：アプリ名・画面の切り替え・開いている場所とその操作・ヘルプ（docs/knowledge/product/app-shell.md） -->
-<header class="app-bar" class:workbench>
+<!--
+  上部バー：アプリ名・いまの画面・開いている場所・メニュー（docs/knowledge/product/app-shell.md）。
+  画面の上に固定し、スクロールすると詰める。画面の切り替えと場所の操作・ヘルプ・ロックはメニューにまとめる。
+-->
+<header class="app-bar" class:workbench class:compact bind:this={barEl} data-sticky-chrome data-testid="app-bar">
   <div class="brand">
     <h1>Kotono CMS</h1>
-    {#if !workbench}<p class="tagline">手元のMarkdownで記事をつくる、ローカルCMS。</p>{/if}
+    {#if !workbench && !ws.root}<p class="tagline">手元のMarkdownで記事をつくる、ローカルCMS。</p>{/if}
   </div>
-  {#if workbench}
-    <nav class="sections" aria-label="画面の切り替え" data-testid="app-nav">
-      <!-- 広い画面：一覧と編集は同じ画面に並ぶので「記事」1つ。狭い画面：「一覧」「編集」に分ける -->
-      <button
-        type="button"
-        class="wide-only"
-        aria-current={section === "articles" ? "page" : undefined}
-        onclick={() => go("articles")}
-        data-testid="nav-articles"><FileText />記事</button
-      >
-      <button
-        type="button"
-        class="narrow-only"
-        aria-current={section === "articles" && pane === "list" ? "page" : undefined}
-        onclick={() => go("articles", "list")}
-        data-testid="nav-list"><List />一覧</button
-      >
-      <button
-        type="button"
-        class="narrow-only"
-        aria-current={section === "articles" && pane === "editor" ? "page" : undefined}
-        onclick={() => go("articles", "editor")}
-        disabled={!ws.session}
-        data-testid="nav-editor"><PenLine />編集</button
-      >
-      <button
-        type="button"
-        aria-current={section === "changes" ? "page" : undefined}
-        onclick={() => go("changes")}
-        data-testid="nav-changes"><GitBranch />Git と同期</button
-      >
-      <button
-        type="button"
-        aria-current={section === "settings" ? "page" : undefined}
-        onclick={() => go("settings")}
-        data-testid="nav-settings"><Settings />設定</button
-      >
+  {#if workbench}<p class="where" data-testid="current-section">{sectionLabel}</p>{/if}
+  {#if ws.root}
+    <span class="folder-name" data-testid="folder-name">{places ? "作業場所" : "作業フォルダ"}：{ws.rootName}</span>
+  {/if}
+  {#if menuAvailable}
+    <button
+      type="button"
+      class="menu-toggle"
+      bind:this={menuToggle}
+      aria-expanded={menuOpen}
+      aria-controls="app-menu"
+      onclick={toggleMenu}
+      data-testid="menu-toggle"><Menu /><span class="menu-label">メニュー</span></button
+    >
+  {/if}
+  <HelpDialog bind:this={help} button={!menuAvailable} />
+  {#if menuAvailable}
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <nav
+      id="app-menu"
+      class="menu"
+      aria-label="メニュー"
+      hidden={!menuOpen}
+      bind:this={menuEl}
+      onkeydown={onMenuKeydown}
+      data-testid="app-menu"
+    >
+      {#if workbench}
+        <div class="menu-group" data-testid="app-nav">
+          <p class="menu-title">画面</p>
+          <!-- 広い画面：一覧と編集は同じ画面に並ぶので「記事」1つ。狭い画面：「一覧」「編集」に分ける -->
+          <button
+            type="button"
+            class="wide-only"
+            aria-current={section === "articles" ? "page" : undefined}
+            onclick={() => pick("articles")}
+            data-testid="nav-articles"><FileText />記事</button
+          >
+          <button
+            type="button"
+            class="narrow-only"
+            aria-current={section === "articles" && pane === "list" ? "page" : undefined}
+            onclick={() => pick("articles", "list")}
+            data-testid="nav-list"><List />一覧</button
+          >
+          <button
+            type="button"
+            class="narrow-only"
+            aria-current={section === "articles" && pane === "editor" ? "page" : undefined}
+            onclick={() => pick("articles", "editor")}
+            disabled={!ws.session}
+            data-testid="nav-editor"><PenLine />編集</button
+          >
+          <button
+            type="button"
+            aria-current={section === "changes" ? "page" : undefined}
+            onclick={() => pick("changes")}
+            data-testid="nav-changes"><GitBranch />Git と同期</button
+          >
+          <button
+            type="button"
+            aria-current={section === "settings" ? "page" : undefined}
+            onclick={() => pick("settings")}
+            data-testid="nav-settings"><Settings />設定</button
+          >
+        </div>
+      {/if}
+      <div class="menu-group">
+        {#if workbench}<p class="menu-title">場所</p>{/if}
+        {#if places}
+          {#if places.current}
+            <button
+              type="button"
+              onclick={() => {
+                closeMenu();
+                void places.leave();
+              }}
+              data-testid="place-leave"><Folders />作業場所の一覧</button
+            >
+          {/if}
+        {:else if supported && ws.root}
+          <button
+            type="button"
+            onclick={() => {
+              closeMenu();
+              void ws.chooseFolder();
+            }}
+            disabled={ws.busy}
+            data-testid="choose-folder"><FolderOpen />別のフォルダを開く</button
+          >
+        {/if}
+        <button
+          type="button"
+          onclick={() => {
+            const from = menuToggle;
+            closeMenu(false);
+            help?.show(from);
+          }}
+          data-testid="help-open"><CircleQuestionMark />ヘルプ</button
+        >
+        {#if login.unlocked}
+          <button type="button" onclick={() => lockApp()} data-testid="app-lock"><Lock />ロック</button>
+        {/if}
+      </div>
     </nav>
   {/if}
-  <div class="place">
-    {#if places}
-      {#if ws.root}
-        <span class="folder-name" data-testid="folder-name">作業場所：{ws.rootName}</span>
-      {/if}
-      {#if places.current}
-        <button type="button" onclick={() => places.leave()} data-testid="place-leave"><Folders />作業場所の一覧</button
-        >
-        {#if places.current.keyring !== null}
-          {@const id = places.current.id}
-          <button type="button" onclick={() => places.lock(id)} data-testid="place-lock-open"><Lock />ロック</button>
-        {/if}
-      {/if}
-    {:else if supported}
-      {#if ws.root}
-        <span class="folder-name" data-testid="folder-name">作業フォルダ：{ws.rootName}</span>
-      {/if}
-      <button
-        type="button"
-        class={ws.root || ws.recent ? "" : "primary"}
-        onclick={() => ws.chooseFolder()}
-        disabled={ws.busy}
-        data-testid="choose-folder"
-      >
-        <FolderOpen />{ws.root ? "別のフォルダを開く" : "フォルダを選択"}
-      </button>
-    {/if}
-  </div>
-  <HelpDialog />
 </header>
 
 <main id="main" tabindex="-1" class:wide={ws.root !== null} class:workbench>
-  {#if supported && drafts.mode === "undecided" && !workbench}<DraftSettings {ws} dc={drafts} />{/if}
-  {#if places && ws.root === null && (places.ready || places.error)}
-    {#if places.loginRequired}
-      <!-- 起動時のログイン（39.3）：暗号化した作業場所があれば、一覧より先にパスキーでの解錠を求める -->
-      <LoginGate {places} onopen={openPlace} />
-    {:else}
+  {#if gated}
+    <!-- 起動時のログイン（ADR-0011）：何よりも先に、パスキーの登録・認証を求める -->
+    {#if login.phase !== "loading"}<LoginScreen {login} onreset={resetLogin} />{/if}
+  {:else}
+    {#if login.info && !workbench}<p class="banner info" role="status" data-testid="login-info">{login.info}</p>{/if}
+    {#if places && ws.root === null && (places.ready || places.error)}
       <PlacesPanel {places} {ws} />
     {/if}
   {/if}
-  {#if !supported || ws.root === null}
+  {#if !supported || (ws.root === null && !gated)}
     {#if !places}<section aria-labelledby="start-heading" class="card">
         <h2 id="start-heading">はじめに</h2>
         {#if supported}
@@ -299,6 +497,15 @@
               >フォルダへのアクセスはこのタブを閉じるまで有効です。開いたフォルダは次回すぐ開けるようこのブラウザ内に記憶します（フォルダ名とアクセス用の情報だけで、記事の内容は保存しません）。開くときにブラウザがアクセスの許可を求めることがあります。</HelpTip
             >
           </p>
+          <div class="recent">
+            <button
+              type="button"
+              class={ws.recent ? "" : "primary"}
+              onclick={() => ws.chooseFolder()}
+              disabled={ws.busy}
+              data-testid="choose-folder"><FolderOpen />フォルダを選択</button
+            >
+          </div>
           {#if ws.recent}
             <div class="recent" data-testid="recent-folder">
               <button
@@ -413,10 +620,6 @@
       <div class="section articles" hidden={section !== "articles"} data-section="articles">
         <RecoveryPanel {ws} />
         <div class="panes" data-pane={pane}>
-          {#if supported && drafts.mode === "undecided"}
-            <!-- 初回の設定は編集側の列に置き、一覧を押し下げない（UI刷新 P-04） -->
-            <div class="consent-slot"><DraftSettings {ws} dc={drafts} /></div>
-          {/if}
           <div class="pane list-pane">
             <ArticleList {ws} {git} onopen={() => (pane = "editor")} />
           </div>
@@ -446,7 +649,8 @@
             <h2 id="about-heading">アプリの更新と版</h2>
             {@render appInfo()}
           </section>
-          {#if supported && drafts.mode !== "undecided"}<DraftSettings {ws} dc={drafts} variant="page" />{/if}
+          {#if supported}<DraftSettings {ws} dc={drafts} {login} variant="page" />{/if}
+          {#if supported && login.record}<LoginSettings {login} />{/if}
           {#if places?.current}<PlaceBar {places} {ws} {git} meta={places.current} part="settings" />{/if}
         </div>
       </div>
@@ -456,7 +660,7 @@
 
 {#if !workbench}
   <footer class="app-footer" class:wide={ws.root !== null}>
-    {#if supported && drafts.mode !== "undecided"}<DraftSettings {ws} dc={drafts} />{/if}
+    {#if supported && !gated}<DraftSettings {ws} dc={drafts} {login} />{/if}
     {@render appInfo()}
   </footer>
 {/if}
@@ -494,25 +698,34 @@
     margin-block: var(--space-8);
   }
 
-  /* ---- 上部バー ---- */
+  /*
+   * ---- 上部バー ----
+   * 画面の上に固定する（sticky）。スクロールすると上下の余白と文字を詰め、説明文と場所の名前を外す。
+   * 画面の切り替え・場所の操作・ヘルプ・ロックは右端の「メニュー」にまとめる（ハンバーガーメニュー）。
+   */
   .app-bar {
     --gutter: max(var(--space-16), (100% - 96rem) / 2 + var(--space-16));
+    position: sticky;
+    top: 0;
+    z-index: var(--z-raised);
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-6) var(--space-12);
+    gap: var(--space-4) var(--space-12);
     padding: var(--space-8) var(--gutter);
     background: var(--color-bg-surface);
     border-bottom: 1px solid var(--color-border-subtle);
     margin-bottom: var(--space-12);
+    transition: padding var(--duration-fast) var(--easing-standard);
   }
   .brand {
     min-width: 0;
+    flex: 0 1 auto;
   }
   h1 {
     margin: 0;
     font-size: var(--font-size-24);
     letter-spacing: 0.01em;
+    white-space: nowrap;
   }
   .app-bar.workbench {
     padding-block: var(--space-4);
@@ -520,58 +733,129 @@
   }
   .app-bar.workbench h1 {
     font-size: var(--font-size-18);
-    white-space: nowrap;
+  }
+  .app-bar.compact {
+    padding-block: var(--space-2);
+    box-shadow: var(--shadow-1);
+  }
+  .app-bar.compact h1 {
+    font-size: var(--font-size-16);
   }
   .tagline {
     margin: 0;
     color: var(--color-fg-muted);
     font-size: var(--font-size-14);
   }
-  .place {
-    display: flex;
-    align-items: center;
-    gap: var(--control-gap) var(--space-12);
-    flex-wrap: wrap;
-    margin-inline-start: auto;
-    min-width: 0;
+  .compact .tagline {
+    display: none;
+  }
+  /* いまの画面の名前（メニューを開かなくても、どこにいるか分かるように） */
+  .where {
+    margin: 0;
+    padding-inline-start: var(--space-12);
+    border-inline-start: 1px solid var(--color-border-subtle);
+    font-size: var(--font-size-14);
+    font-weight: var(--font-weight-strong);
+    color: var(--color-accent-text);
+    white-space: nowrap;
   }
   .folder-name {
+    margin-inline-start: auto;
+    min-width: 0;
     font-size: var(--font-size-14);
-    overflow-wrap: anywhere;
+    color: var(--color-fg-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  .workbench .place button,
-  .app-bar.workbench > :global(.help-open) {
+  .menu-toggle {
+    margin-inline-start: auto;
+    display: inline-flex;
+    align-items: center;
     font-size: var(--font-size-14);
     padding: var(--control-pad-y-sm) var(--control-pad-x-sm);
   }
-
-  /* 画面の切り替え：選んでいる画面は文字の太さと下線で示す（色だけに頼らない：14.1） */
-  .sections {
-    display: flex;
-    gap: var(--space-4);
+  .folder-name + .menu-toggle {
+    margin-inline-start: 0;
   }
-  .sections button {
-    display: inline-flex;
+  .app-bar > :global(.help-open) {
+    margin-inline-start: auto;
+    font-size: var(--font-size-14);
+    padding: var(--control-pad-y-sm) var(--control-pad-x-sm);
+  }
+  /* メニューの開閉は画面の端で頻繁に押すので、指の画面では 44px（Apple HIG）にする */
+  @media (pointer: coarse) {
+    .menu-toggle {
+      min-height: var(--touch-target);
+      min-width: var(--touch-target);
+    }
+  }
+
+  /* メニュー：上部バーの右端の下に重ねる。選んでいる画面は文字の太さと左の線で示す（色だけに頼らない：14.1） */
+  .menu {
+    position: absolute;
+    top: calc(100% + var(--space-4));
+    right: var(--gutter);
+    z-index: var(--z-popover);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    min-width: 14rem;
+    max-width: calc(100vw - 2 * var(--space-16));
+    max-height: calc(100dvh - var(--app-bar-h, 3rem) - var(--space-16));
+    overflow: auto;
+    padding: var(--space-8);
+    background: var(--color-bg-raised);
+    border: 1px solid var(--color-border-control);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-2);
+  }
+  .menu[hidden] {
+    display: none;
+  }
+  .menu-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+  .menu-group + .menu-group {
+    border-top: 1px solid var(--color-border-subtle);
+    padding-top: var(--space-8);
+  }
+  .menu-title {
+    margin: 0 0 var(--space-2);
+    padding-inline: var(--space-8);
+    font-size: var(--font-size-12);
+    color: var(--color-fg-muted);
+  }
+  .menu button {
+    display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
+    width: 100%;
+    text-align: start;
     border-color: transparent;
     background: transparent;
-    color: var(--color-fg-muted);
-    font-size: var(--font-size-14);
-    padding: var(--control-pad-y) var(--control-pad-x);
+    padding: var(--control-pad-y) var(--space-8);
     white-space: nowrap;
   }
-  .sections button:not(:disabled):hover {
-    color: var(--color-fg-default);
+  .menu button:not(:disabled):hover {
     background: var(--color-bg-hover);
   }
-  .sections button[aria-current="page"] {
+  .menu button:disabled {
+    background: transparent;
+  }
+  .menu button[aria-current="page"] {
     color: var(--color-accent-text);
     background: var(--color-accent-subtle);
     font-weight: var(--font-weight-strong);
-    box-shadow: inset 0 calc(-1 * var(--focus-ring-width)) 0 var(--color-accent);
-    border-end-start-radius: 0;
-    border-end-end-radius: 0;
+    box-shadow: inset var(--focus-ring-width) 0 0 var(--color-accent);
+  }
+  /* メニューの項目は指の画面で 44px（Apple HIG：頻繁に押す移動） */
+  @media (pointer: coarse) {
+    .menu button {
+      min-height: var(--touch-target);
+    }
   }
   .narrow-only {
     display: none !important;
@@ -665,7 +949,7 @@
   }
   @media (pointer: coarse) {
     .env-details summary {
-      min-height: var(--touch-target);
+      min-height: var(--touch-target-sm);
     }
   }
   .env-details[open] summary {
@@ -676,12 +960,28 @@
     margin: 0;
     padding: 0;
   }
+  /* 確認した項目：行と列の罫線を引いた表にする */
+  .capabilities {
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
   .capabilities li {
     display: grid;
-    grid-template-columns: 1.5rem 1fr auto;
-    gap: var(--space-4) var(--space-8);
-    padding-block: var(--space-6);
+    grid-template-columns: 2rem 1fr auto;
     border-top: 1px solid var(--color-border-subtle);
+  }
+  .capabilities li > * {
+    padding: var(--space-4) var(--space-8);
+  }
+  .capabilities li > :not(:first-child, .impact) {
+    border-inline-start: 1px solid var(--color-border-subtle);
+  }
+  .capabilities .mark {
+    text-align: center;
+  }
+  .capabilities .impact {
+    border-top: 1px dashed var(--color-border-subtle);
   }
   .capabilities li:first-child {
     border-top: none;
@@ -719,6 +1019,11 @@
   .banner p {
     margin: 0;
   }
+  .banner.info {
+    border-color: var(--color-info-border);
+    background: var(--color-info-bg);
+    max-width: 36rem;
+  }
   .panes {
     display: grid;
     grid-template-columns: minmax(18rem, 26rem) minmax(0, 1fr);
@@ -728,25 +1033,18 @@
 
   /*
    * 狭い画面（60rem 以下：iPad の縦・iPhone を含む）：ページ全体を1つのスクロールにし、
-   * 上部バーの2行目に「一覧｜編集｜Git と同期｜設定」を並べる。一覧と編集は1度に1つだけ出す（14.1）。
+   * メニューの画面に「一覧｜編集｜Git と同期｜設定」を並べる。一覧と編集は1度に1つだけ出す（14.1）。
+   * 固定した上部バーの下に、フォーカスした部品・見出しが隠れないようにする。
    */
   @media (max-width: 60rem) {
+    :global(html) {
+      scroll-padding-top: calc(var(--app-bar-h, 0px) + var(--space-8));
+    }
     .wide-only {
       display: none !important;
     }
     .narrow-only {
-      display: inline-flex !important;
-    }
-    .sections {
-      order: 3;
-      flex: 1 0 100%;
-      gap: var(--space-2);
-      margin-inline: calc(var(--space-4) * -1);
-    }
-    .sections button {
-      flex: 1 1 0;
-      min-width: 0;
-      padding-inline: var(--space-4);
+      display: flex !important;
     }
     .panes {
       grid-template-columns: minmax(0, 1fr);
@@ -756,27 +1054,18 @@
       display: none;
     }
   }
-  /*
-   * とても狭い画面（iPhone の縦）：1行目にアプリ名とヘルプ、2行目に開いている場所とその操作、3行目に画面の切り替え。
-   * 切り替えのアイコンは外して文字を優先する（ボタンの意味は常に文字で伝える：14.1）
-   */
+  /* とても狭い画面（iPhone の縦）：場所の名前は外し（メニューと画面の中にある）、メニューの文字は残す */
   @media (max-width: 30rem) {
-    .brand {
-      flex: 1 1 auto;
-    }
-    .app-bar > :global(.help-open) {
-      order: 1;
-    }
-    .place {
-      order: 2;
-      flex: 1 0 100%;
-      margin-inline-start: 0;
-    }
     .folder-name {
-      flex: 1 1 auto;
-    }
-    .sections :global(svg.lucide-icon) {
       display: none;
+    }
+    .folder-name + .menu-toggle {
+      margin-inline-start: auto;
+    }
+    .where {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
     }
   }
 
@@ -793,7 +1082,6 @@
     }
     .app-bar.workbench {
       flex: none;
-      flex-wrap: nowrap;
     }
     main.workbench {
       flex: 1 1 auto;
@@ -837,22 +1125,6 @@
     }
     main.workbench .editor-pane {
       padding-inline-start: var(--space-12);
-    }
-    main.workbench .panes:has(> .consent-slot) {
-      grid-template-rows: auto minmax(0, 1fr);
-    }
-    main.workbench .panes > .consent-slot {
-      grid-column: 2;
-      grid-row: 1;
-      padding: var(--space-8) 0 0 var(--space-12);
-    }
-    main.workbench .panes:has(> .consent-slot) > .list-pane {
-      grid-column: 1;
-      grid-row: 1 / span 2;
-    }
-    main.workbench .panes:has(> .consent-slot) > .editor-pane {
-      grid-column: 2;
-      grid-row: 2;
     }
   }
   /* 狭い側の作業台（〜75rem）では一覧の列を最小幅にして、編集側の操作列を1行に収める（UI刷新 反復4） */

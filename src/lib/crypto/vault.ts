@@ -35,8 +35,14 @@ const td = new TextDecoder("utf-8", { fatal: true });
 const NAME_AAD = te.encode("kotono-cms/meta/name");
 const TOKEN_AAD = te.encode("kotono-cms/meta/token");
 const DRAFT_AAD = te.encode("kotono-cms/draft");
+/** ログイン鍵で作業場所のデータ鍵を包むときの追加認証データ（作業場所 ID を足す：ADR-0011） */
+const PLACE_AAD = te.encode("kotono-cms/login/place");
 const EXPORT_MAGIC = te.encode("KOTONO-EXPORT/1\n");
 export const PASSPHRASE_MIN = 10;
+
+function placeAad(id: string): Uint8Array {
+  return new Uint8Array([...PLACE_AAD, 0, ...te.encode(id)]);
+}
 
 export interface Unlocked {
   readonly dk: Uint8Array;
@@ -91,6 +97,26 @@ export class Vault {
 
   lock(id: string): void {
     this.open.delete(id);
+  }
+
+  /**
+   * ログイン鍵（loginId で解錠中）で、作業場所（placeId で解錠中）のデータ鍵を包む（ADR-0011）。
+   * ログインしただけで、その作業場所も開けるようにするため。
+   */
+  async wrapPlace(loginId: string, placeId: string): Promise<string> {
+    const login = this.need(loginId);
+    const place = this.need(placeId);
+    return b64u(await aesEncrypt(login.keys.meta, place.dk, placeAad(placeId)));
+  }
+
+  /** wrapPlace で包んだデータ鍵を開き、作業場所を解錠済みにする。開けなければ false */
+  async unwrapPlace(loginId: string, placeId: string, wrapped: string): Promise<boolean> {
+    const login = this.need(loginId);
+    const b = fromB64u(wrapped);
+    const dk = b ? await aesDecrypt(login.keys.meta, b, placeAad(placeId)) : null;
+    if (!dk || dk.length !== 32) return false;
+    this.open.set(placeId, { dk, keys: await deriveDataKeys(dk) });
+    return true;
   }
 
   lockAll(): void {
@@ -226,32 +252,6 @@ export class Vault {
       if (dk) return { id: c.id, dk };
     }
     return null;
-  }
-
-  /**
-   * 起動時のログイン（39.3）：パスキーが登録された作業場所すべてを候補に 1 回だけ認証し、
-   * 選ばれたパスキーの作業場所を解錠する。解錠した作業場所の ID（と以前の版の暗号化した表示名）を返す。開けなければ null。
-   */
-  async loginWithPasskey(
-    places: readonly { id: string; record: KeyringRecord }[],
-  ): Promise<({ id: string } & UnlockResult) | null> {
-    const candidates = places.flatMap((p) =>
-      p.record.slots.filter((s): s is PasskeySlot => s.kind === "passkey").map((slot) => ({ id: p.id, slot })),
-    );
-    if (candidates.length === 0) throw new Error("パスキーを登録した作業場所がありません。");
-    const found = await this.authenticatePasskey(candidates);
-    if (!found) return null;
-    const record = places.find((p) => p.id === found.id)?.record;
-    if (!record) return null;
-    const k = { dk: found.dk, keys: await deriveDataKeys(found.dk) };
-    let legacyName: string | null = null;
-    if (record.name) {
-      // 以前の版の記録：暗号化した表示名を復号して返す（読めなければ鍵が違うものとして扱う）
-      legacyName = await this.decryptLegacyName(k, record.name);
-      if (legacyName === null) return null;
-    }
-    this.open.set(found.id, k);
-    return { id: found.id, legacyName };
   }
 
   /** 解錠する。開けなければ null */

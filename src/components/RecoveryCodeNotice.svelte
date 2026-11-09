@@ -6,6 +6,7 @@
     account,
     passkey = null,
     ondone,
+    subject = "place",
   }: {
     code: string;
     /** パスワード管理に保存するときのユーザー名（解錠画面と同じ値にする） */
@@ -13,6 +14,8 @@
     /** パスキーを登録する。この環境で使えなければ null */
     passkey?: (() => Promise<boolean>) | null;
     ondone: () => unknown;
+    /** place：作業場所の回復コード。login：起動時のログインの回復コード（ADR-0011） */
+    subject?: "place" | "login";
   } = $props();
 
   let kept = $state(false);
@@ -63,10 +66,15 @@
   <form onsubmit={submit}>
     <h3 id="rc-title">回復コードを保存してください</h3>
     <p id="rc-desc" class="small">
-      この作業場所は暗号化しています。回復コードはこの画面でだけ表示し、CMS
-      には保存しません。「作業場所を開く」を押すと、ブラウザがパスワードとして保存するか尋ねます（iPhone・Mac では
-      iCloud
-      キーチェーン）。保存しておけば、覚えたり書き写したりする必要はありません。回復コードをなくし、パスフレーズ・パスキーも使えなくなると、誰も内容を戻せません。
+      {#if subject === "login"}
+        パスキー・パスフレーズを使えなくなったときは、この回復コードでログインします。回復コードはこの画面でだけ表示し、CMS
+        には保存しません。「使い始める」を押すと、ブラウザがパスワードとして保存するか尋ねます。回復コードをなくし、パスキー・パスフレーズも使えなくなると、ログインを作り直すことになり、暗号化した復旧ドラフトは読めなくなります。
+      {:else}
+        この作業場所は暗号化しています。回復コードはこの画面でだけ表示し、CMS
+        には保存しません。「作業場所を開く」を押すと、ブラウザがパスワードとして保存するか尋ねます（iPhone・Mac では
+        iCloud
+        キーチェーン）。保存しておけば、覚えたり書き写したりする必要はありません。回復コードをなくし、パスフレーズ・パスキーも使えなくなると、誰も内容を戻せません。
+      {/if}
     </p>
     <p class="code mono" data-testid="recovery-code-value">{code}</p>
     <!-- パスワード管理に保存させるための欄（ユーザー名と新しいパスワード） -->
@@ -118,7 +126,7 @@
       ><input type="checkbox" bind:checked={kept} data-testid="recovery-kept" /> 回復コードを保存しました（または控えました）</label
     >
     <button type="submit" class="primary" disabled={!kept || !fieldOk} data-testid="recovery-done"
-      >作業場所を開く</button
+      >{subject === "login" ? "使い始める" : "作業場所を開く"}</button
     >
   </form>
 </div>

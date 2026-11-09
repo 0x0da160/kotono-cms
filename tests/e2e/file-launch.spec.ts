@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { registerLogin } from "./login";
 
 const distHtml = resolve(import.meta.dirname, "../../dist/kotono-cms.html");
 
@@ -21,6 +22,7 @@ test("単一HTMLを file:// で起動できる（仕様 2.1・A01）", async ({ 
 
   const url = pathToFileURL(distHtml).href;
   await page.goto(url);
+  await registerLogin(page);
 
   await expect(page).toHaveTitle("Kotono CMS");
   await expect(page.getByRole("heading", { level: 1, name: "Kotono CMS" })).toBeVisible();
@@ -51,6 +53,7 @@ test("配布HTMLは外部リソースを参照しない（仕様 2.1）", () => 
 
 test("CSP が許可していないインラインスクリプトを止める（仕様 16.1.1・TG08 の一部）", async ({ page }) => {
   await page.goto(pathToFileURL(distHtml).href);
+  await registerLogin(page);
   const result = await page.evaluate(
     () =>
       new Promise<string>((resolveResult) => {

@@ -9,6 +9,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { installFakeFs, type FakeFsApi } from "./fake-fs";
+import { registerLogin } from "./login";
 
 const distHtml = resolve(import.meta.dirname, "../../dist/kotono-cms.html");
 const url = pathToFileURL(distHtml).href;
@@ -48,6 +49,7 @@ async function launch(page: Page, seed: Record<string, string> = SEED) {
   });
   await page.addInitScript(installFakeFs, seed);
   await page.goto(url);
+  await registerLogin(page);
   await page.getByTestId("choose-folder").click();
   return { requests, errors };
 }
