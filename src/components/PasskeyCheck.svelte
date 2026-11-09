@@ -197,7 +197,7 @@
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     font-size: var(--font-size-13);
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-md);
     padding: var(--space-8);
     min-height: 6rem;
@@ -206,6 +206,6 @@
     font-size: var(--font-size-14);
   }
   .muted {
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
   }
 </style>

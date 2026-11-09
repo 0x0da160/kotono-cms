@@ -103,10 +103,11 @@
   .help {
     width: min(40rem, calc(100vw - 2rem));
     max-height: calc(100dvh - 2rem);
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-strong);
     border-radius: var(--radius-lg);
-    background: var(--color-surface);
-    color: var(--color-text);
+    background: var(--color-bg-raised);
+    box-shadow: var(--shadow-2);
+    color: var(--color-fg-default);
     padding: var(--space-16) var(--space-20) var(--space-20);
     font-size: var(--font-size-14);
     line-height: 1.7;
@@ -123,8 +124,8 @@
     gap: var(--space-16);
     margin: -1rem -1.25rem var(--space-8);
     padding: var(--space-12) var(--space-20);
-    background: var(--color-surface);
-    border-bottom: 1px solid var(--color-border);
+    background: var(--color-bg-surface);
+    border-bottom: 1px solid var(--color-border-subtle);
   }
   .top button {
     display: inline-flex;
@@ -152,6 +153,6 @@
   }
   .more {
     margin-top: var(--space-12);
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
   }
 </style>

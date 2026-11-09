@@ -158,8 +158,8 @@
 
 <style>
   .page {
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
+    background: var(--color-bg-surface);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-lg);
     padding: var(--panel-pad);
     margin-bottom: var(--space-12);
@@ -168,11 +168,11 @@
     margin: 0 0 var(--space-4);
   }
   .consent {
-    border: 1px solid var(--color-focus);
+    border: 1px solid var(--color-focus-ring);
     border-radius: var(--radius-lg);
     padding: var(--panel-pad);
     margin-bottom: var(--space-12);
-    background: var(--color-surface);
+    background: var(--color-bg-surface);
   }
   h2 {
     margin: 0 0 var(--space-4);
@@ -180,7 +180,7 @@
   }
   .small {
     font-size: var(--font-size-13);
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
   }
   .buttons {
     display: flex;

@@ -137,11 +137,11 @@
 
 <style>
   .recovery {
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-lg);
     padding: var(--panel-pad);
     margin-bottom: var(--space-12);
-    background: var(--color-surface);
+    background: var(--color-bg-surface);
   }
   h2 {
     margin: 0 0 var(--space-4);
@@ -156,7 +156,7 @@
     gap: var(--space-8);
   }
   .list li {
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-md);
     padding: var(--space-8);
     display: flex;

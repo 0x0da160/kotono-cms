@@ -17,8 +17,18 @@
 
 body {
   margin: 0;
-  background: var(--color-bg);
-  color: var(--color-text);
+  background: var(--color-bg-page);
+  color: var(--color-fg-default);
+}
+
+/* リンクは常に下線（色だけで伝えない）。accent は面の色なので文字には link を使う */
+a {
+  color: var(--color-link);
+  text-underline-offset: 0.2em;
+}
+
+a:hover {
+  color: var(--color-link-hover);
 }
 
 :focus-visible {
@@ -29,16 +39,30 @@ body {
 button {
   font: inherit;
   color: inherit;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-control);
   border-radius: var(--radius-md);
   padding: var(--control-pad-y) var(--control-pad-x);
   line-height: var(--control-line-height);
   cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--easing-standard),
+    border-color var(--duration-fast) var(--easing-standard);
 }
 
+button:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+}
+
+button:active:not(:disabled) {
+  background: var(--color-bg-pressed);
+}
+
+/* 無効：親の opacity で薄くせず、無効の色を使う（押せない理由は通常の文字で隣に書く） */
 button:disabled {
-  opacity: 0.55;
+  background: var(--color-disabled-bg);
+  border-color: var(--color-disabled-border);
+  color: var(--color-disabled-fg);
   cursor: not-allowed;
 }
 
@@ -49,9 +73,32 @@ button.primary {
   font-weight: var(--font-weight-strong);
 }
 
+button.primary:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+}
+
+button.primary:active:not(:disabled) {
+  background: var(--color-accent-pressed);
+  border-color: var(--color-accent-pressed);
+}
+
+button.primary:disabled {
+  background: var(--color-disabled-bg);
+  border-color: var(--color-disabled-border);
+  color: var(--color-disabled-fg);
+  font-weight: var(--font-weight-regular);
+}
+
+/* 削除の入口（確認を開く）：枠と文字だけ。確定は確認ダイアログの中の塗りのボタン */
 button.danger {
-  border-color: var(--color-ng);
-  color: var(--color-ng);
+  border-color: var(--color-danger-border);
+  color: var(--color-danger-fg);
+}
+
+button.danger:disabled {
+  border-color: var(--color-disabled-border);
+  color: var(--color-disabled-fg);
 }
 
 input,
@@ -59,15 +106,51 @@ select,
 textarea {
   font: inherit;
   color: inherit;
-  background: var(--color-surface);
-  border: 1px solid var(--color-field-border);
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border-control);
   border-radius: var(--radius-md);
   padding: var(--control-pad-y) var(--space-8);
+}
+
+::placeholder {
+  color: var(--color-fg-placeholder);
+  opacity: 1;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--color-accent);
+}
+
+/* 入力の誤り：枠の色と左の太い辺（aria-invalid と説明の文で伝える） */
+:is(input, select, textarea)[aria-invalid="true"] {
+  border-color: var(--color-danger-border);
+  box-shadow: inset var(--border-width-edge) 0 0 var(--color-danger-border);
+}
+
+/* 読み取り専用：沈んだ面と点線の枠 */
+:is(input, textarea)[readonly] {
+  background: var(--color-bg-sunken);
+  border-style: dashed;
+}
+
+:is(input, select, textarea):disabled {
+  background: var(--color-disabled-bg);
+  border-color: var(--color-disabled-border);
+  color: var(--color-disabled-fg);
+  cursor: not-allowed;
 }
 
 input,
 select {
   line-height: var(--control-line-height);
+}
+
+code {
+  background: var(--color-code-bg);
+  color: var(--color-code-fg);
+  border-radius: var(--radius-sm);
+  padding: 0 0.2em;
 }
 
 code,
@@ -78,13 +161,13 @@ code,
 }
 
 .muted {
-  color: var(--color-muted);
+  color: var(--color-fg-muted);
 }
 
 /* 状態は色だけで伝えない（14.1）：バッジは常に文字を持つ */
 .badge {
   display: inline-block;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-control);
   border-radius: var(--radius-pill);
   padding: 0 var(--space-8);
   font-size: var(--font-size-12);
@@ -92,19 +175,31 @@ code,
   white-space: nowrap;
 }
 
+/* 注意：未保存・保存状態が不明 */
 .badge.unsaved,
-.badge.unknown,
-.badge.err {
-  border-color: var(--color-ng);
-  color: var(--color-ng);
+.badge.unknown {
+  background: var(--color-warning-bg);
+  border-color: var(--color-warning-border);
+  color: var(--color-warning-fg);
   font-weight: var(--font-weight-strong);
 }
 
-.badge.saved,
-.badge.pub {
-  border-color: var(--color-ok);
-  color: var(--color-ok);
+/* 失敗・誤り */
+.badge.err {
+  background: var(--color-danger-bg);
+  border-color: var(--color-danger-border);
+  color: var(--color-danger-fg);
+  font-weight: var(--font-weight-strong);
 }
+
+/* 成功：保存済み */
+.badge.saved {
+  background: var(--color-success-bg);
+  border-color: var(--color-success-border);
+  color: var(--color-success-fg);
+}
+
+/* 公開対象は中立のまま（サイトへの公開の完了と区別する） */
 
 /*
  * アイコン（Lucide）。文字の前に添えて見分けやすくするだけで、意味は常に文字で伝える（14.1）。

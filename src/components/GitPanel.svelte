@@ -244,8 +244,8 @@
 
 <style>
   .card {
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
+    background: var(--color-bg-surface);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-lg);
     padding: var(--panel-pad);
     margin-block: var(--space-12);
@@ -277,7 +277,7 @@
     overflow-wrap: anywhere;
   }
   .blockers {
-    color: var(--color-ng);
+    color: var(--color-danger-fg);
     margin: var(--space-4) 0;
     padding-inline-start: var(--space-20);
   }
@@ -292,11 +292,11 @@
   .articles {
     list-style: none;
     padding-inline-start: 0;
-    border-top: 1px solid var(--color-border);
+    border-top: 1px solid var(--color-border-subtle);
   }
   .articles > li {
     padding-block: var(--space-4);
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border-subtle);
   }
   .history li {
     display: flex;
@@ -308,40 +308,45 @@
   }
   .history .date,
   .history .who {
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
   }
   .pending,
   .notice {
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-md);
     padding: var(--panel-pad-sm);
     margin-top: var(--space-12);
   }
-  .notice[data-kind="error"],
+  .notice[data-kind="error"] {
+    border-color: var(--color-danger-border);
+    background: var(--color-danger-bg);
+  }
   .pending {
-    border-color: var(--color-ng);
+    border-color: var(--color-warning-border);
+    background: var(--color-warning-bg);
   }
   .notice[data-kind="ok"] {
-    border-color: var(--color-ok);
+    border-color: var(--color-success-border);
+    background: var(--color-success-bg);
   }
   .notice p,
   .pending p {
     margin: 0 0 var(--space-4);
   }
   .err {
-    color: var(--color-ng);
+    color: var(--color-danger-fg);
   }
   .small {
     font-size: var(--font-size-14);
   }
   .muted {
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
   }
   .link {
     background: none;
     border: none;
     padding: var(--space-2) 0;
-    color: var(--color-focus);
+    color: var(--color-focus-ring);
     text-decoration: underline;
     cursor: pointer;
     font-size: var(--font-size-14);

@@ -77,6 +77,6 @@
     gap: var(--control-gap) var(--space-12);
   }
   .muted {
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
   }
 </style>

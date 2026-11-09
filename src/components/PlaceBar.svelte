@@ -215,8 +215,8 @@
     margin-inline-start: auto;
   }
   .card {
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
+    background: var(--color-bg-surface);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-lg);
     padding: var(--panel-pad);
     margin-block-end: var(--space-12);
@@ -235,18 +235,20 @@
     font-size: var(--font-size-14);
   }
   .warn {
-    color: var(--color-ng);
+    color: var(--color-warning-fg);
     font-weight: var(--font-weight-strong);
   }
   .banner {
-    border: 1px solid var(--color-ng);
+    border: 1px solid var(--color-danger-border);
     border-radius: var(--radius-md);
     padding: var(--panel-pad-sm);
     margin: var(--space-8) 0 0;
     font-size: var(--font-size-14);
+    background: var(--color-danger-bg);
   }
   .banner.info {
-    border-color: var(--color-border);
+    border-color: var(--color-info-border);
+    background: var(--color-info-bg);
   }
   .suggest p {
     margin: 0 0 var(--space-8);
@@ -281,7 +283,7 @@
     font-size: var(--font-size-16);
     line-height: var(--control-line-height);
     padding: var(--control-pad-y) var(--space-8);
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-md);
     background: transparent;
     color: inherit;

@@ -125,13 +125,13 @@
     border: none;
     border-radius: var(--radius-pill);
     background: transparent;
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
     cursor: pointer;
   }
   .tip-btn:hover,
   .tip-btn[aria-expanded="true"] {
-    color: var(--color-text);
-    background: var(--color-border);
+    color: var(--color-fg-default);
+    background: var(--color-bg-hover);
   }
   .tip-btn :global(svg) {
     width: 1rem;
@@ -151,9 +151,9 @@
     width: max-content;
     max-width: min(22rem, calc(100vw - 1rem));
     padding: var(--panel-pad-sm);
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-strong);
     border-radius: var(--radius-md);
-    background: var(--color-surface);
+    background: var(--color-bg-raised);
     color: inherit;
     box-shadow: var(--shadow-2);
     font-size: var(--font-size-13);

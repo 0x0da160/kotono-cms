@@ -294,7 +294,7 @@
     display: flex;
     flex-direction: column;
     font-size: var(--font-size-12);
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
     gap: var(--space-2);
   }
   .row {
@@ -309,7 +309,7 @@
   .filters input,
   .filters select {
     font-size: var(--font-size-14);
-    color: var(--color-text);
+    color: var(--color-fg-default);
   }
   .kw {
     display: flex;
@@ -320,7 +320,7 @@
     display: flex;
     align-items: center;
     font-size: var(--font-size-12);
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
   }
   .cond > summary {
     cursor: pointer;
@@ -330,7 +330,7 @@
     gap: 0 var(--space-8);
     min-height: 1.5rem;
     font-size: var(--font-size-12);
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
   }
   /* 指で操作する画面では、開閉の見出しも 44px 以上にする（app.css と同じ） */
   @media (pointer: coarse) {
@@ -345,13 +345,13 @@
   }
   .cond > summary::before {
     content: "▸";
-    color: var(--color-text);
+    color: var(--color-fg-default);
   }
   .cond[open] > summary::before {
     content: "▾";
   }
   .cond-now {
-    color: var(--color-text);
+    color: var(--color-fg-default);
     font-size: var(--font-size-13);
   }
   .cond[open] > summary {
@@ -366,7 +366,7 @@
   .summary {
     margin: 0;
     font-size: var(--font-size-14);
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
   }
   /* 行は罫線で区切る（UI刷新 方向B：P-06）。選択中は面と左の太線で示し、色だけに頼らない */
   .rows {
@@ -375,7 +375,7 @@
     padding: 0;
     display: flex;
     flex-direction: column;
-    border-top: 1px solid var(--color-border);
+    border-top: 1px solid var(--color-border-subtle);
   }
   .row-btn {
     width: 100%;
@@ -387,15 +387,23 @@
     padding: var(--space-4) var(--space-8);
     background: transparent;
     border: none;
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border-subtle);
     border-radius: 0;
     color: inherit;
     font: inherit;
     cursor: pointer;
   }
+  .row-btn:hover {
+    background: var(--color-bg-hover);
+  }
+  .row-btn:active {
+    background: var(--color-bg-pressed);
+  }
+  /* 現在地：面の色・太い辺・aria-current（色だけで伝えない） */
   .row-btn.current {
-    background: var(--color-surface);
-    box-shadow: inset 4px 0 0 var(--color-focus);
+    background: var(--color-selection-bg);
+    color: var(--color-selection-fg);
+    box-shadow: inset var(--border-width-edge) 0 0 var(--color-accent);
   }
   .title,
   .tags {
@@ -408,7 +416,7 @@
     overflow-wrap: anywhere;
   }
   .untitled {
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
     font-weight: var(--font-weight-regular);
   }
   .meta,
@@ -418,13 +426,13 @@
     flex-wrap: wrap;
     gap: var(--space-2) var(--space-8);
     font-size: var(--font-size-12);
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
   }
   .id {
     font-family: var(--font-mono);
   }
   .tag {
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-pill);
     padding: 0 var(--space-8);
     white-space: pre;
@@ -440,7 +448,7 @@
   .chips li {
     display: inline-flex;
     align-items: center;
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-pill);
     padding-inline-start: var(--space-8);
   }
@@ -462,7 +470,7 @@
   }
   .warn {
     margin: 0;
-    color: var(--color-ng);
+    color: var(--color-warning-fg);
     font-size: var(--font-size-14);
   }
   .small {

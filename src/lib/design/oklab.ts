@@ -46,10 +46,9 @@ export function fromLch(L: number, C: number, hDeg: number): Oklab {
   return { L, a: C * Math.cos(h), b: C * Math.sin(h) };
 }
 
-const EPS = 1e-6;
-
+/** 色域の判定は誤差を許さない（デザインシステムの生成器 build.mjs と同じ結果にするため） */
 export function inSrgbGamut(rgb: LinearRgb): boolean {
-  return rgb.every((v) => v >= -EPS && v <= 1 + EPS);
+  return rgb.every((v) => v >= 0 && v <= 1);
 }
 
 /**
@@ -60,7 +59,7 @@ export function gamutMapChroma(L: number, C: number, hDeg: number): Oklab {
   if (inSrgbGamut(oklabToLinearSrgb(fromLch(L, C, hDeg)))) return fromLch(L, C, hDeg);
   let lo = 0;
   let hi = C;
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 48; i++) {
     const mid = (lo + hi) / 2;
     if (inSrgbGamut(oklabToLinearSrgb(fromLch(L, mid, hDeg)))) lo = mid;
     else hi = mid;

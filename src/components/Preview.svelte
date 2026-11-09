@@ -231,16 +231,17 @@
     width: 100%;
     min-height: 24rem;
     height: 60vh;
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-md);
-    background: var(--color-surface);
+    background: var(--color-bg-surface);
     resize: vertical;
   }
   .warn {
     margin: 0;
-    border: 1px solid var(--color-ng);
+    border: 1px solid var(--color-warning-border);
     border-radius: var(--radius-md);
     padding: var(--space-6) var(--space-10);
+    background: var(--color-warning-bg);
   }
   .small {
     font-size: var(--font-size-13);
