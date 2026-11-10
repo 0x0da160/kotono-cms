@@ -2,7 +2,7 @@
  * GitHub との同期の画面の状態と操作（仕様 3.2 第40章）。
  *
  * - 同期は明示操作でだけ行う（40.1）。
- * - トークン：暗号化した作業場所では作業場所の鍵で暗号化して保存できる。暗号化しない作業場所・実フォルダでは
+ * - トークン：ブラウザ内の作業場所では作業場所の鍵で暗号化して保存できる。実フォルダでは
  *   保存せず、このタブを閉じるまでメモリにだけ置く（40.2：デスクトップの保存方法は技術ゲートで確定するまでの暫定）。
  * - pull・マージの作業ツリーの書き換えは、未保存の編集がないことと、変わるファイルの一覧の確認の後に行う。
  */
@@ -39,9 +39,9 @@ export class SyncController {
     private readonly fetcher?: FetchLike,
   ) {}
 
-  /** トークンを保存できる（暗号化した作業場所） */
+  /** トークンを保存できる（ブラウザ内の作業場所を開いているとき。作業場所は暗号化している） */
   get canSaveToken(): boolean {
-    return this.places?.current?.keyring != null && this.places.vault !== null;
+    return this.places?.current != null;
   }
 
   reset(): void {
@@ -60,7 +60,7 @@ export class SyncController {
     const m = this.places?.current;
     if (m?.remote) {
       this.target = { owner: m.remote.owner, repo: m.remote.repo, branch: m.remote.branch };
-      if (m.remote.token && m.keyring && this.places?.vault?.isUnlocked(m.id)) {
+      if (m.remote.token && this.places?.vault.isUnlocked(m.id)) {
         try {
           const t = await this.places.vault.openToken(m.id, m.remote.token);
           if (t) {
@@ -109,8 +109,7 @@ export class SyncController {
     const m = this.places?.current;
     if (m && this.places?.store) {
       let sealed: string | null = m.remote?.token ?? null;
-      if (t !== "")
-        sealed = save && this.canSaveToken && this.places.vault ? await this.places.vault.sealToken(m.id, t) : null;
+      if (t !== "") sealed = save && this.canSaveToken ? await this.places.vault.sealToken(m.id, t) : null;
       const updated = await this.places.store.update(m.id, { remote: { ...target, token: sealed } });
       this.places.current = updated;
       this.tokenSaved = sealed !== null;

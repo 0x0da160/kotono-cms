@@ -5,7 +5,6 @@
   let {
     busy,
     account = null,
-    passphrase,
     passkey,
     onunlock,
     submitLabel = "解錠",
@@ -13,25 +12,18 @@
     busy: boolean;
     /** 回復コードをパスワード管理から自動入力させるときのユーザー名 */
     account?: string | null;
-    passphrase: boolean;
+    /** パスキーで開くボタンを出すか */
     passkey: boolean;
     onunlock: (m: UnlockMethod) => unknown;
     submitLabel?: string;
   } = $props();
 
-  let kind = $state<"recovery" | "passphrase">("recovery");
   let secret = $state("");
   let show = $state(false);
 
-  $effect(() => {
-    // パスフレーズの枠があればパスフレーズを既定にする（回復コードは控えを探す手間がかかる）
-    if (passphrase) kind = "passphrase";
-  });
-
   async function submit(e: SubmitEvent) {
     e.preventDefault();
-    const m: UnlockMethod = kind === "recovery" ? { kind, code: secret } : { kind, passphrase: secret };
-    await onunlock(m);
+    await onunlock({ kind: "recovery", code: secret });
     secret = "";
   }
 </script>
@@ -46,7 +38,7 @@
       data-testid="unlock-passkey"><FingerprintPattern />パスキーで解錠</button
     >
   {/if}
-  {#if account && kind === "recovery"}
+  {#if account}
     <input
       class="vh"
       type="text"
@@ -58,16 +50,10 @@
       aria-hidden="true"
     />
   {/if}
-  {#if passphrase}
-    <div class="kinds" role="radiogroup" aria-label="解錠の方法">
-      <label><input type="radio" bind:group={kind} value="passphrase" /> パスフレーズ</label>
-      <label><input type="radio" bind:group={kind} value="recovery" /> 回復コード</label>
-    </div>
-  {/if}
   <label class="field">
-    {kind === "recovery" ? "回復コード（例：ABCDE-FGHIJ-…）" : "パスフレーズ"}
+    回復コード（例：ABCDE-FGHIJ-…）
     <input
-      type={show || (kind === "recovery" && !account) ? "text" : "password"}
+      type={show || !account ? "text" : "password"}
       bind:value={secret}
       autocomplete="current-password"
       autocapitalize="off"
@@ -91,10 +77,6 @@
     gap: var(--space-8);
     margin-top: var(--space-8);
     max-width: 28rem;
-  }
-  .kinds {
-    display: flex;
-    gap: var(--space-16);
   }
   .field {
     display: flex;

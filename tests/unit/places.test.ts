@@ -11,10 +11,10 @@ import { MemoryLoginStore } from "../../src/lib/login/store";
 import { PlacesController, type Deliver } from "../../src/lib/app/places.svelte";
 import { Workspace } from "../../src/lib/app/workspace.svelte";
 import { encodeUtf8, sha256Hex } from "../../src/lib/core/bytes";
-import { aesEncrypt, b64u } from "../../src/lib/crypto/keys";
 import type { PasskeyApi } from "../../src/lib/crypto/passkey";
 import { Vault } from "../../src/lib/crypto/vault";
 import { SealedDraftStore } from "../../src/lib/drafts/sealed";
+import type { KeySlot } from "../../src/lib/workspaces/store";
 import { DRAFT_FORMAT_VERSION, IdbDraftStore, type DraftRecord } from "../../src/lib/drafts/store";
 import { inlineMdService } from "../../src/lib/parse/md-inline";
 import { MemDir, MemFs } from "./support/memory-fs";
@@ -97,7 +97,6 @@ function setup(opts: { now?: () => Date; passkey?: PasskeyApi; fs?: MemFs; store
     ...(opts.now ? { now: opts.now } : {}),
     hooks: {
       login: () => (login.unlocked && login.record ? { id: LOGIN_ID, slots: login.record.keyring.slots } : null),
-      removed: (id) => login.forgetPlace(id),
       autoLocked: () => {
         autoLocked++;
         login.lock();
@@ -120,11 +119,23 @@ async function loggedIn(opts: Parameters<typeof setup>[0] = {}) {
   return { ...t, code, pk };
 }
 
+/** 開いている作業場所の記事を 1 件書く（書き出し・取り込みの確かめに使う） */
+async function writeArticle(ws: Workspace): Promise<void> {
+  const articles = await ws.root?.getDirectoryHandle("content").then((d) => d.getDirectoryHandle("articles"));
+  const f = await (
+    await articles?.getDirectoryHandle("k7m2x9q", { create: true })
+  )?.getFileHandle("index.md", {
+    create: true,
+  });
+  const w = await f?.createWritable();
+  await w?.write(te.encode("本文"));
+  await w?.close();
+}
+
 describe("暗号化した復旧ドラフト（39.1）", () => {
   it("下の保存領域には記事ID・本文・チェックサムを平文で置かない", async () => {
     const { base, sealed, vault } = setup();
-    const k = await vault.prepareNew();
-    vault.adopt("a".repeat(16), k.key);
+    vault.adopt("a".repeat(16), await vault.newKey());
     const ws = `e:${"a".repeat(16)}`;
     sealed.register(ws, vault.draftSealer("a".repeat(16)));
     await sealed.setEnabled(true);
@@ -149,8 +160,8 @@ describe("暗号化した復旧ドラフト（39.1）", () => {
     const { base, sealed, vault } = setup();
     const a = "a".repeat(16);
     const b = "b".repeat(16);
-    vault.adopt(a, (await vault.prepareNew()).key);
-    vault.adopt(b, (await vault.prepareNew()).key);
+    vault.adopt(a, await vault.newKey());
+    vault.adopt(b, await vault.newKey());
     sealed.register(`e:${a}`, vault.draftSealer(a));
     sealed.register(`e:${b}`, vault.draftSealer(b));
     await sealed.setEnabled(true);
@@ -165,23 +176,28 @@ describe("暗号化した復旧ドラフト（39.1）", () => {
   it("実フォルダのドラフトもログイン鍵で暗号化し、ログインしていない間は読み書きしない（ADR-0011）", async () => {
     const { base, sealed, vault } = setup();
     await sealed.setEnabled(true);
-    // 以前の版の平文のドラフト
-    await base.put(await rec("folder-1", "以前の本文"));
-    expect(await sealed.list()).toHaveLength(0);
-    await expect(sealed.put(await rec("folder-1", "x", { seq: 2 }))).rejects.toThrow("ログイン");
-    vault.adopt("login", (await vault.prepareNew()).key);
-    expect(await sealed.setDefault(vault.draftSealer("login"))).toBe(1);
+    await expect(sealed.put(await rec("folder-1", "x"))).rejects.toThrow("ログイン");
+    vault.adopt("login", await vault.newKey());
+    sealed.setDefault(vault.draftSealer("login"));
+    await sealed.put(await rec("folder-1", "新しい本文", { seq: 3 }));
     const raw = JSON.stringify(await base.list());
-    expect(raw).not.toContain("以前の本文");
+    expect(raw).not.toContain("新しい本文");
     expect(raw).not.toContain("k7m2x9q");
     const back = await sealed.list();
     expect(back).toHaveLength(1);
-    expect(back[0]).toMatchObject({ ws: "folder-1", key: "a:k7m2x9q", text: "以前の本文" });
-    await sealed.put(await rec("folder-1", "新しい本文", { seq: 3 }));
-    expect(JSON.stringify(await base.list())).not.toContain("新しい本文");
-    expect((await sealed.list()).map((r) => r.text)).toContain("新しい本文");
-    await sealed.setDefault(null);
+    expect(back[0]).toMatchObject({ ws: "folder-1", key: "a:k7m2x9q", text: "新しい本文" });
+    sealed.setDefault(null);
     expect(await sealed.list()).toHaveLength(0);
+  });
+
+  it("包んでいない以前の版の記録は読まず、包み直しもしない", async () => {
+    const { base, sealed, vault } = setup();
+    await sealed.setEnabled(true);
+    await base.put(await rec("folder-1", "以前の本文"));
+    vault.adopt("login", await vault.newKey());
+    sealed.setDefault(vault.draftSealer("login"));
+    expect(await sealed.list()).toHaveLength(0);
+    expect(JSON.stringify(await base.list())).toContain("以前の本文");
   });
 
   it("復旧ドラフトは既定で有効（未設定は有効、無効にしたら無効のまま）", async () => {
@@ -200,7 +216,7 @@ describe("作業場所の操作（38・39.3、ADR-0012）", () => {
     const { places, ws, fs } = await loggedIn();
     const m = await places.create("ブログ");
     if (!m) throw new Error(places.error ?? "create");
-    expect(m.keyring?.slots.map((s) => s.kind)).toEqual(["login"]);
+    expect(m.keyring.slots.map((s) => s.kind)).toEqual(["login"]);
     await places.open(m);
     expect(ws.rootName).toBe("ブログ");
     // 作成時に記事の置き場所を用意する
@@ -247,80 +263,15 @@ describe("作業場所の操作（38・39.3、ADR-0012）", () => {
     if (!m) throw new Error(places.error ?? "create");
     expect(m.name).toBe("ブログ");
     expect(m.keyring).not.toHaveProperty("name");
-    // 鍵を持たない別の画面（Vault なし）で一覧を読む
+    // 鍵を持たない別の画面（ログインしていない）で一覧を読む
     const other = new PlacesController(
       new Workspace(undefined, { md: inlineMdService, processor: null }),
       {},
       async () => "cancelled",
+      { vault: new Vault(null, 100_000) },
     );
     await other.init(fs.root);
     expect(other.views()[0]).toMatchObject({ label: "ブログ", locked: true });
-  });
-
-  it("以前の版の作業場所（作業場所の回復コード）は、一度解錠するとログインの枠を足し、次からログインだけで開ける。表示名も平文へ移す", async () => {
-    const pk = fakePasskey();
-    const a = await loggedIn({ passkey: pk.api });
-    const store = a.places.store;
-    if (!store) throw new Error("store");
-    // 以前の版の形式：作業場所の回復コードの枠。name は空、keyring.name に表示名の暗号文
-    const k = await a.vault.prepareNew();
-    const encName = await aesEncrypt(k.key.keys.meta, te.encode("旧ブログ"), te.encode("kotono-cms/meta/name"));
-    const created = await store.create({
-      name: "旧ブログ",
-      keyring: k.record,
-      fill: async (dir, id) => {
-        const t = await a.vault.wrapDir(dir, id, k.key);
-        await (
-          await t.getDirectoryHandle("content", { create: true })
-        ).getDirectoryHandle("articles", { create: true });
-      },
-    });
-    await store.update(created.id, { name: "", keyring: { ...k.record, name: b64u(encName) } });
-    await a.places.refresh();
-    const legacy = a.places.entries[0];
-    if (legacy?.state !== "ok") throw new Error("entry");
-    expect(await a.places.unlockWithLogin()).toEqual([]);
-    expect(a.places.views()[0]).toMatchObject({ locked: true, label: "ロック中の作業場所" });
-
-    expect(await a.places.unlock(legacy.meta, { kind: "recovery", code: "AAAAA-AAAAA-AAAAA-AAAAA-AAAAA" })).toBe(false);
-    expect(await a.places.unlock(legacy.meta, { kind: "recovery", code: k.recoveryCode })).toBe(true);
-    expect(a.places.views()[0]).toMatchObject({ locked: false, label: "旧ブログ" });
-    const migrated = await store.get(created.id);
-    if (migrated.state !== "ok") throw new Error("migrated");
-    expect(migrated.meta.name).toBe("旧ブログ");
-    expect(migrated.meta.keyring).not.toHaveProperty("name");
-    expect(migrated.meta.keyring?.slots.map((s) => s.kind)).toEqual(["recovery", "login"]);
-
-    // 起動し直す：ログインだけで開ける（作業場所の回復コードは要らない）
-    const b = setup({ passkey: pk.api, fs: a.fs, store: a.store });
-    await b.login.init();
-    await b.places.init(a.fs.root);
-    expect(await b.login.login({ kind: "passkey" })).toBe(true);
-    expect(await b.places.unlockWithLogin()).toEqual([created.id]);
-    await b.places.open(migrated.meta);
-    expect(b.ws.rootName).toBe("旧ブログ");
-    expect(b.ws.articles).not.toBeNull();
-  });
-
-  it("以前の版（ADR-0011）でログインの記録に覚えた鍵は、作業場所の meta へ移す", async () => {
-    const a = await loggedIn();
-    const store = a.places.store;
-    if (!store) throw new Error("store");
-    const k = await a.vault.prepareNew();
-    const created = await store.create({ name: "日記", keyring: k.record });
-    a.vault.adopt(created.id, k.key);
-    const wrapped = await a.vault.wrapPlace(LOGIN_ID, created.id);
-    const rec = a.store.rec;
-    if (!rec) throw new Error("rec");
-    a.store.rec = { ...rec, places: { [created.id]: wrapped } };
-    a.vault.lock(created.id);
-    await a.login.init();
-    await a.places.refresh();
-    const legacy = await a.login.unlockPlaces();
-    expect(legacy).toEqual([created.id]);
-    expect(await a.places.unlockWithLogin(legacy)).toEqual([created.id]);
-    const m = await store.get(created.id);
-    expect(m.state === "ok" && m.meta.keyring?.slots.map((s) => s.kind)).toEqual(["recovery", "login"]);
   });
 
   it("無操作の時間・非表示の時間でロックする（ログインもロックする）", async () => {
@@ -356,20 +307,12 @@ describe("作業場所の操作（38・39.3、ADR-0012）", () => {
     expect(places.anyUnlocked).toBe(false);
   });
 
-  it("暗号化して書き出し、別の端末でログインの回復コードで取り込める。同じ端末ではそのまま取り込める（38.3・39.4）", async () => {
+  it("暗号化して書き出し、別の端末ではログインの回復コードで取り込める。同じ端末ではそのまま取り込める（38.3・39.4）", async () => {
     const a = await loggedIn();
     const m = await a.places.create("ブログ");
     if (!m) throw new Error("create");
     await a.places.open(m);
-    const created = await a.ws.root?.getDirectoryHandle("content").then((d) => d.getDirectoryHandle("articles"));
-    const f = await (
-      await created?.getDirectoryHandle("k7m2x9q", { create: true })
-    )?.getFileHandle("index.md", {
-      create: true,
-    });
-    const w = await f?.createWritable();
-    await w?.write(te.encode("本文"));
-    await w?.close();
+    await writeArticle(a.ws);
     await a.places.export(m, false);
     const out = a.delivered[0];
     expect(out?.name).toMatch(/^ブログ-\d{8}\.kotono$/);
@@ -393,9 +336,39 @@ describe("作業場所の操作（38・39.3、ADR-0012）", () => {
     const nm = await b.places.confirmImport("取り込み");
     if (!nm) throw new Error(b.places.error ?? "import");
     // 取り込んだ作業場所は、取り込んだ端末のログインの鍵で包む
-    expect(nm.keyring?.slots.map((s) => s.kind)).toEqual(["login"]);
+    expect(nm.keyring.slots.map((s) => s.kind)).toEqual(["login"]);
     await b.places.open(nm);
     expect(b.ws.scan?.entries.map((e) => e.dirName)).toEqual(["k7m2x9q"]);
+  });
+
+  it("平文の zip は、取り込むときに新しい鍵で暗号化する（書き出しの形式は利用者が選ぶ）", async () => {
+    const a = await loggedIn();
+    const m = await a.places.create("ブログ");
+    if (!m) throw new Error("create");
+    await a.places.open(m);
+    await writeArticle(a.ws);
+    await a.places.export(m, true);
+    const out = a.delivered[0];
+    if (!out) throw new Error("no export");
+    expect(out.name).toMatch(/^ブログ-\d{8}\.zip$/);
+    const file = { name: "ブログ.zip", arrayBuffer: async () => out.bytes.slice().buffer };
+    await a.places.prepareImport(file);
+    expect(a.places.pendingSealed).toBeNull();
+    const nm = await a.places.confirmImport("取り込み");
+    if (!nm) throw new Error(a.places.error ?? "import");
+    expect(nm.id).not.toBe(m.id);
+    expect(nm.keyring.slots.map((s) => s.kind)).toEqual(["login"]);
+  });
+
+  it("削除すると、その作業場所の鍵を捨て、一覧から消す", async () => {
+    const a = await loggedIn();
+    const m = await a.places.create("x");
+    if (!m) throw new Error("create");
+    expect(a.places.anyUnlocked).toBe(true);
+    await a.places.remove(m.id);
+    expect(a.places.anyUnlocked).toBe(false);
+    expect(a.vault.isUnlocked(m.id)).toBe(false);
+    expect(a.places.views()).toEqual([]);
   });
 
   it("保存で「端末の外にない変更」を記録する", async () => {
@@ -424,7 +397,7 @@ describe("起動時のログイン（ADR-0011・ADR-0012）", () => {
     const m = await a.places.create("ブログ");
     if (!m) throw new Error(a.places.error ?? "create");
     // ログインの記録には作業場所の鍵を置かない（作業場所の meta のログインの枠に置く）
-    expect(a.store.rec?.places).toEqual({});
+    expect(a.store.rec).not.toHaveProperty("places");
 
     // 起動し直す：ログインの記録と保存領域は同じ。鍵はメモリにしかない
     const b = setup({ passkey: pk.api, fs: a.fs, store: a.store });
@@ -433,7 +406,7 @@ describe("起動時のログイン（ADR-0011・ADR-0012）", () => {
     await b.places.init(a.fs.root);
     expect(b.places.views()[0]?.locked).toBe(true);
     expect(await b.login.login({ kind: "passkey" })).toBe(true);
-    await b.places.unlockWithLogin();
+    expect(await b.places.unlockAll()).toEqual([m.id]);
     expect(b.places.views()[0]?.locked).toBe(false);
     await b.places.open(m);
     expect(b.ws.rootName).toBe("ブログ");
@@ -447,26 +420,20 @@ describe("起動時のログイン（ADR-0011・ADR-0012）", () => {
     expect(await a.login.register()).toBe(false);
   });
 
-  it("パスフレーズではログインできない。以前の版のパスフレーズの枠は、回復コードでログインしたときに外し、パスキーの登録を求める", async () => {
-    // 以前の版の記録：回復コードとパスフレーズの枠
+  it("以前の版の記録（パスフレーズの枠）は読まず、登録からやり直す", async () => {
     const old = setup();
-    const fresh = await old.vault.prepareNew();
-    old.vault.adopt(LOGIN_ID, fresh.key);
-    const keyring = await old.vault.withPassphrase(LOGIN_ID, fresh.record, "correct horse battery");
+    const fresh = await old.vault.newLogin();
     const store = new MemoryLoginStore();
-    store.rec = { v: 1, keyring, places: {}, createdAt: "2026-11-09T00:00:00Z" };
-
-    const pk = fakePasskey();
-    const a = setup({ passkey: pk.api, store });
+    const passphrase = { kind: "passphrase", salt: "AAAA", iterations: 100_000, wrapped: "AAAA" } as unknown as KeySlot;
+    store.rec = {
+      v: 1,
+      keyring: { v: 1, slots: [...fresh.keyring.slots, passphrase] },
+      createdAt: "2026-11-09T00:00:00Z",
+    };
+    const a = setup({ passkey: fakePasskey().api, store });
     await a.login.init();
-    expect(a.login.phase).toBe("login");
-    expect(a.login.hasPasskey).toBe(false);
-    expect(await a.login.login({ kind: "passphrase", passphrase: "correct horse battery" })).toBe(false);
-    expect(await a.login.login({ kind: "recovery", code: fresh.recoveryCode })).toBe(true);
-    expect(store.rec?.keyring.slots.map((s) => s.kind)).toEqual(["recovery"]);
-    expect(a.login.phase).toBe("passkey");
-    expect(await a.login.addPasskey()).toBe(true);
-    expect(a.login.phase).toBe("ready");
+    expect(a.login.record).toBeNull();
+    expect(a.login.phase).toBe("register");
   });
 
   it("パスキーの取り消し・失敗では自動で繰り返さず、回復コードでログインできる", async () => {
@@ -494,7 +461,7 @@ describe("起動時のログイン（ADR-0011・ADR-0012）", () => {
     await a.login.reset();
     await a.login.register();
     a.login.confirmRecovery();
-    expect(await a.places.unlockWithLogin()).toEqual([]);
+    expect(await a.places.unlockAll()).toEqual([]);
     expect(a.places.views()[0]?.locked).toBe(true);
   });
 });

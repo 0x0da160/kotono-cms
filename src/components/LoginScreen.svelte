@@ -28,7 +28,7 @@
   <details class="reset">
     <summary>パスキーも回復コードも使えないとき</summary>
     <p class="small">
-      ログインを作り直せます。このブラウザの復旧ドラフトはすべて削除します（暗号化しているため、もう読めません）。ブラウザ内の作業場所もこのログインの鍵で暗号化しているため、開けなくなります（以前の版で作り、作業場所の回復コードがあるものを除く）。
+      ログインを作り直せます。このブラウザの復旧ドラフトはすべて削除します（暗号化しているため、もう読めません）。ブラウザ内の作業場所もこのログインの鍵で暗号化しているため、開けなくなります。
     </p>
     <button type="button" class="danger" onclick={onreset} disabled={login.busy} data-testid="login-reset"
       >ログインを作り直す…</button
@@ -38,16 +38,11 @@
 
 <section class="card login" aria-labelledby="login-heading" data-testid="login" data-phase={login.phase}>
   {#if login.phase === "recovery" && login.recoveryCode}
-    <RecoveryCodeNotice
-      code={login.recoveryCode}
-      account={login.account}
-      subject="login"
-      ondone={() => login.confirmRecovery()}
-    />
+    <RecoveryCodeNotice code={login.recoveryCode} account={login.account} ondone={() => login.confirmRecovery()} />
   {:else if login.phase === "register"}
     <h2>
       <span id="login-heading">はじめに：パスキーの登録</span><HelpTip label="ログイン"
-        >サーバーへのログインではありません。認証はこの端末の中だけで行い、どこにも送りません。認証で開く鍵で、未保存の編集の退避（復旧ドラフト）とブラウザ内の作業場所をまとめて暗号化します。作業場所ごとの回復コード・パスキーはありません。</HelpTip
+        >サーバーへのログインではありません。認証はこの端末の中だけで行い、どこにも送りません。認証で開く鍵で、未保存の編集の退避（復旧ドラフト）とブラウザ内の作業場所をまとめて暗号化します。</HelpTip
       >
     </h2>
     <p>
@@ -88,13 +83,12 @@
       <p class="alt small">パスキーを使えないときは、回復コードでログインできます。</p>
     {:else}
       <p data-testid="login-no-passkey">
-        登録したパスキーは、この配信元では使えません（別の配信元で登録したものか、以前の版でパスフレーズで登録しました）。回復コードでログインし、パスキーを登録し直してください。
+        登録したパスキーは、この配信元では使えません（別の配信元で登録したものです）。回復コードでログインし、パスキーを登録し直してください。
       </p>
     {/if}
     <UnlockForm
       busy={login.busy}
       account={login.account}
-      passphrase={false}
       passkey={false}
       submitLabel="ログイン"
       onunlock={(m) => login.login(m)}

@@ -28,7 +28,6 @@
   } = $props();
 
   const days = $derived(places.remindDays(meta));
-  const encrypted = $derived(meta.keyring !== null);
 
   /** 書き出し前に、未保存・未コミットを示す（38.3） */
   async function exportNow() {
@@ -38,21 +37,15 @@
     if (changed > 0) details.push(`未コミットの記事が ${changed} 件あります（ファイルとしては書き出しに含まれます）。`);
     const v = await ws.ask({
       title: "作業場所を書き出します",
-      message: encrypted
-        ? "既定では暗号化して書き出します（.kotono）。別の端末でも、このログインの回復コード（またはこのログインで登録した、同期しているパスキー）で開けます。平文の zip は誰でも中身を読めます。"
-        : "作業場所を .git を含めて zip にします。共有シートまたはダウンロードで保存先を選んでください。",
+      message:
+        "既定では暗号化して書き出します（.kotono）。別の端末でも、このログインの回復コード（またはこのログインで登録した、同期しているパスキー）で開けます。平文の zip は誰でも中身を読めます。",
       details,
-      buttons: encrypted
-        ? [
-            { label: "暗号化して書き出す", value: "sealed", variant: "primary" },
-            { label: "平文の zip にする", value: "plain" },
-            { label: "キャンセル", value: "cancel" },
-          ]
-        : [
-            { label: "書き出す", value: "plain", variant: "primary" },
-            { label: "キャンセル", value: "cancel" },
-          ],
-      initial: encrypted ? "sealed" : "plain",
+      buttons: [
+        { label: "暗号化して書き出す", value: "sealed", variant: "primary" },
+        { label: "平文の zip にする", value: "plain" },
+        { label: "キャンセル", value: "cancel" },
+      ],
+      initial: "sealed",
     });
     if (v === "cancel") return;
     await places.export(meta, v === "plain");
@@ -89,7 +82,7 @@
     {/if}
     {@render sync?.()}
   </div>
-{:else if encrypted}
+{:else}
   <section class="card settings" aria-labelledby="place-settings-heading" data-testid="place-settings">
     <h2 id="place-settings-heading">自動ロック</h2>
     <p class="small muted">

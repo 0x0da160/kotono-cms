@@ -4,24 +4,16 @@
   let {
     code,
     account,
-    passkey = null,
     ondone,
-    subject = "place",
   }: {
     code: string;
     /** パスワード管理に保存するときのユーザー名（解錠画面と同じ値にする） */
     account: string;
-    /** パスキーを登録する。この環境で使えなければ null */
-    passkey?: (() => Promise<boolean>) | null;
     ondone: () => unknown;
-    /** place：作業場所の回復コード。login：起動時のログインの回復コード（ADR-0011） */
-    subject?: "place" | "login";
   } = $props();
 
   let kept = $state(false);
   let copied = $state(false);
-  let registering = $state(false);
-  let registered = $state(false);
   // パスワード管理に保存させるための欄。初期値は回復コードで、書き換えられたら開かない
   let field = $derived(code);
   const fieldOk = $derived(normalizeRecoveryCode(field) === normalizeRecoveryCode(code));
@@ -32,16 +24,6 @@
       copied = true;
     } catch {
       copied = false;
-    }
-  }
-
-  async function addPasskey() {
-    if (!passkey || registering) return;
-    registering = true;
-    try {
-      registered = await passkey();
-    } finally {
-      registering = false;
     }
   }
 
@@ -66,15 +48,8 @@
   <form onsubmit={submit}>
     <h3 id="rc-title">回復コードを保存してください</h3>
     <p id="rc-desc" class="small">
-      {#if subject === "login"}
-        パスキーを使えなくなったとき（別の端末・パスキーの削除）は、この回復コードでログインします。別の端末で、ここから書き出した作業場所（.kotono）を開くのにも使います。回復コードはこの画面でだけ表示し、CMS
-        には保存しません。「使い始める」を押すと、ブラウザがパスワードとして保存するか尋ねます。回復コードをなくし、パスキーも使えなくなると、ログインを作り直すことになり、復旧ドラフトとブラウザ内の作業場所は読めなくなります。
-      {:else}
-        この作業場所は暗号化しています。回復コードはこの画面でだけ表示し、CMS
-        には保存しません。「作業場所を開く」を押すと、ブラウザがパスワードとして保存するか尋ねます（iPhone・Mac では
-        iCloud
-        キーチェーン）。保存しておけば、覚えたり書き写したりする必要はありません。回復コードをなくし、パスフレーズ・パスキーも使えなくなると、誰も内容を戻せません。
-      {/if}
+      パスキーを使えなくなったとき（別の端末・パスキーの削除）は、この回復コードでログインします。別の端末で、ここから書き出した作業場所（.kotono）を開くのにも使います。回復コードはこの画面でだけ表示し、CMS
+      には保存しません。「使い始める」を押すと、ブラウザがパスワードとして保存するか尋ねます。回復コードをなくし、パスキーも使えなくなると、ログインを作り直すことになり、復旧ドラフトとブラウザ内の作業場所は読めなくなります。
     </p>
     <p class="code mono" data-testid="recovery-code-value">{code}</p>
     <!-- パスワード管理に保存させるための欄（ユーザー名と新しいパスワード） -->
@@ -106,28 +81,10 @@
       <button type="button" onclick={copy}>{copied ? "コピーしました" : "コピー"}</button>
     </div>
 
-    {#if passkey}
-      <div class="passkey" data-testid="recovery-passkey">
-        <p class="small">
-          普段はパスキー（Face ID・Touch ID）で開けるようにしておくと、回復コードを使う場面はほぼなくなります。
-        </p>
-        <button
-          type="button"
-          class={registered ? "" : "primary"}
-          disabled={registering || registered}
-          onclick={addPasskey}
-          data-testid="recovery-add-passkey"
-          >{registered ? "パスキーを登録しました" : registering ? "登録中…" : "パスキーを登録"}</button
-        >
-      </div>
-    {/if}
-
     <label class="check"
       ><input type="checkbox" bind:checked={kept} data-testid="recovery-kept" /> 回復コードを保存しました（または控えました）</label
     >
-    <button type="submit" class="primary" disabled={!kept || !fieldOk} data-testid="recovery-done"
-      >{subject === "login" ? "使い始める" : "作業場所を開く"}</button
-    >
+    <button type="submit" class="primary" disabled={!kept || !fieldOk} data-testid="recovery-done">使い始める</button>
   </form>
 </div>
 
@@ -179,9 +136,6 @@
   .actions {
     display: flex;
     gap: var(--control-gap);
-  }
-  .passkey {
-    margin-block: var(--space-12);
   }
   .check {
     display: flex;

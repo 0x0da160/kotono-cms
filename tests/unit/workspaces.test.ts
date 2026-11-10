@@ -16,6 +16,9 @@ import { detectCapabilities, supportedMode } from "../../src/lib/capabilities";
 const enc = (s: string) => new TextEncoder().encode(s);
 const dec = (b: Uint8Array) => new TextDecoder().decode(b);
 
+/** ログインの枠だけを持つ鍵の情報（作業場所はすべて暗号化する：ADR-0012） */
+const loginKeyring = async () => ({ v: 1 as const, slots: [{ kind: "login" as const, wrapped: "QUJD" }] });
+
 function seq(): (n: number) => Uint8Array {
   let i = 0;
   return (n) => new Uint8Array(n).map(() => i++ % 251);
@@ -34,7 +37,7 @@ describe("作業場所（38.1）", () => {
 
   it("作成・一覧・開く。meta を最後に書く", async () => {
     const { fs, s } = await store();
-    const m = await s.create({ name: "  ブログ  " });
+    const m = await s.create({ name: "  ブログ  ", keyring: loginKeyring });
     expect(m.name).toBe("ブログ");
     expect(fs.get(`kotono/meta/${m.id}.json`)).toBeDefined();
     const list = await s.list();
@@ -49,6 +52,7 @@ describe("作業場所（38.1）", () => {
     await expect(
       s.create({
         name: "x",
+        keyring: loginKeyring,
         fill: async (dir) => {
           await dir.getFileHandle("a.txt", { create: true });
           throw new Error("boom");
@@ -62,22 +66,35 @@ describe("作業場所（38.1）", () => {
 
   it("名前の検査", async () => {
     const { s } = await store();
-    await expect(s.create({ name: "   " })).rejects.toThrow("名前を入力");
-    await expect(s.create({ name: "a\u0001" })).rejects.toThrow("制御文字");
+    await expect(s.create({ name: "   ", keyring: loginKeyring })).rejects.toThrow("名前を入力");
+    await expect(s.create({ name: "a\u0001", keyring: loginKeyring })).rejects.toThrow("制御文字");
   });
 
   it("壊れた meta は不完全とし、内容を使わない", async () => {
     const { fs, s } = await store();
-    const m = await s.create({ name: "x" });
+    const m = await s.create({ name: "x", keyring: loginKeyring });
     fs.write(`kotono/meta/${m.id}.json`, "{");
     expect((await s.list())[0]).toMatchObject({ state: "incomplete" });
     expect(parseMeta(enc(JSON.stringify({ ...m, id: "other" })), m.id)).toContain("ID が一致しません");
     expect(parseMeta(enc(JSON.stringify({ ...m, v: 2 })), m.id)).toContain("未知の版");
   });
 
+  it("鍵の情報にログインの枠がない作業場所は不完全とし、使わない（ADR-0012）", async () => {
+    const { fs, s } = await store();
+    const m = await s.create({ name: "x", keyring: loginKeyring });
+    const recoveryOnly = {
+      ...m,
+      keyring: { v: 1, slots: [{ kind: "recovery", salt: "QUJD", iterations: 600_000, wrapped: "QUJD" }] },
+    };
+    expect(parseMeta(enc(JSON.stringify(recoveryOnly)), m.id)).toContain("ログインの枠がありません");
+    expect(parseMeta(enc(JSON.stringify({ ...m, keyring: null })), m.id)).toContain("鍵の情報が不正です");
+    fs.write(`kotono/meta/${m.id}.json`, JSON.stringify(recoveryOnly));
+    expect((await s.list())[0]).toMatchObject({ state: "incomplete" });
+  });
+
   it("削除は中身を 1 件ずつ消し、退避は残す（19.1 手順8）", async () => {
     const { fs, s } = await store();
-    const m = await s.create({ name: "x" });
+    const m = await s.create({ name: "x", keyring: loginKeyring });
     fs.write(`kotono/workspaces/${m.id}/content/articles/abcdefg/index.md`, "a");
     const b = await s.backupRoot(m.id);
     await b.getFileHandle("keep.txt", { create: true });
@@ -88,7 +105,7 @@ describe("作業場所（38.1）", () => {
 
   it("削除の部分失敗を区別する", async () => {
     const { fs, s } = await store();
-    const m = await s.create({ name: "x" });
+    const m = await s.create({ name: "x", keyring: loginKeyring });
     fs.write(`kotono/workspaces/${m.id}/a.txt`, "a");
     fs.write(`kotono/workspaces/${m.id}/b.txt`, "b");
     fs.faults.beforeRemove = (p) => {
@@ -108,7 +125,7 @@ describe("作業場所（38.1）", () => {
       lastExportAt: null,
       lastSyncAt: null,
       lastChangeAt: null,
-      keyring: null,
+      keyring: { v: 1, slots: [{ kind: "login", wrapped: "QUJD" }] },
       remote: null,
     };
     expect(unsyncedSince(base)).toBeNull();

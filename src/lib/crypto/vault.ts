@@ -1,18 +1,13 @@
 /**
- * 作業場所の鍵の管理と解錠（仕様 3.2 第39章、ADR-0006 第7章）。
+ * 鍵の管理と解錠（仕様 3.2 第39章、ADR-0012）。
  *
- * - データ鍵（DK）は解錠中だけメモリに置く。ロックで捨てる。
- * - DK は回復コード（必須）・パスフレーズ（任意）・パスキーの PRF（任意）でそれぞれ包んで meta に置く。
- * - 暗号化した書き出し（`.kotono`）は、包んだ DK（回復コード・パスフレーズ・パスキーの枠）と、
- *   DK から作った書き出し用の鍵で暗号化した zip からなる。別の端末では回復コード等で開ける。
- * - ADR-0012 から、作業場所の DK は起動時のログインの鍵で包む（作業場所ごとの回復コード・パスキーはない）。
- *   書き出し（ヘッダーの版 2）には、ログインの枠（回復コード・パスキー）と、ログインの鍵で包んだ DK を入れる。
- *   別の端末では、書き出した端末のログインの回復コード（または同期したパスキー）で開ける。
+ * - ログイン鍵は、起動時のログイン（パスキーか回復コード）で開く鍵。ログイン中だけメモリに置き、ロックで捨てる。
+ *   ログイン鍵は回復コードの枠（必須）とパスキーの PRF の枠（任意）で包み、ログインの記録（IndexedDB）に置く。
+ * - 作業場所のデータ鍵（DK）は、ログイン鍵で包んで作業場所の meta に置く（ログインの枠）。
+ *   作業場所ごとの回復コード・パスキー・パスフレーズはない。
+ * - 暗号化した書き出し（`.kotono`）は、ログインの枠（回復コード・パスキー）と、ログイン鍵で包んだ DK と、
+ *   DK から作った書き出し用の鍵で暗号化した zip からなる。別の端末では、回復コード（または同期したパスキー）で開ける。
  */
-import type { DirHandleLike } from "../fs/types";
-import { validKeyring, type KeyringRecord, type KeySlot } from "../workspaces/store";
-import type { Sealer } from "../drafts/sealed";
-import { encryptedRoot, type EncContext } from "./encfs";
 import {
   PBKDF2_ITERATIONS,
   aesDecrypt,
@@ -30,20 +25,21 @@ import {
   wrapDk,
   type DataKeys,
 } from "./keys";
+import type { DirHandleLike } from "../fs/types";
+import { validKeyring, type KeyringRecord, type KeySlot } from "../workspaces/store";
+import type { Sealer } from "../drafts/sealed";
+import { encryptedRoot, type EncContext } from "./encfs";
 import type { PasskeyApi } from "./passkey";
 
 const te = new TextEncoder();
 const td = new TextDecoder("utf-8", { fatal: true });
-/** 以前の版で作業場所の表示名を暗号化していたときの追加認証データ（読み取りと移行にだけ使う） */
-const NAME_AAD = te.encode("kotono-cms/meta/name");
 const TOKEN_AAD = te.encode("kotono-cms/meta/token");
 const DRAFT_AAD = te.encode("kotono-cms/draft");
-/** ログイン鍵で作業場所のデータ鍵を包むときの追加認証データ（作業場所 ID を足す：ADR-0011） */
+/** ログイン鍵で作業場所のデータ鍵を包むときの追加認証データ（作業場所 ID を足す） */
 const PLACE_AAD = te.encode("kotono-cms/login/place");
-/** 書き出し（版 2）で、書き出した端末のログインの鍵で DK を包むときの追加認証データ */
+/** 書き出しで、書き出した端末のログイン鍵で DK を包むときの追加認証データ */
 const EXPORT_DK_AAD = te.encode("kotono-cms/export/dk");
 const EXPORT_MAGIC = te.encode("KOTONO-EXPORT/1\n");
-export const PASSPHRASE_MIN = 10;
 
 function placeAad(id: string): Uint8Array {
   return new Uint8Array([...PLACE_AAD, 0, ...te.encode(id)]);
@@ -54,48 +50,27 @@ export interface Unlocked {
   readonly keys: DataKeys;
 }
 
-export type UnlockMethod =
-  | { readonly kind: "recovery"; readonly code: string }
-  | { readonly kind: "passphrase"; readonly passphrase: string }
-  | { readonly kind: "passkey" };
+/** 解錠の方法（ADR-0012：ログインはパスキーと回復コードだけ。パスフレーズはない） */
+export type UnlockMethod = { readonly kind: "recovery"; readonly code: string } | { readonly kind: "passkey" };
 
-export interface NewKeyring {
-  readonly record: KeyringRecord;
+type PasskeySlot = Extract<KeySlot, { kind: "passkey" }>;
+
+export interface NewLogin {
+  /** ログインの記録の枠（回復コードの枠だけ。パスキーは登録のあとに足す） */
+  readonly keyring: KeyringRecord;
   readonly key: Unlocked;
   /** 作成時に一度だけ表示する（保存しない：39.2） */
   readonly recoveryCode: string;
 }
 
-type PasskeySlot = Extract<KeySlot, { kind: "passkey" }>;
-
-export interface UnlockResult {
-  /**
-   * 以前の版で暗号化して保存していた表示名を復号したもの。
-   * 呼び出し側は meta の平文の name へ移し、keyring から name を外す。新しい形式では null
-   */
-  readonly legacyName: string | null;
-}
-
-export type SealedExportHeader =
-  | { readonly v: 1; readonly slots: readonly KeySlot[] }
-  | {
-      readonly v: 2;
-      /** DK を直接包んだ枠（以前の版の作業場所の回復コード等）。なければ空 */
-      readonly slots: readonly KeySlot[];
-      /** 書き出した端末のログインの枠（ログインの鍵を包む）と、ログインの鍵で包んだ DK */
-      readonly login: { readonly slots: readonly KeySlot[]; readonly wrapped: string };
-    };
-
-/** 書き出しを開く方法の一覧（画面の出し分け） */
-export function exportMethods(h: SealedExportHeader): { passphrase: boolean; passkey: boolean } {
-  const all = h.v === 2 ? [...h.slots, ...h.login.slots] : h.slots;
-  return { passphrase: all.some((s) => s.kind === "passphrase"), passkey: all.some((s) => s.kind === "passkey") };
+/** 暗号化した書き出し（版 1）のヘッダー。ログインの枠と、ログイン鍵で包んだ DK */
+export interface SealedExportHeader {
+  readonly v: 1;
+  readonly login: { readonly slots: readonly KeySlot[]; readonly wrapped: string };
 }
 
 export class Vault {
   private readonly open = new Map<string, Unlocked>();
-  /** 作成直後に表示する回復コード（ID → コード） */
-  lastRecovery: { id: string | null; code: string } | null = null;
 
   constructor(
     readonly passkey: PasskeyApi | null = null,
@@ -108,117 +83,73 @@ export class Vault {
 
   adopt(id: string, key: Unlocked): void {
     this.open.set(id, key);
-    if (this.lastRecovery && this.lastRecovery.id === null) this.lastRecovery = { ...this.lastRecovery, id };
   }
 
   lock(id: string): void {
     this.open.delete(id);
   }
 
-  /**
-   * ログイン鍵（loginId で解錠中）で、作業場所（placeId で解錠中）のデータ鍵を包む（ADR-0011）。
-   * ログインしただけで、その作業場所も開けるようにするため。
-   */
-  async wrapPlace(loginId: string, placeId: string): Promise<string> {
-    const login = this.need(loginId);
-    const place = this.need(placeId);
-    return b64u(await aesEncrypt(login.keys.meta, place.dk, placeAad(placeId)));
+  lockAll(): void {
+    this.open.clear();
   }
 
-  /** wrapPlace で包んだデータ鍵を開き、作業場所を解錠済みにする。開けなければ false */
-  async unwrapPlace(loginId: string, placeId: string, wrapped: string): Promise<boolean> {
-    const login = this.need(loginId);
-    const b = fromB64u(wrapped);
-    const dk = b ? await aesDecrypt(login.keys.meta, b, placeAad(placeId)) : null;
-    if (!dk || dk.length !== 32) return false;
-    this.open.set(placeId, { dk, keys: await deriveDataKeys(dk) });
-    return true;
+  private need(id: string): Unlocked {
+    const k = this.open.get(id);
+    if (!k) throw new Error("ロックされています。");
+    return k;
   }
 
-  /** 新しい作業場所の DK（ADR-0012：回復コードの枠は作らない。ログインの枠で包む） */
+  /** 新しいデータ鍵（乱数）。ログイン鍵にも作業場所のデータ鍵にも使う */
   async newKey(): Promise<Unlocked> {
     const dk = randomBytes(32);
     return { dk, keys: await deriveDataKeys(dk) };
   }
 
-  /** ログイン鍵（loginId で解錠中）で、作業場所の DK を包んだ枠を作る（ADR-0012） */
-  async loginSlot(loginId: string, placeId: string, key: Unlocked): Promise<KeySlot> {
+  /** 新しいログイン鍵と回復コードの枠を作る。パスキーは登録のあとに withPasskey で足す */
+  async newLogin(): Promise<NewLogin> {
+    const key = await this.newKey();
+    const code = newRecoveryCode();
+    const slot = await this.recoverySlot(code, key.dk);
+    return { keyring: { v: 1, slots: [slot] }, key, recoveryCode: code };
+  }
+
+  /** 作業場所の枠（ログインの枠だけ）を作る。ログイン鍵（loginId で解錠中）で DK を包む */
+  async placeKeyring(loginId: string, placeId: string, key: Unlocked): Promise<KeyringRecord> {
     const login = this.need(loginId);
-    return { kind: "login", wrapped: b64u(await aesEncrypt(login.keys.meta, key.dk, placeAad(placeId))) };
+    const wrapped = b64u(await aesEncrypt(login.keys.meta, key.dk, placeAad(placeId)));
+    return { v: 1, slots: [{ kind: "login", wrapped }] };
   }
 
-  /** 解錠中の作業場所の DK を、ログイン鍵で包んだ枠を作る（以前の版の作業場所に足す） */
-  loginSlotFor(loginId: string, placeId: string): Promise<KeySlot> {
-    return this.loginSlot(loginId, placeId, this.need(placeId));
-  }
-
-  /** 枠にログインの枠があるか */
-  static hasLoginSlot(record: KeyringRecord | null): boolean {
-    return record?.slots.some((s) => s.kind === "login") ?? false;
-  }
-
-  /** ログインの枠で作業場所を解錠する。ログインの枠がない・開けない（別のログインの枠）なら false */
-  async unlockWithLogin(loginId: string, placeId: string, record: KeyringRecord): Promise<boolean> {
-    if (!this.open.has(loginId)) return false;
-    for (const s of record.slots) {
+  /**
+   * ログイン鍵（loginId で解錠中）で、作業場所の枠を開き、作業場所を解錠済みにする。
+   * 開けなければ false（ログイン鍵がない・別の作業場所の枠・枠が壊れている）
+   */
+  async unlockWithLogin(loginId: string, placeId: string, keyring: KeyringRecord): Promise<boolean> {
+    const login = this.open.get(loginId);
+    if (!login) return false;
+    for (const s of keyring.slots) {
       if (s.kind !== "login") continue;
-      if (await this.unwrapPlace(loginId, placeId, s.wrapped)) return true;
+      const b = fromB64u(s.wrapped);
+      const dk = b ? await aesDecrypt(login.keys.meta, b, placeAad(placeId)) : null;
+      if (dk && dk.length === 32) {
+        this.open.set(placeId, { dk, keys: await deriveDataKeys(dk) });
+        return true;
+      }
     }
     return false;
   }
 
-  lockAll(): void {
-    this.open.clear();
-  }
-
-  forget(id: string): void {
-    this.open.delete(id);
-  }
-
-  private ctx(id: string, scope: string, k: Unlocked, onUnreadable?: (w: string) => void): EncContext {
-    return { keys: k.keys, scope, workspaceId: id, ...(onUnreadable ? { onUnreadable } : {}) };
-  }
-
-  private need(id: string): Unlocked {
-    const k = this.open.get(id);
-    if (!k) throw new Error("この作業場所はロックされています。");
-    return k;
-  }
-
-  /** 新しい DK と回復コードの枠を作る。表示名は暗号化せず meta に平文で置く */
-  async prepareNew(): Promise<NewKeyring> {
-    const dk = randomBytes(32);
-    const keys = await deriveDataKeys(dk);
-    const code = newRecoveryCode();
-    const slot = await this.secretSlot("recovery", normalizeRecoveryCode(code) ?? "", dk);
-    this.lastRecovery = { id: null, code };
-    return { record: { v: 1, slots: [slot] }, key: { dk, keys }, recoveryCode: code };
-  }
-
-  /** 取り込んだ暗号化書き出しの枠をそのまま使う（DK は同じ） */
-  keyringFor(slots: readonly KeySlot[]): KeyringRecord {
-    return { v: 1, slots: [...slots] };
-  }
-
-  private async secretSlot(kind: "recovery" | "passphrase", secret: string, dk: Uint8Array): Promise<KeySlot> {
+  /** 回復コードで鍵を包んだ枠を作る（塩はこの枠ごとに乱数） */
+  private async recoverySlot(code: string, dk: Uint8Array): Promise<KeySlot> {
     const salt = randomBytes(16);
-    const w = await keyFromSecret(secret, salt, this.iterations);
-    return { kind, salt: b64u(salt), iterations: this.iterations, wrapped: b64u(await wrapDk(w, dk)) };
+    const w = await keyFromSecret(normalizeRecoveryCode(code) ?? "", salt, this.iterations);
+    return { kind: "recovery", salt: b64u(salt), iterations: this.iterations, wrapped: b64u(await wrapDk(w, dk)) };
   }
 
-  /** パスフレーズの枠を作る（既存のパスフレーズの枠は置き換える） */
-  async withPassphrase(id: string, record: KeyringRecord, passphrase: string): Promise<KeyringRecord> {
-    if (passphrase.normalize("NFKC").length < PASSPHRASE_MIN)
-      throw new Error(`パスフレーズは ${PASSPHRASE_MIN} 文字以上にしてください。`);
-    const k = this.need(id);
-    const slot = await this.secretSlot("passphrase", passphrase, k.dk);
-    return { ...record, slots: [...record.slots.filter((s) => s.kind !== "passphrase"), slot] };
-  }
-
-  /** パスキーを登録し、PRF の出力で DK を包んだ枠を加える */
-  async withPasskey(id: string, record: KeyringRecord, label: string): Promise<KeyringRecord> {
+  /** パスキーを登録し、PRF の出力でログイン鍵を包んだ枠を加える（ログイン鍵は解錠中であること） */
+  async withPasskey(loginId: string, record: KeyringRecord, label: string): Promise<KeyringRecord> {
     if (!this.passkey) throw new Error("この環境ではパスキーを使えません。");
-    const k = this.need(id);
+    const k = this.need(loginId);
     // 塩はパスキーどうしで共通にする。共通なら認証時に PRF の入力を eval だけで渡せる
     // （evalByCredential に対応しないパスキー管理アプリがある：iOS の 1Password）。
     // PRF の出力はパスキーごとの秘密で決まるので、塩が共通でも包む鍵はパスキーごとに違う。
@@ -236,24 +167,29 @@ export class Vault {
     return { ...record, slots: [...record.slots, slot] };
   }
 
-  /** パスキーの枠をすべて外す（回復コードの枠は残る） */
-  withoutPasskeys(record: KeyringRecord): KeyringRecord {
-    return { ...record, slots: record.slots.filter((s) => s.kind !== "passkey") };
+  /** 枠で解錠する。開けたら id の鍵として置き、true を返す。開けなければ false */
+  async unlock(id: string, keyring: KeyringRecord, method: UnlockMethod): Promise<boolean> {
+    const k = await this.unlockSlots(keyring.slots, method);
+    if (!k) return false;
+    this.open.set(id, k);
+    return true;
   }
 
-  /** 枠のいずれかで DK を開く。開けなければ null */
+  /**
+   * 枠のいずれかで鍵を開く。開けなければ null。
+   * パスキーの枠がなければ例外（呼び出し側は画面に出す）。パスキーの認証を取り消したときも例外になる。
+   */
   async unlockSlots(slots: readonly KeySlot[], method: UnlockMethod): Promise<Unlocked | null> {
     let dk: Uint8Array | null = null;
     if (method.kind === "passkey") {
       const pk = slots.filter((s): s is PasskeySlot => s.kind === "passkey");
-      if (pk.length === 0) throw new Error("この作業場所にはパスキーが登録されていません。");
-      const found = await this.authenticatePasskey(pk.map((slot) => ({ id: "", slot })));
-      dk = found?.dk ?? null;
+      if (pk.length === 0) throw new Error("このログインにはパスキーが登録されていません。");
+      dk = await this.authenticatePasskey(pk);
     } else {
-      const secret = method.kind === "recovery" ? normalizeRecoveryCode(method.code) : method.passphrase;
-      if (secret === null || secret === "") return null;
+      const secret = normalizeRecoveryCode(method.code);
+      if (!secret) return null;
       for (const s of slots) {
-        if (s.kind !== method.kind) continue;
+        if (s.kind !== "recovery") continue;
         const salt = fromB64u(s.salt);
         const wrapped = fromB64u(s.wrapped);
         if (!salt || !wrapped) continue;
@@ -264,68 +200,44 @@ export class Vault {
     return dk ? { dk, keys: await deriveDataKeys(dk) } : null;
   }
 
-  /** この配信元で使えるパスキーの枠か（記録のない古い枠は試す：39.2） */
+  /** この配信元で使えるパスキーの枠か（配信元を記録していない枠は、ここでも試す） */
   usablePasskey(slot: KeySlot): slot is PasskeySlot {
     const here = this.passkey?.rpId;
     return slot.kind === "passkey" && (slot.rpId === undefined || here === undefined || slot.rpId === here);
   }
 
   /**
-   * 候補の枠をまとめて 1 回のパスキー認証にかけ、選ばれたパスキーの枠で DK を開く。
-   * 選ばれたパスキーがどの候補にもない・DK を開けないときは null。
+   * 候補のパスキーの枠をまとめて 1 回のパスキー認証にかけ、選ばれたパスキーの枠で鍵を開く。
+   * 選ばれたパスキーがどの候補にもない・鍵を開けないときは null。
    */
-  private async authenticatePasskey(
-    candidates: readonly { id: string; slot: PasskeySlot }[],
-  ): Promise<{ id: string; dk: Uint8Array } | null> {
+  private async authenticatePasskey(candidates: readonly PasskeySlot[]): Promise<Uint8Array | null> {
     if (!this.passkey) throw new Error("この環境ではパスキーを使えません。");
-    const usable = candidates.filter((c) => this.usablePasskey(c.slot));
+    const usable = candidates.filter((s) => this.usablePasskey(s));
     if (usable.length === 0) {
-      const rp = candidates[0]?.slot.rpId ?? "";
+      const rp = candidates[0]?.rpId ?? "";
       throw new Error(
-        `この作業場所のパスキーは「${rp}」で登録したもので、ここ（${this.passkey.rpId ?? ""}）では使えません。回復コードで開き、パスキーを登録し直してください。`,
+        `このログインのパスキーは「${rp}」で登録したもので、ここ（${this.passkey.rpId ?? ""}）では使えません。回復コードでログインし、パスキーを登録し直してください。`,
       );
     }
     const got = await this.passkey.authenticate(
-      usable.map((c) => ({
-        credentialId: fromB64u(c.slot.credentialId) ?? new Uint8Array(),
-        prfSalt: fromB64u(c.slot.prfSalt) ?? new Uint8Array(),
+      usable.map((s) => ({
+        credentialId: fromB64u(s.credentialId) ?? new Uint8Array(),
+        prfSalt: fromB64u(s.prfSalt) ?? new Uint8Array(),
       })),
     );
     const cid = b64u(got.credentialId);
     const w = await keyFromPrf(got.prf);
-    for (const c of usable) {
-      if (c.slot.credentialId !== cid) continue;
-      const wrapped = fromB64u(c.slot.wrapped);
+    for (const s of usable) {
+      if (s.credentialId !== cid) continue;
+      const wrapped = fromB64u(s.wrapped);
       const dk = wrapped ? await unwrapDk(w, wrapped) : null;
-      if (dk) return { id: c.id, dk };
+      if (dk) return dk;
     }
     return null;
   }
 
-  /** 解錠する。開けなければ null */
-  async unlock(id: string, record: KeyringRecord, method: UnlockMethod): Promise<UnlockResult | null> {
-    const k = await this.unlockSlots(record.slots, method);
-    if (!k) return null;
-    let legacyName: string | null = null;
-    if (record.name) {
-      // 以前の版の記録：暗号化した表示名を復号して返す（読めなければ鍵が違うものとして扱う）
-      legacyName = await this.decryptLegacyName(k, record.name);
-      if (legacyName === null) return null;
-    }
-    this.open.set(id, k);
-    return { legacyName };
-  }
-
-  private async decryptLegacyName(k: Unlocked, encName: string): Promise<string | null> {
-    const sealed = fromB64u(encName);
-    if (!sealed) return null;
-    const p = await aesDecrypt(k.keys.meta, sealed, NAME_AAD);
-    if (!p) return null;
-    try {
-      return td.decode(p);
-    } catch {
-      return null;
-    }
+  private ctx(id: string, scope: string, k: Unlocked, onUnreadable?: (w: string) => void): EncContext {
+    return { keys: k.keys, scope, workspaceId: id, ...(onUnreadable ? { onUnreadable } : {}) };
   }
 
   async wrapDir(
@@ -386,24 +298,15 @@ export class Vault {
   // 暗号化した書き出し（38.3・39.4）
 
   /**
-   * 暗号化して書き出す（版 2）。DK を直接包んだ枠（以前の版の作業場所の回復コード等）と、
-   * ログインの枠・ログインの鍵で包んだ DK をヘッダーに入れる（ADR-0012）
+   * 暗号化して書き出す。DK はログイン鍵（loginId で解錠中）で包み、ログインの枠と一緒にヘッダーに入れる。
+   * 別の端末では、このログインの回復コード（または同期したパスキー）で開ける。
    */
-  async sealExport(
-    id: string,
-    zip: Uint8Array,
-    slots: readonly KeySlot[],
-    login?: { readonly id: string; readonly slots: readonly KeySlot[] },
-  ): Promise<Uint8Array> {
+  async sealExport(id: string, zip: Uint8Array, loginId: string, loginSlots: readonly KeySlot[]): Promise<Uint8Array> {
     const k = this.need(id);
-    const direct = slots.filter((s) => s.kind !== "login");
-    let header: SealedExportHeader;
-    if (login) {
-      const lk = this.need(login.id);
-      const wrapped = b64u(await aesEncrypt(lk.keys.meta, k.dk, EXPORT_DK_AAD));
-      // ログインのパスフレーズの枠（以前の版）は入れない（ログインはパスキーと回復コードだけ：ADR-0012）
-      header = { v: 2, slots: direct, login: { slots: login.slots.filter((s) => s.kind !== "passphrase"), wrapped } };
-    } else header = { v: 1, slots: direct };
+    const lk = this.need(loginId);
+    const wrapped = b64u(await aesEncrypt(lk.keys.meta, k.dk, EXPORT_DK_AAD));
+    const slots = loginSlots.filter((s) => s.kind !== "login");
+    const header: SealedExportHeader = { v: 1, login: { slots, wrapped } };
     const h = te.encode(JSON.stringify(header));
     const body = await aesEncrypt(k.keys.exportKey, zip, h);
     const out = new Uint8Array(EXPORT_MAGIC.length + 4 + h.length + body.length);
@@ -431,51 +334,35 @@ export class Vault {
     } catch {
       return null;
     }
-    const r = v as { v?: unknown; slots?: unknown; login?: unknown };
+    const r = v as { v?: unknown; login?: unknown };
+    const l = r.login as { slots?: unknown; wrapped?: unknown } | null | undefined;
     // 枠の形式は meta と同じ規則で検査する（未信頼入力：38.2）
-    const slotsOk = (x: unknown, empty: boolean) =>
-      (empty && Array.isArray(x) && x.length === 0) || validKeyring({ v: 1, slots: x });
-    const body = bytes.slice(EXPORT_MAGIC.length + 4 + len);
-    if (r.v === 1 && slotsOk(r.slots, false)) return { header: { v: 1, slots: r.slots as KeySlot[] }, raw, body };
-    if (r.v !== 2 || !slotsOk(r.slots, true)) return null;
-    const l = r.login as { slots?: unknown; wrapped?: unknown } | null;
-    if (typeof l !== "object" || l === null || !slotsOk(l.slots, false)) return null;
+    if (r.v !== 1 || typeof l !== "object" || l === null) return null;
+    if (!validKeyring({ v: 1, slots: l.slots })) return null;
     if (typeof l.wrapped !== "string" || !/^[A-Za-z0-9_-]{1,512}$/.test(l.wrapped)) return null;
-    const header: SealedExportHeader = {
-      v: 2,
-      slots: r.slots as KeySlot[],
-      login: { slots: l.slots as KeySlot[], wrapped: l.wrapped },
-    };
+    const body = bytes.slice(EXPORT_MAGIC.length + 4 + len);
+    const header: SealedExportHeader = { v: 1, login: { slots: l.slots as KeySlot[], wrapped: l.wrapped } };
     return { header, raw, body };
   }
 
   /**
    * 暗号化した書き出しを開く。開けなければ null。
-   * method が "login" なら、いまのログインの鍵（loginId で解錠中）で開けるか試す（同じ端末で書き出したもの）
+   * method が "login" なら、いまのログイン鍵（loginId で解錠中）で開く（同じログインで書き出したもの）。
+   * そうでなければ、ヘッダーのログインの枠を回復コードかパスキーで開く（別の端末）。
    */
   async openSealedExport(
     bytes: Uint8Array,
     method: UnlockMethod | { readonly kind: "login"; readonly loginId: string },
-  ): Promise<{ zip: Uint8Array; key: Unlocked; slots: readonly KeySlot[] } | null> {
+  ): Promise<{ zip: Uint8Array; key: Unlocked } | null> {
     const r = Vault.readExportHeader(bytes);
     if (!r) return null;
-    const h = r.header;
-    let key: Unlocked | null = null;
-    if (method.kind === "login") {
-      const lk = this.open.get(method.loginId);
-      if (h.v === 2 && lk) key = await this.unwrapExportDk(lk, h.login.wrapped);
-    } else {
-      // 直接の枠（以前の版の作業場所の回復コード等）を先に試し、だめならログインの枠で開く
-      const direct = h.slots.filter((s) => s.kind === method.kind);
-      if (direct.length > 0) key = await this.unlockSlots(direct, method).catch(() => null);
-      if (!key && h.v === 2) {
-        const lk = await this.unlockSlots(h.login.slots, method);
-        if (lk) key = await this.unwrapExportDk(lk, h.login.wrapped);
-      }
-    }
+    const { slots, wrapped } = r.header.login;
+    const lk =
+      method.kind === "login" ? (this.open.get(method.loginId) ?? null) : await this.unlockSlots(slots, method);
+    const key = lk ? await this.unwrapExportDk(lk, wrapped) : null;
     if (!key) return null;
     const zip = await aesDecrypt(key.keys.exportKey, r.body, r.raw);
-    return zip ? { zip, key, slots: h.slots } : null;
+    return zip ? { zip, key } : null;
   }
 
   private async unwrapExportDk(login: Unlocked, wrapped: string): Promise<Unlocked | null> {

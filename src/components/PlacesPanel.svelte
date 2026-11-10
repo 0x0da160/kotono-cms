@@ -4,8 +4,6 @@
   import type { PlacesController, PlaceView } from "../lib/app/places.svelte";
   import type { Workspace } from "../lib/app/workspace.svelte";
   import type { WorkspaceMeta } from "../lib/workspaces/store";
-  import type { UnlockMethod } from "../lib/crypto/vault";
-  import { accountName } from "../lib/crypto/passkey";
   import UnlockForm from "./UnlockForm.svelte";
   import StorageNotice from "./StorageNotice.svelte";
 
@@ -13,14 +11,11 @@
 
   let newName = $state("");
   let importName = $state("");
-  let unlocking = $state<string | null>(null);
   /** 「…」（書き出す・削除をまとめる）を開いている行の ID */
   let moreOpen = $state<string | null>(null);
   let fileInput: HTMLInputElement | undefined = $state();
 
   const views = $derived(places.views());
-  /** 解錠の入力欄を開いている行があるか（あれば、エラーはその欄の下に出す） */
-  const unlockOpen = $derived(views.some((v) => v.locked && v.id === unlocking));
 
   $effect(() => {
     if (places.pendingImport) importName = places.pendingImport.name;
@@ -74,13 +69,6 @@
     if (m) await places.open(m);
   }
 
-  async function unlockAndOpen(meta: WorkspaceMeta, method: UnlockMethod) {
-    if (await places.unlock(meta, method)) {
-      unlocking = null;
-      await places.open(meta);
-    }
-  }
-
   async function remove(v: PlaceView) {
     const e = v.entry;
     const details: string[] = [];
@@ -92,9 +80,8 @@
         m.lastSyncAt ? `最後に同期した日時：${fmt(m.lastSyncAt)}` : "GitHub と同期していません。",
       );
       if (since !== null) details.push(`書き出し・同期していない変更があります（${since} 日前から）。`);
-      if (m.keyring) details.push("暗号化した作業場所です。書き出しがなければ、削除後は誰も内容を戻せません。");
-      if (v.locked)
-        details.push("このログインでは開けない作業場所です（ログインを作り直す前の鍵で暗号化しています）。");
+      details.push("暗号化した作業場所です。書き出しがなければ、削除後は誰も内容を戻せません。");
+      if (v.locked) details.push("このログインでは開けない作業場所です（ログインを作り直す前に作りました）。");
     } else details.push("作成・取り込みの途中で止まった作業場所です。");
     details.push("削除前の退避（退避領域）は残しますが、退避領域もブラウザのデータ消去から守られません。");
     const ok = await ws.ask({
@@ -111,37 +98,24 @@
   }
 
   async function exportPlace(meta: WorkspaceMeta) {
-    let plain = false;
-    if (meta.keyring) {
-      const v = await ws.ask({
-        title: "書き出しの形式",
-        message:
-          "既定では暗号化して書き出します（.kotono）。別の端末でも、このログインの回復コード（またはこのログインで登録した、同期しているパスキー）で開けます。平文の zip は誰でも中身を読めます。",
-        buttons: [
-          { label: "暗号化して書き出す", value: "sealed", variant: "primary" },
-          { label: "平文の zip にする", value: "plain" },
-          { label: "キャンセル", value: "cancel" },
-        ],
-        initial: "sealed",
-      });
-      if (v === "cancel") return;
-      plain = v === "plain";
-    }
-    await places.export(meta, plain);
+    const v = await ws.ask({
+      title: "書き出しの形式",
+      message:
+        "既定では暗号化して書き出します（.kotono）。別の端末でも、このログインの回復コード（またはこのログインで登録した、同期しているパスキー）で開けます。平文の zip は誰でも中身を読めます。",
+      buttons: [
+        { label: "暗号化して書き出す", value: "sealed", variant: "primary" },
+        { label: "平文の zip にする", value: "plain" },
+        { label: "キャンセル", value: "cancel" },
+      ],
+      initial: "sealed",
+    });
+    if (v === "cancel") return;
+    await places.export(meta, v === "plain");
   }
 
   function fmt(iso: string): string {
     const d = new Date(iso);
     return Number.isNaN(d.getTime()) ? iso : d.toLocaleString("ja-JP");
-  }
-
-  /** パスワード管理での回復コードのユーザー名。ロック中でも分かる ID から作る */
-  function recoveryAccount(id: string): string {
-    return accountName(id);
-  }
-
-  function hasSlot(meta: WorkspaceMeta, kind: "recovery" | "passphrase" | "passkey"): boolean {
-    return meta.keyring?.slots.some((s) => s.kind === kind) ?? false;
   }
 
   function sizeText(n: number): string {
@@ -198,9 +172,7 @@
   <form class="sub" onsubmit={create} data-testid="place-create">
     <h3>新しい作業場所</h3>
     <label>名前 <input bind:value={newName} maxlength="80" required data-testid="place-name" /></label>
-    {#if places.vault}<p class="small muted">
-        ログインの鍵で暗号化して保存します。作業場所ごとの回復コード・パスキーはありません。
-      </p>{/if}
+    <p class="small muted">記事・画像・Git の履歴は、ログインの鍵で暗号化して保存します。</p>
     <div class="actions">
       <button type="submit" class="primary" disabled={places.busy} data-testid="place-create-run">作る</button>
     </div>
@@ -249,10 +221,7 @@
     <StorageNotice {places} />
   {/if}
 
-  <!-- 解錠の失敗は、入力した欄のすぐ下に出す（パネルの先頭では目に入らない） -->
-  {#if places.error && !unlockOpen}<p class="banner" role="alert" data-testid="places-error">
-      {places.error}
-    </p>{/if}
+  {#if places.error}<p class="banner" role="alert" data-testid="places-error">{places.error}</p>{/if}
   {#if places.info}<p class="banner info" role="status" data-testid="places-info">{places.info}</p>{/if}
 
   {#if places.needsLogin}
@@ -268,7 +237,7 @@
           <li data-testid="place" data-state={e.state} data-locked={v.locked}>
             <div class="head">
               <span class="name">{v.label}</span>
-              {#if e.state === "ok" && e.meta.keyring}<span class="badge">{v.locked ? "ロック中" : "解錠中"}</span>{/if}
+              {#if e.state === "ok"}<span class="badge">{v.locked ? "開けません" : "解錠中"}</span>{/if}
               {#if e.state !== "ok"}<span class="badge err">不完全</span>{/if}
             </div>
             {#if e.state === "ok"}
@@ -283,17 +252,7 @@
                 {#if e.meta.lastSyncAt}・同期：{fmt(e.meta.lastSyncAt)}{/if}
               </p>
               <div class="actions">
-                {#if v.locked && !hasSlot(e.meta, "recovery")}
-                  <!-- ログインの枠だけの作業場所：解錠の方法はログインだけ -->
-                {:else if v.locked}
-                  <button
-                    type="button"
-                    class={unlocking === v.id ? "" : "primary"}
-                    onclick={() => (unlocking = unlocking === v.id ? null : v.id)}
-                    aria-expanded={unlocking === v.id}
-                    data-testid="place-unlock">{unlocking === v.id ? "解錠をやめる" : "解錠する"}</button
-                  >
-                {:else}
+                {#if !v.locked}
                   <button
                     type="button"
                     class="primary"
@@ -304,28 +263,10 @@
                 {/if}
                 {@render more(v, v.locked ? null : e.meta)}
               </div>
-              {#if v.locked && !hasSlot(e.meta, "recovery")}
+              {#if v.locked}
                 <p class="muted small" data-testid="place-other-login">
-                  {places.needsLogin
-                    ? "ログインすると開けます。"
-                    : "このログインでは開けません。ログインを作り直す前の鍵で暗号化した作業場所です。書き出しがあれば、その時のログインの回復コードで取り込めます。"}
+                  このログインでは開けません。ログインを作り直す前に作った作業場所です。書き出し（.kotono）があれば、その時のログインの回復コードで取り込めます。
                 </p>
-              {:else if v.locked && unlocking !== v.id}
-                <p class="muted small">
-                  {e.state === "ok" && e.meta.name
-                    ? "以前の版で作った作業場所です。作業場所の回復コードで一度解錠すると、次からはログインだけで開けます。"
-                    : "名前と内容は暗号化されています。作業場所の回復コードで解錠すると表示されます。"}
-                </p>
-              {/if}
-              {#if v.locked && unlocking === v.id}
-                <UnlockForm
-                  busy={places.busy}
-                  account={recoveryAccount(e.meta.id)}
-                  passphrase={hasSlot(e.meta, "passphrase")}
-                  passkey={hasSlot(e.meta, "passkey") && places.vault?.passkey != null}
-                  onunlock={(m) => unlockAndOpen(e.meta, m)}
-                />
-                {#if places.error}<p class="banner" role="alert" data-testid="places-error">{places.error}</p>{/if}
               {/if}
             {:else}
               <p class="muted small">{e.reason}</p>
@@ -341,21 +282,15 @@
     {/if}
 
     {#if places.pendingSealed}
+      {@const s = places.pendingSealed}
       <div class="sub" data-testid="import-sealed">
         <h3>暗号化した書き出しを開く</h3>
         <p class="small">
-          「{places.pendingSealed
-            .name}」は、別の端末（または作り直す前のログイン）で書き出したものです。書き出した端末のログインの回復コードを入力してください。以前の版で書き出したものは、作業場所の回復コード{places
-            .pendingSealed.passphrase
-            ? "かパスフレーズ"
+          「{s.name}」は、別の端末（または作り直す前のログイン）で書き出したものです。書き出したログインの回復コード{s.passkey
+            ? "か、そのログインで登録したパスキー"
             : ""}で開けます。
         </p>
-        <UnlockForm
-          busy={places.busy}
-          passphrase={places.pendingSealed.passphrase}
-          passkey={places.pendingSealed.passkey && places.vault?.passkey != null}
-          onunlock={(m) => places.unsealImport(m)}
-        />
+        <UnlockForm busy={places.busy} passkey={s.passkey} onunlock={(m) => places.unsealImport(m)} />
         <button type="button" onclick={() => places.cancelImport()}>取り消す</button>
       </div>
     {:else if places.pendingImport}
@@ -367,7 +302,7 @@
           {#if p.plan.strippedRoot}<li>先頭のフォルダ「{p.plan.strippedRoot}」を外して展開します。</li>{/if}
           <li>{p.plan.hasGit ? "Git の履歴（.git）を含みます。" : "Git の履歴（.git）は含まれていません。"}</li>
           {#if p.plan.skipped.length > 0}<li>OS の付属物 {p.plan.skipped.length} 件は取り込みません。</li>{/if}
-          {#if places.vault}<li>このログインの鍵で暗号化して保存します。</li>{/if}
+          <li>このログインの鍵で暗号化して保存します。</li>
         </ul>
         <label>作業場所の名前 <input bind:value={importName} maxlength="80" required data-testid="import-name" /></label
         >
@@ -376,7 +311,7 @@
           <button type="button" onclick={() => places.cancelImport()}>取り消す</button>
         </div>
       </form>
-    {:else if places.store && !places.needsLogin}
+    {:else if places.store}
       {#if views.length === 0}
         {@render addForms()}
       {:else}

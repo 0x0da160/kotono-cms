@@ -89,7 +89,6 @@
         sealed: sealedDrafts,
         hooks: {
           login: () => (login.unlocked && login.record ? { id: LOGIN_ID, slots: login.record.keyring.slots } : null),
-          removed: (id) => login.forgetPlace(id),
           autoLocked: () => void lockApp(true),
           active: () => login.unlocked,
         },
@@ -174,13 +173,8 @@
     if (mode === "folder" && ws.root === null) await ws.loadRecent();
     if (places) {
       await placesReady;
-      // ログインの枠を持つ作業場所を解錠する。以前の版でログインの記録に覚えていた鍵は、作業場所の meta へ移す
-      const legacy = await login.unlockPlaces();
-      await places.unlockWithLogin(legacy);
-      for (const id of legacy) {
-        const e = places.entries.find((x) => x.state === "ok" && x.meta.id === id);
-        if (e?.state === "ok" && e.meta.keyring?.slots.some((s) => s.kind === "login")) await login.forgetPlace(id);
-      }
+      // ログインの鍵で開ける作業場所を開く（ADR-0012）
+      await places.unlockAll();
     }
   }
 
@@ -211,7 +205,7 @@
       message:
         "登録したパスキー・回復コードの情報をこのブラウザから消し、登録からやり直します。このブラウザの復旧ドラフトはすべて削除します（もう読めないため）。",
       details: [
-        "ブラウザ内の作業場所は、このログインの鍵で暗号化しているため、作り直すと開けなくなります（以前の版で作り、作業場所の回復コードがあるものは、その回復コードで開けます）。書き出した .kotono も、このログインの回復コードでしか開けません。",
+        "ブラウザ内の作業場所は、このログインの鍵で暗号化しているため、作り直すと開けなくなります。書き出した .kotono も、書き出したログインの回復コードでしか開けません。",
         "作業場所は自動では消しません。開けなくなった作業場所は、作業場所の一覧から削除できます。",
         "パスキー管理アプリに残るパスキーは、不要なら管理アプリで削除してください。",
       ],

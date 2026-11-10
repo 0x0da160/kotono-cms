@@ -56,8 +56,7 @@ export function browserPasskey(host: CredentialsHost): PasskeyApi | null {
     )) as PublicKeyCredential | null;
     if (!cred) throw new Error("パスキーでの認証が取り消されました。");
     const prf = (cred.getClientExtensionResults() as PrfResults).prf?.results?.first;
-    if (!prf)
-      throw new Error("このパスキーは鍵の導出（PRF）に対応していません。回復コードかパスフレーズで開いてください。");
+    if (!prf) throw new Error("このパスキーは鍵の導出（PRF）に対応していません。回復コードでログインしてください。");
     return { credentialId: new Uint8Array(cred.rawId), prf: new Uint8Array(prf) };
   };
 

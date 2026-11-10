@@ -1,17 +1,14 @@
 /**
- * 起動時のログインの記録（ADR-0011）。
+ * 起動時のログインの記録（ADR-0011・ADR-0012）。
  *
- * アプリの鍵（ログイン鍵）を、パスキーの PRF・パスフレーズ・回復コードで包んだ枠（KeyringRecord と同じ形）と、
- * ログイン鍵で包んだ作業場所の鍵（ログインだけで作業場所を開くため）を、ブラウザ内（IndexedDB）に 1 件だけ置く。
- * ログイン鍵そのものは保存しない（ログイン中だけメモリに置く）。
+ * ログイン鍵を、回復コードの枠（必須）とパスキーの PRF の枠（任意）で包んだもの（KeyringRecord と同じ形）を、
+ * ブラウザ内（IndexedDB）に 1 件だけ置く。ログイン鍵そのものは保存しない（ログイン中だけメモリに置く）。
  */
-import { isWorkspaceId, validKeyring, type KeyringRecord } from "../workspaces/store";
+import { validKeyring, type KeyringRecord } from "../workspaces/store";
 
 export interface LoginRecord {
   readonly v: 1;
   readonly keyring: KeyringRecord;
-  /** 作業場所 ID → ログイン鍵で包んだ作業場所のデータ鍵（base64url） */
-  readonly places: Readonly<Record<string, string>>;
   readonly createdAt: string;
 }
 
@@ -21,19 +18,11 @@ export interface LoginStore {
   clear(): Promise<void>;
 }
 
-const B64URL = /^[A-Za-z0-9_-]{1,8192}$/;
-
 /** 読み戻した記録を未信頼入力として検査する */
 export function validLogin(v: unknown): v is LoginRecord {
   if (v === null || typeof v !== "object") return false;
   const r = v as Record<string, unknown>;
-  if (r["v"] !== 1 || !validKeyring(r["keyring"]) || typeof r["createdAt"] !== "string") return false;
-  const p = r["places"];
-  if (p === null || typeof p !== "object" || Array.isArray(p)) return false;
-  const entries = Object.entries(p as Record<string, unknown>);
-  return (
-    entries.length <= 256 && entries.every(([k, w]) => isWorkspaceId(k) && typeof w === "string" && B64URL.test(w))
-  );
+  return r["v"] === 1 && validKeyring(r["keyring"]) && typeof r["createdAt"] === "string";
 }
 
 const DB_NAME = "kotono-cms-settings";
