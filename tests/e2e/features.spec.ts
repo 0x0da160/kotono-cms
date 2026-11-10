@@ -298,7 +298,10 @@ test("復旧ドラフトは既定で有効で、暗号化して退避する。�
   await page.reload();
   await loginAgain(page);
   await page.getByTestId("choose-folder").click();
-  const panel = page.getByTestId("recovery-panel");
+  // 復旧ドラフトはメニューの中の窓にある。候補があるとトグルに印が付く
+  await expect(page.getByTestId("menu-toggle")).toHaveAttribute("data-attention", "info");
+  await menu(page, "recovery-open");
+  const panel = page.getByTestId("recovery-dialog").getByTestId("recovery-panel");
   await expect(panel).toBeVisible();
   await panel.getByText(/関連先未確認のドラフト/).click();
   await expect(panel.getByTestId("draft-candidate").first()).toContainText("チェックサム一致");
@@ -322,7 +325,7 @@ test("復旧ドラフトは「設定」で無効にでき、無効の間は退�
   await expect(page.getByTestId("draft-status")).toContainText("復旧退避なし（ブラウザ内復旧ドラフトは無効）");
 });
 
-test("上部バーは固定してスクロールで詰め、画面の切り替えはメニューにまとめる。切り替えても編集中の内容は残る（アプリの外枠）", async ({
+test("上部バーは固定して大きさを変えず、画面の切り替えはメニューにまとめる。切り替えても編集中の内容は残る（アプリの外枠）", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -377,17 +380,17 @@ test("上部バーは固定してスクロールで詰め、画面の切り替�
   await expect(page.getByTestId("nav-editor")).toHaveAttribute("aria-current", "page");
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("save-status")).toHaveText("未保存");
-  // スクロールすると上部バーを詰め、画面の上に残す
+  // 上部バーは最初からコンパクトで、スクロールしても大きさは変えず、画面の上に残す
   await page.setViewportSize({ width: 900, height: 360 });
-  const tall = await bar.evaluate((el) => (el as HTMLElement).offsetHeight);
+  const before = await bar.evaluate((el) => (el as HTMLElement).offsetHeight);
   await page.mouse.move(400, 300);
   await page.mouse.wheel(0, 600);
-  await expect(bar).toHaveClass(/compact/);
+  await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(24);
   expect(await bar.evaluate((el) => el.getBoundingClientRect().top)).toBe(0);
-  expect(await bar.evaluate((el) => (el as HTMLElement).offsetHeight)).toBeLessThanOrEqual(tall);
+  expect(await bar.evaluate((el) => (el as HTMLElement).offsetHeight)).toBe(before);
 });
 
-test("上部バーを詰めても、境目の辺りで詰める・戻すを繰り返さない（ちらつかない）。メニューの開閉はアイコンだけ", async ({
+test("上部バーは最初からコンパクトで、スクロールしても大きさが変わらない（ちらつかない）。メニューの開閉はアイコンだけ", async ({
   page,
 }) => {
   await page.goto(url);
@@ -396,28 +399,22 @@ test("上部バーを詰めても、境目の辺りで詰める・戻すを繰�
   await expect(toggle).toHaveAccessibleName("メニュー");
   await expect(toggle).toHaveText("");
   const bar = page.getByTestId("app-bar");
-  // 説明文のある最初の画面（詰めると高さが大きく変わる）。短いページ（少しだけスクロールできる）と長めのページで確かめる
-  for (const height of [620, 400]) {
+  // 最初の画面（以前は説明文を詰めると高さが大きく変わった）。画面より長いページになる高さで、スクロールしても高さと位置が変わらないことを確かめる
+  await page.setViewportSize({ width: 390, height: 900 });
+  const contentH = await page.evaluate(() => document.querySelector("footer")?.getBoundingClientRect().bottom ?? 0);
+  for (const height of [Math.floor(contentH * 0.75), Math.floor(contentH * 0.55)]) {
     await page.setViewportSize({ width: 390, height });
     await page.evaluate(() => scrollTo(0, 0));
-    await expect(bar).not.toHaveClass(/compact/);
-    await bar.evaluate((el) => {
-      const w = window as unknown as { __flips: boolean[]; __flipsObserver?: MutationObserver };
-      w.__flipsObserver?.disconnect();
-      w.__flips = [];
-      w.__flipsObserver = new MutationObserver(() => w.__flips.push(el.classList.contains("compact")));
-      w.__flipsObserver.observe(el, { attributes: true, attributeFilter: ["class"] });
-    });
+    const before = await bar.evaluate((el) => (el as HTMLElement).offsetHeight);
     const docH = await page.evaluate(() => document.documentElement.scrollHeight);
     await page.mouse.move(200, height - 60);
     for (let i = 0; i < 25; i++) await page.mouse.wheel(0, 2);
-    await expect(bar).toHaveClass(/compact/);
-    // 詰めてもページの高さは変わらない（位置が戻らない）
+    await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(24);
+    expect(await bar.evaluate((el) => (el as HTMLElement).offsetHeight)).toBe(before);
+    expect(await bar.evaluate((el) => el.getBoundingClientRect().top)).toBe(0);
+    // ページの高さも変わらない（位置が戻らない）
     expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(docH);
-    expect(await page.evaluate(() => scrollY)).toBeGreaterThan(24);
-    for (let i = 0; i < 40; i++) await page.mouse.wheel(0, -2);
-    await expect(bar).not.toHaveClass(/compact/);
-    expect(await page.evaluate(() => (window as unknown as { __flips: boolean[] }).__flips)).toEqual([true, false]);
+    await page.evaluate(() => scrollTo(0, 0));
   }
 });
 

@@ -61,7 +61,10 @@ test("作業場所はログインの鍵で暗号化し、作業場所ごとの�
 }) => {
   const code = await open(page);
   expect(code).toMatch(/^[A-Z2-7]{5}(-[A-Z2-7]{5}){4}$/);
+  await menu(page, "env-open");
   await expect(page.getByTestId("env-summary")).toContainText("必要なAPIを備えています");
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("env-dialog")).toBeHidden();
   // 暗号化するかを選ぶ欄はない
   await expect(page.getByTestId("place-encrypt")).toHaveCount(0);
   await page.getByTestId("place-name").fill("ブログ");
@@ -196,4 +199,18 @@ test("保存領域（OPFS）を開けないときは、理由とやり直しを�
   await page.getByTestId("place-name").fill("ブログ");
   await page.getByTestId("place-create-run").click();
   await expect(page.getByTestId("folder-name")).toHaveText("作業場所：ブログ");
+});
+
+test("保存領域を消さないよう求めると、ブラウザが許可したかどうかを示す（38.4）", async ({ page }) => {
+  // ブラウザが永続化を許可しない場合を固定する（headless Chromium の判断に左右されないように）
+  await page.addInitScript(() => {
+    const st = navigator.storage;
+    Object.defineProperty(st, "persisted", { configurable: true, value: () => Promise.resolve(false) });
+    Object.defineProperty(st, "persist", { configurable: true, value: () => Promise.resolve(false) });
+  });
+  await open(page);
+  await expect(page.getByTestId("persist-answer")).toHaveText("");
+  await page.getByTestId("persist-ask").click();
+  await expect(page.getByTestId("persist-answer")).toContainText("ブラウザは許可しませんでした");
+  await expect(page.getByTestId("persist-ask")).toBeEnabled();
 });
