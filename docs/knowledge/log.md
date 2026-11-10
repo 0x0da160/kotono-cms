@@ -1,6 +1,9 @@
 # Directory Update Log
 
 ## 2026-11-10
+* **Addition**: [ADR-0014 以前の版との互換をなくし、表現を「ロック」と「ロック解除」の対にする](/decisions/0014-lock-unlock-wording-and-no-backward-compat.md) を追加。ADR-0012 の互換の項目（パスフレーズの枠・以前の版の作業場所・以前の形式の書き出し）と、ADR-0013 で未決だった「ロック」の名前を置き換えた。
+* **Update**: [Kotono CMS のアプリの外枠（シェル）](/product/app-shell.md) の「ログイン」を「ロック解除」に改め、パスフレーズと作業場所ごとの解錠の記述を外した。
+* **Update**: [ADR-0011](/decisions/0011-passkey-first-and-compact-ui.md)・[ADR-0012](/decisions/0012-passkey-only-login-whole-app-encryption.md)・[ADR-0013](/decisions/0013-header-menu-consolidation.md) に、置き換えた項目の注記を追加。
 * **Addition**: [ADR-0013 上部バーの大きさを変えず、画面とツールをメニューにまとめる](/decisions/0013-header-menu-consolidation.md) を追加。ADR-0011 の第3章1（スクロールで詰める上部バー）と第3章2（メニューの中身）を置き換えた。
 * **Update**: [Kotono CMS のアプリの外枠（シェル）](/product/app-shell.md) を、説明文を外して大きさを変えない上部バー、メニューにまとめた場所・復旧ドラフト・対応環境の確認・ヘルプ・ロック、ログインの画面のメニューに更新。
 * **Update**: [ADR-0011](/decisions/0011-passkey-first-and-compact-ui.md) に、置き換えた項目の注記を追加。

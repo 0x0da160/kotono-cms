@@ -107,7 +107,7 @@ function setup(opts: { now?: () => Date; passkey?: PasskeyApi; fs?: MemFs; store
   return { idb, base, sealed, drafts, ws, fs, places, delivered, vault, store, login, autoLocked: () => autoLocked };
 }
 
-/** パスキーでログインを登録して、作業場所の保存領域を開いた状態にする。ログインの回復コードを返す */
+/** パスキーを登録してロックを解除し、作業場所の保存領域を開いた状態にする。回復コードを返す */
 async function loggedIn(opts: Parameters<typeof setup>[0] = {}) {
   const pk = opts.passkey ? null : fakePasskey();
   const t = setup({ ...opts, passkey: opts.passkey ?? (pk as ReturnType<typeof fakePasskey>).api });
@@ -173,10 +173,10 @@ describe("暗号化した復旧ドラフト（39.1）", () => {
     expect(listed.map((r) => r.ws)).toEqual([`e:${a}`]);
   });
 
-  it("実フォルダのドラフトもログイン鍵で暗号化し、ログインしていない間は読み書きしない（ADR-0011）", async () => {
+  it("実フォルダのドラフトもロック解除の鍵で暗号化し、ロック中は読み書きしない（ADR-0011）", async () => {
     const { base, sealed, vault } = setup();
     await sealed.setEnabled(true);
-    await expect(sealed.put(await rec("folder-1", "x"))).rejects.toThrow("ログイン");
+    await expect(sealed.put(await rec("folder-1", "x"))).rejects.toThrow("ロックを解除していない");
     vault.adopt("login", await vault.newKey());
     sealed.setDefault(vault.draftSealer("login"));
     await sealed.put(await rec("folder-1", "新しい本文", { seq: 3 }));
@@ -212,7 +212,7 @@ describe("暗号化した復旧ドラフト（39.1）", () => {
 });
 
 describe("作業場所の操作（38・39.3、ADR-0012）", () => {
-  it("作業場所は常にログインの鍵で暗号化し、作業場所ごとの回復コード・パスキーは作らない", async () => {
+  it("作業場所は常にロック解除の鍵で暗号化し、作業場所ごとの回復コード・パスキーは作らない", async () => {
     const { places, ws, fs } = await loggedIn();
     const m = await places.create("ブログ");
     if (!m) throw new Error(places.error ?? "create");
@@ -228,12 +228,12 @@ describe("作業場所の操作（38・39.3、ADR-0012）", () => {
     expect(names).not.toContain("articles");
   });
 
-  it("ログインしていなければ作業場所を作れない（黙らずに知らせる）", async () => {
+  it("ロックを解除していなければ作業場所を作れない（黙らずに知らせる）", async () => {
     const { places, fs } = setup({ passkey: fakePasskey().api });
     await places.init(fs.root);
     expect(places.needsLogin).toBe(true);
     expect(await places.create("ブログ")).toBeNull();
-    expect(places.error).toContain("ログイン");
+    expect(places.error).toContain("ロックを解除していない");
   });
 
   it("保存領域（OPFS）を開けないときは理由を示し、作るを押すと黙らずに知らせる。もう一度試せる", async () => {
@@ -263,7 +263,7 @@ describe("作業場所の操作（38・39.3、ADR-0012）", () => {
     if (!m) throw new Error(places.error ?? "create");
     expect(m.name).toBe("ブログ");
     expect(m.keyring).not.toHaveProperty("name");
-    // 鍵を持たない別の画面（ログインしていない）で一覧を読む
+    // 鍵を持たない別の画面（ロックを解除していない）で一覧を読む
     const other = new PlacesController(
       new Workspace(undefined, { md: inlineMdService, processor: null }),
       {},
@@ -274,7 +274,7 @@ describe("作業場所の操作（38・39.3、ADR-0012）", () => {
     expect(other.views()[0]).toMatchObject({ label: "ブログ", locked: true });
   });
 
-  it("無操作の時間・非表示の時間でロックする（ログインもロックする）", async () => {
+  it("無操作の時間・非表示の時間でロックする（アプリ全体をロックする）", async () => {
     let t = Date.parse("2026-11-06T00:00:00Z");
     const { places, ws, login, autoLocked } = await loggedIn({ now: () => new Date(t) });
     const m = await places.create("x");
@@ -307,7 +307,7 @@ describe("作業場所の操作（38・39.3、ADR-0012）", () => {
     expect(places.anyUnlocked).toBe(false);
   });
 
-  it("暗号化して書き出し、別の端末ではログインの回復コードで取り込める。同じ端末ではそのまま取り込める（38.3・39.4）", async () => {
+  it("暗号化して書き出し、別の端末では書き出した端末の回復コードで取り込める。同じ端末ではそのまま取り込める（38.3・39.4）", async () => {
     const a = await loggedIn();
     const m = await a.places.create("ブログ");
     if (!m) throw new Error("create");
@@ -320,13 +320,13 @@ describe("作業場所の操作（38・39.3、ADR-0012）", () => {
     expect(new TextDecoder().decode(out.bytes)).not.toContain("本文");
     const file = { name: "ブログ-20261106.kotono", arrayBuffer: async () => out.bytes.slice().buffer };
 
-    // 同じ端末（同じログイン）：回復コードを求めずに取り込める
+    // 同じ端末（同じロック解除の鍵）：回復コードを求めずに取り込める
     await a.places.prepareImport(file);
     expect(a.places.pendingSealed).toBeNull();
     expect(a.places.pendingImport).not.toBeNull();
     a.places.cancelImport();
 
-    // 別の端末（別のログイン）：書き出した端末のログインの回復コードで開く
+    // 別の端末（別のロック解除の鍵）：書き出した端末の回復コードで開く
     const b = await loggedIn();
     await b.places.prepareImport(file);
     expect(b.places.pendingSealed).not.toBeNull();
@@ -335,7 +335,7 @@ describe("作業場所の操作（38・39.3、ADR-0012）", () => {
     expect(b.places.pendingImport?.plan.files.map((x) => x.path)).toContain("content/articles/k7m2x9q/index.md");
     const nm = await b.places.confirmImport("取り込み");
     if (!nm) throw new Error(b.places.error ?? "import");
-    // 取り込んだ作業場所は、取り込んだ端末のログインの鍵で包む
+    // 取り込んだ作業場所は、取り込んだ端末のロック解除の鍵で包む
     expect(nm.keyring.slots.map((s) => s.kind)).toEqual(["login"]);
     await b.places.open(nm);
     expect(b.ws.scan?.entries.map((e) => e.dirName)).toEqual(["k7m2x9q"]);
@@ -382,8 +382,8 @@ describe("作業場所の操作（38・39.3、ADR-0012）", () => {
   });
 });
 
-describe("起動時のログイン（ADR-0011・ADR-0012）", () => {
-  it("パスキーで登録すると、作業場所はログインだけで開ける（作業場所ごとの解錠は要らない）", async () => {
+describe("起動時のロック解除（ADR-0011・ADR-0012・ADR-0014）", () => {
+  it("パスキーで登録すると、作業場所はロックを解除しただけで開ける（作業場所ごとのロック解除は要らない）", async () => {
     const pk = fakePasskey();
     const a = setup({ passkey: pk.api });
     await a.login.init();
@@ -396,10 +396,10 @@ describe("起動時のログイン（ADR-0011・ADR-0012）", () => {
     await a.places.init(a.fs.root);
     const m = await a.places.create("ブログ");
     if (!m) throw new Error(a.places.error ?? "create");
-    // ログインの記録には作業場所の鍵を置かない（作業場所の meta のログインの枠に置く）
+    // ロック解除の記録には作業場所の鍵を置かない（作業場所の meta の、ロック解除の鍵で包んだ枠に置く）
     expect(a.store.rec).not.toHaveProperty("places");
 
-    // 起動し直す：ログインの記録と保存領域は同じ。鍵はメモリにしかない
+    // 起動し直す：ロック解除の記録と保存領域は同じ。鍵はメモリにしかない
     const b = setup({ passkey: pk.api, fs: a.fs, store: a.store });
     await b.login.init();
     expect(b.login.phase).toBe("login");
@@ -413,7 +413,7 @@ describe("起動時のログイン（ADR-0011・ADR-0012）", () => {
     expect(pk.state.asked).toBe(1);
   });
 
-  it("パスキーを使えない開き方（file://）では登録もログインもできない", async () => {
+  it("パスキーを使えない開き方（file://）では登録もロック解除もできない", async () => {
     const a = setup();
     await a.login.init();
     expect(a.login.phase).toBe("nopasskey");
@@ -436,7 +436,7 @@ describe("起動時のログイン（ADR-0011・ADR-0012）", () => {
     expect(a.login.phase).toBe("register");
   });
 
-  it("パスキーの取り消し・失敗では自動で繰り返さず、回復コードでログインできる", async () => {
+  it("パスキーの取り消し・失敗では自動で繰り返さず、回復コードでロックを解除できる", async () => {
     const pk = fakePasskey();
     const a = setup({ passkey: pk.api });
     await a.login.init();
@@ -453,7 +453,7 @@ describe("起動時のログイン（ADR-0011・ADR-0012）", () => {
     expect(pk.state.asked).toBe(1);
   });
 
-  it("ログインを作り直すと、ログインの枠だけの作業場所は開けない", async () => {
+  it("ロック解除の鍵を作り直すと、前の鍵で包んだ作業場所は開けない", async () => {
     const a = await loggedIn();
     const m = await a.places.create("x");
     if (!m) throw new Error("create");

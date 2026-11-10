@@ -77,7 +77,7 @@
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ブラウザの大域を各層の最小の型へ渡す
   const host = globalThis as any;
   const vault = new Vault(browserPasskey(host));
-  /** 起動時のログイン（ADR-0011・ADR-0012）：何よりも先にパスキーで認証する */
+  /** 起動時のロック解除（ADR-0011・ADR-0012）：何よりも先にパスキーで認証する */
   const login = new LoginController(
     vault,
     typeof indexedDB === "undefined" ? null : new IdbLoginStore(indexedDB),
@@ -94,7 +94,7 @@
         },
       })
     : null;
-  /** ログインの画面を出している間は、ほかの画面を出さない */
+  /** ロック解除の画面を出している間は、ほかの画面を出さない */
   const gated = $derived(supported && login.phase !== "ready" && login.phase !== "unavailable");
   const sync = new SyncController(ws, git, places);
   const pwa = new PwaController(host);
@@ -159,27 +159,27 @@
     }
   });
 
-  /** ログインしたら（ログインできない環境では最初から）、フォルダ・作業場所を開く準備をする */
+  /** ロックを解除したら（ロック解除を使えない環境では最初から）、フォルダ・作業場所を開く準備をする */
   $effect(() => {
     if (!supported || gated || login.phase === "loading") return;
     untrack(() => void afterLogin());
   });
 
   async function afterLogin() {
-    // ログインの画面が消えてフォーカスを失ったら、画面の中身へ移す（キーボードの位置を見失わせない）
+    // ロック解除の画面が消えてフォーカスを失ったら、画面の中身へ移す（キーボードの位置を見失わせない）
     if (document.activeElement === document.body || document.activeElement === null)
       document.getElementById("main")?.focus();
     // 前回のフォルダ：権限が残っていればそのまま開く。残っていなければ「前回のフォルダを開く」を示す（ADR-0005）
     if (mode === "folder" && ws.root === null) await ws.loadRecent();
     if (places) {
       await placesReady;
-      // ログインの鍵で開ける作業場所を開く（ADR-0012）
+      // ロック解除の鍵で開ける作業場所を開く（ADR-0012）
       await places.unlockAll();
     }
   }
 
   /**
-   * ロックする（ログインの画面に戻る）。未保存の編集は、復旧ドラフトへ退避してから閉じる。
+   * ロックする（ロック解除の画面に戻る）。未保存の編集は、復旧ドラフトへ退避してから閉じる。
    * 退避できないとき（ドラフトが無効など）は、手動のロックなら閉じる前に確かめる。
    */
   async function lockApp(auto = false) {
@@ -198,14 +198,14 @@
     login.lock();
   }
 
-  /** ログインを作り直す（どの方法でもログインできないとき） */
+  /** ロック解除の鍵を作り直す（どの方法でもロックを解除できないとき） */
   async function resetLogin() {
     const v = await ws.ask({
-      title: "ログインを作り直します",
+      title: "ロック解除の鍵を作り直します",
       message:
         "登録したパスキー・回復コードの情報をこのブラウザから消し、登録からやり直します。このブラウザの復旧ドラフトはすべて削除します（もう読めないため）。",
       details: [
-        "ブラウザ内の作業場所は、このログインの鍵で暗号化しているため、作り直すと開けなくなります。書き出した .kotono も、書き出したログインの回復コードでしか開けません。",
+        "ブラウザ内の作業場所は、いまの鍵で暗号化しているため、作り直すと開けなくなります。書き出した .kotono も、書き出したときの回復コードでしか開けません。",
         "作業場所は自動では消しません。開けなくなった作業場所は、作業場所の一覧から削除できます。",
         "パスキー管理アプリに残るパスキーは、不要なら管理アプリで削除してください。",
       ],
@@ -243,7 +243,7 @@
         ? `復旧ドラフトが ${draftCount} 件あります。メニューの「復旧ドラフト」で見られます。`
         : "",
   );
-  /** 復旧ドラフトの項目は、ログインした後だけ出す（ログインの前は暗号化していて読めない） */
+  /** 復旧ドラフトの項目は、ロックを解除した後だけ出す（解除の前は暗号化していて読めない） */
   const draftsAvailable = $derived(!gated && supported && drafts.mode !== "unavailable");
 
   const sectionLabel = $derived(
@@ -537,7 +537,7 @@
 
 <main id="main" tabindex="-1" class:wide={ws.root !== null} class:workbench>
   {#if gated}
-    <!-- 起動時のログイン（ADR-0011）：何よりも先に、パスキーの登録・認証を求める -->
+    <!-- 起動時のロック解除（ADR-0011）：何よりも先に、パスキーの登録・認証を求める -->
     {#if login.phase !== "loading"}<LoginScreen {login} onreset={resetLogin} />{/if}
   {:else}
     {#if login.info && !workbench}<p class="banner info" role="status" data-testid="login-info">{login.info}</p>{/if}

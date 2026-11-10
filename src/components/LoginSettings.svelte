@@ -1,20 +1,20 @@
 <script lang="ts">
   import type { LoginController } from "../lib/app/login.svelte";
 
-  /** 「設定」の画面：起動時のログイン（ADR-0011・ADR-0012）。ログインはパスキーだけ。別のパスキーを足せる */
+  /** 「設定」の画面：起動時のロック解除（ADR-0011・ADR-0012）。ロックはパスキーで解除する。別のパスキーを足せる */
   let { login }: { login: LoginController } = $props();
 
   const passkeys = $derived(login.record?.keyring.slots.filter((s) => s.kind === "passkey").length ?? 0);
 </script>
 
 <section class="card" aria-labelledby="login-settings-heading" data-testid="login-settings">
-  <h2 id="login-settings-heading">ログイン</h2>
+  <h2 id="login-settings-heading">ロック解除</h2>
   <ul class="small methods">
     <li>パスキー：{passkeys > 0 ? `登録済み（${passkeys} 件）` : "未登録"}</li>
     <li>回復コード：登録時に表示したもの（CMS には保存していません）</li>
   </ul>
   <p class="small muted">
-    このログインの鍵で、復旧ドラフトとブラウザ内の作業場所をまとめて暗号化しています。パスキーと回復コードの両方を失うと、誰も内容を戻せません。
+    ロック解除の鍵で、復旧ドラフトとブラウザ内の作業場所をまとめて暗号化しています。パスキーと回復コードの両方を失うと、誰も内容を戻せません。
   </p>
   {#if login.passkeySupported}
     <button

@@ -1,11 +1,12 @@
 /**
- * 鍵の管理と解錠（仕様 3.2 第39章、ADR-0012）。
+ * 鍵の管理とロック解除（仕様 3.2 第39章、ADR-0012）。
  *
- * - ログイン鍵は、起動時のログイン（パスキーか回復コード）で開く鍵。ログイン中だけメモリに置き、ロックで捨てる。
- *   ログイン鍵は回復コードの枠（必須）とパスキーの PRF の枠（任意）で包み、ログインの記録（IndexedDB）に置く。
- * - 作業場所のデータ鍵（DK）は、ログイン鍵で包んで作業場所の meta に置く（ログインの枠）。
+ * - ロック解除の鍵は、起動時のロック解除（パスキーか回復コード）で開く鍵。ロック解除中だけメモリに置き、ロックで捨てる。
+ *   ロック解除の鍵は回復コードの枠（必須）とパスキーの PRF の枠（任意）で包み、ロック解除の記録（IndexedDB）に置く。
+ *   コード上の名前は login のまま（loginId・NewLogin・枠の種類 `login`。画面の表現は ADR-0014）。
+ * - 作業場所のデータ鍵（DK）は、ロック解除の鍵で包んで作業場所の meta に置く（枠の種類 `login`）。
  *   作業場所ごとの回復コード・パスキー・パスフレーズはない。
- * - 暗号化した書き出し（`.kotono`）は、ログインの枠（回復コード・パスキー）と、ログイン鍵で包んだ DK と、
+ * - 暗号化した書き出し（`.kotono`）は、ロック解除の鍵を包んだ枠（回復コード・パスキー）と、ロック解除の鍵で包んだ DK と、
  *   DK から作った書き出し用の鍵で暗号化した zip からなる。別の端末では、回復コード（または同期したパスキー）で開ける。
  */
 import {
@@ -35,9 +36,9 @@ const te = new TextEncoder();
 const td = new TextDecoder("utf-8", { fatal: true });
 const TOKEN_AAD = te.encode("kotono-cms/meta/token");
 const DRAFT_AAD = te.encode("kotono-cms/draft");
-/** ログイン鍵で作業場所のデータ鍵を包むときの追加認証データ（作業場所 ID を足す） */
+/** ロック解除の鍵で作業場所のデータ鍵を包むときの追加認証データ（作業場所 ID を足す） */
 const PLACE_AAD = te.encode("kotono-cms/login/place");
-/** 書き出しで、書き出した端末のログイン鍵で DK を包むときの追加認証データ */
+/** 書き出しで、書き出した端末のロック解除の鍵で DK を包むときの追加認証データ */
 const EXPORT_DK_AAD = te.encode("kotono-cms/export/dk");
 const EXPORT_MAGIC = te.encode("KOTONO-EXPORT/1\n");
 
@@ -50,20 +51,20 @@ export interface Unlocked {
   readonly keys: DataKeys;
 }
 
-/** 解錠の方法（ADR-0012：ログインはパスキーと回復コードだけ。パスフレーズはない） */
+/** ロック解除の方法（ADR-0012：パスキーと回復コードだけ。パスフレーズはない） */
 export type UnlockMethod = { readonly kind: "recovery"; readonly code: string } | { readonly kind: "passkey" };
 
 type PasskeySlot = Extract<KeySlot, { kind: "passkey" }>;
 
 export interface NewLogin {
-  /** ログインの記録の枠（回復コードの枠だけ。パスキーは登録のあとに足す） */
+  /** ロック解除の記録の枠（回復コードの枠だけ。パスキーは登録のあとに足す） */
   readonly keyring: KeyringRecord;
   readonly key: Unlocked;
   /** 作成時に一度だけ表示する（保存しない：39.2） */
   readonly recoveryCode: string;
 }
 
-/** 暗号化した書き出し（版 1）のヘッダー。ログインの枠と、ログイン鍵で包んだ DK */
+/** 暗号化した書き出し（版 1）のヘッダー。ロック解除の鍵を包んだ枠（回復コード・パスキー）と、ロック解除の鍵で包んだ DK */
 export interface SealedExportHeader {
   readonly v: 1;
   readonly login: { readonly slots: readonly KeySlot[]; readonly wrapped: string };
@@ -99,13 +100,13 @@ export class Vault {
     return k;
   }
 
-  /** 新しいデータ鍵（乱数）。ログイン鍵にも作業場所のデータ鍵にも使う */
+  /** 新しいデータ鍵（乱数）。ロック解除の鍵にも作業場所のデータ鍵にも使う */
   async newKey(): Promise<Unlocked> {
     const dk = randomBytes(32);
     return { dk, keys: await deriveDataKeys(dk) };
   }
 
-  /** 新しいログイン鍵と回復コードの枠を作る。パスキーは登録のあとに withPasskey で足す */
+  /** 新しいロック解除の鍵と回復コードの枠を作る。パスキーは登録のあとに withPasskey で足す */
   async newLogin(): Promise<NewLogin> {
     const key = await this.newKey();
     const code = newRecoveryCode();
@@ -113,7 +114,7 @@ export class Vault {
     return { keyring: { v: 1, slots: [slot] }, key, recoveryCode: code };
   }
 
-  /** 作業場所の枠（ログインの枠だけ）を作る。ログイン鍵（loginId で解錠中）で DK を包む */
+  /** 作業場所の枠（ロック解除の鍵で包んだ枠だけ）を作る。ロック解除の鍵（loginId で開いている）で DK を包む */
   async placeKeyring(loginId: string, placeId: string, key: Unlocked): Promise<KeyringRecord> {
     const login = this.need(loginId);
     const wrapped = b64u(await aesEncrypt(login.keys.meta, key.dk, placeAad(placeId)));
@@ -121,8 +122,8 @@ export class Vault {
   }
 
   /**
-   * ログイン鍵（loginId で解錠中）で、作業場所の枠を開き、作業場所を解錠済みにする。
-   * 開けなければ false（ログイン鍵がない・別の作業場所の枠・枠が壊れている）
+   * ロック解除の鍵（loginId で開いている）で、作業場所の枠を開き、作業場所の鍵を置く。
+   * 開けなければ false（ロック解除の鍵がない・別の作業場所の枠・枠が壊れている）
    */
   async unlockWithLogin(loginId: string, placeId: string, keyring: KeyringRecord): Promise<boolean> {
     const login = this.open.get(loginId);
@@ -146,7 +147,7 @@ export class Vault {
     return { kind: "recovery", salt: b64u(salt), iterations: this.iterations, wrapped: b64u(await wrapDk(w, dk)) };
   }
 
-  /** パスキーを登録し、PRF の出力でログイン鍵を包んだ枠を加える（ログイン鍵は解錠中であること） */
+  /** パスキーを登録し、PRF の出力でロック解除の鍵を包んだ枠を加える（ロック解除中であること） */
   async withPasskey(loginId: string, record: KeyringRecord, label: string): Promise<KeyringRecord> {
     if (!this.passkey) throw new Error("この環境ではパスキーを使えません。");
     const k = this.need(loginId);
@@ -167,7 +168,7 @@ export class Vault {
     return { ...record, slots: [...record.slots, slot] };
   }
 
-  /** 枠で解錠する。開けたら id の鍵として置き、true を返す。開けなければ false */
+  /** 枠で鍵を開く。開けたら id の鍵として置き、true を返す。開けなければ false */
   async unlock(id: string, keyring: KeyringRecord, method: UnlockMethod): Promise<boolean> {
     const k = await this.unlockSlots(keyring.slots, method);
     if (!k) return false;
@@ -183,7 +184,7 @@ export class Vault {
     let dk: Uint8Array | null = null;
     if (method.kind === "passkey") {
       const pk = slots.filter((s): s is PasskeySlot => s.kind === "passkey");
-      if (pk.length === 0) throw new Error("このログインにはパスキーが登録されていません。");
+      if (pk.length === 0) throw new Error("パスキーが登録されていません。");
       dk = await this.authenticatePasskey(pk);
     } else {
       const secret = normalizeRecoveryCode(method.code);
@@ -216,7 +217,7 @@ export class Vault {
     if (usable.length === 0) {
       const rp = candidates[0]?.rpId ?? "";
       throw new Error(
-        `このログインのパスキーは「${rp}」で登録したもので、ここ（${this.passkey.rpId ?? ""}）では使えません。回復コードでログインし、パスキーを登録し直してください。`,
+        `このパスキーは「${rp}」で登録したもので、ここ（${this.passkey.rpId ?? ""}）では使えません。回復コードを使ってください。`,
       );
     }
     const got = await this.passkey.authenticate(
@@ -298,8 +299,8 @@ export class Vault {
   // 暗号化した書き出し（38.3・39.4）
 
   /**
-   * 暗号化して書き出す。DK はログイン鍵（loginId で解錠中）で包み、ログインの枠と一緒にヘッダーに入れる。
-   * 別の端末では、このログインの回復コード（または同期したパスキー）で開ける。
+   * 暗号化して書き出す。DK はロック解除の鍵（loginId で開いている）で包み、その鍵を包んだ枠（回復コード・パスキー）と一緒にヘッダーに入れる。
+   * 別の端末では、書き出した端末の回復コード（または同期したパスキー）で開ける。
    */
   async sealExport(id: string, zip: Uint8Array, loginId: string, loginSlots: readonly KeySlot[]): Promise<Uint8Array> {
     const k = this.need(id);
@@ -347,8 +348,8 @@ export class Vault {
 
   /**
    * 暗号化した書き出しを開く。開けなければ null。
-   * method が "login" なら、いまのログイン鍵（loginId で解錠中）で開く（同じログインで書き出したもの）。
-   * そうでなければ、ヘッダーのログインの枠を回復コードかパスキーで開く（別の端末）。
+   * method が "login" なら、いまのロック解除の鍵（loginId で開いている）で開く（同じ鍵で書き出したもの）。
+   * そうでなければ、ヘッダーの枠を回復コードかパスキーで開く（別の端末）。
    */
   async openSealedExport(
     bytes: Uint8Array,

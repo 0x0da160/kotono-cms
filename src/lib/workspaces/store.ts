@@ -28,7 +28,7 @@ export const META_MAX_BYTES = 64 * 1024;
 export const NAME_MAX_LENGTH = 100;
 
 /**
- * 鍵の情報（第39章）。ログインの記録（回復コードとパスキーの枠）と、作業場所の meta（ログインの枠）に使う。
+ * 鍵の情報（第39章）。ロック解除の記録（回復コードとパスキーの枠）と、作業場所の meta（ロック解除の鍵で包んだ枠）に使う。
  */
 export interface KeyringRecord {
   readonly v: 1;
@@ -48,8 +48,8 @@ export type KeySlot =
     }
   | {
       /**
-       * 起動時のログインの鍵で包んだデータ鍵（ADR-0012）。追加認証データに作業場所 ID を含むので、
-       * 別の作業場所の枠に差し替えても開けない。ログインを作り直すと開けなくなる
+       * ロック解除の鍵で包んだデータ鍵（ADR-0012。枠の種類の名前は login のまま）。追加認証データに作業場所 ID を含むので、
+       * 別の作業場所の枠に差し替えても開けない。ロック解除の鍵を作り直すと開けなくなる
        */
       readonly kind: "login";
       readonly wrapped: string;
@@ -67,7 +67,7 @@ export interface WorkspaceMeta {
   readonly lastSyncAt: string | null;
   /** 最後に保存・コミットした日時。書き出し・同期より新しければ「端末の外にない変更あり」（38.4） */
   readonly lastChangeAt: string | null;
-  /** 鍵の情報（ログインの枠。ADR-0012：すべての作業場所は暗号化する） */
+  /** 鍵の情報（ロック解除の鍵で包んだ枠。ADR-0012：すべての作業場所は暗号化する） */
   readonly keyring: KeyringRecord;
   /** 同期の設定（第40章）。トークンは含めない */
   readonly remote: RemoteRecord | null;
@@ -140,7 +140,7 @@ export function parseMeta(bytes: Uint8Array, expectedId: string): WorkspaceMeta 
   }
   const keyring = r["keyring"];
   if (!validKeyring(keyring) || !hasLoginSlot(keyring as KeyringRecord))
-    return "作業場所の鍵の情報が不正です（ログインの枠がありません）。";
+    return "作業場所の鍵の情報が不正です（ロック解除の鍵で包んだ枠がありません）。";
   const remote = r["remote"] ?? null;
   if (remote !== null && !validRemote(remote)) return "作業場所の同期の設定が不正です。";
   return {
@@ -191,7 +191,7 @@ export function validKeyring(v: unknown): boolean {
   });
 }
 
-/** 鍵の情報に、ログインの枠があるか */
+/** 鍵の情報に、ロック解除の鍵で包んだ枠があるか */
 export function hasLoginSlot(k: KeyringRecord): boolean {
   return k.slots.some((s) => s.kind === "login");
 }
@@ -267,7 +267,7 @@ export async function removeTreeContents(dir: DirHandleLike, prefix = ""): Promi
 
 export interface CreateOptions {
   readonly name: string;
-  /** 鍵の情報（ログインの枠）。作業場所 ID で決まるので、ID を受け取る関数で渡す */
+  /** 鍵の情報（ロック解除の鍵で包んだ枠）。作業場所 ID で決まるので、ID を受け取る関数で渡す */
   readonly keyring: (id: string) => Promise<KeyringRecord>;
   /** 中身を用意してから meta を書く（取り込み：38.2）。失敗すれば meta を書かない */
   readonly fill?: (dir: DirHandleLike, id: string) => Promise<void>;

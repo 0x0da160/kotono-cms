@@ -272,7 +272,7 @@ test("画像の削除は、未参照の画像だけを退避の後に削除す�
   expect(await list(page, `content/articles/${A}/media`)).toEqual([]);
 });
 
-test("復旧ドラフトは既定で有効で、暗号化して退避する。ログインし直すと候補として出す（33・ADR-0011）", async ({
+test("復旧ドラフトは既定で有効で、暗号化して退避する。ロックを解除し直すと候補として出す（33・ADR-0011）", async ({
   page,
 }) => {
   await launch(page);
@@ -294,7 +294,7 @@ test("復旧ドラフトは既定で有効で、暗号化して退避する。�
   );
   expect(raw).not.toContain("退避される編集");
   expect(raw).not.toBe("[]");
-  // 再読み込み：ログインし直す。疑似フォルダは作り直されるため、同じフォルダとは確認できない（関連先未確認）
+  // 再読み込み：ロックを解除し直す。疑似フォルダは作り直されるため、同じフォルダとは確認できない（関連先未確認）
   await page.reload();
   await loginAgain(page);
   await page.getByTestId("choose-folder").click();
@@ -444,7 +444,7 @@ test("キーボードだけで記事を開き、保存できる（14.1）", asyn
   await expect(page.getByTestId("notice")).toHaveCount(0);
   await expect(page.getByTestId("body-editor")).toBeFocused();
   // スキップリンク：読み込み直後の最初の Tab で到達する
-  // （ログインの画面でも同じ）
+  // （ロック解除の画面でも同じ）
   await page.goto(url);
   await expect(page.getByTestId("login")).toBeVisible();
   await page.keyboard.press("Tab");

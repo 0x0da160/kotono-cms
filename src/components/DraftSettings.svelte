@@ -12,7 +12,7 @@
   }: {
     ws: Workspace;
     dc: DraftController;
-    /** 起動時のログイン（暗号化の鍵の出どころを示す）。ログインできない環境では null */
+    /** 起動時のロック解除（暗号化の鍵の出どころを示す）。ロック解除を使えない環境では null */
     login?: LoginController | null;
     /** footer：最初の画面のフッターに畳んで出す。page：「設定」の画面に開いて出す（docs/knowledge/product/app-shell.md） */
     variant?: "footer" | "page";
@@ -72,13 +72,13 @@
 {#snippet explanation()}
   <p class="small" data-testid="draft-encryption">
     {login?.record
-      ? "起動時のログイン（パスキー）で開く鍵で暗号化して置きます。"
+      ? "起動時のロック解除（パスキー）で開く鍵で暗号化して置きます。"
       : "暗号化して置きます。"}ロック中は読み書きしません。<HelpTip label="復旧ドラフトの保存内容と期間"
       ><span class="tip-p">保存先はこのブラウザの内部（IndexedDB）です。リポジトリのフォルダには書き込みません。</span
       ><span class="tip-p"
         >保存する内容：編集中の原文、記事ID、元ファイルのハッシュ（ここまでを暗号化）、編集の番号、退避時刻、大きさ。画像やリポジトリ全体は保存しません。</span
       ><span class="tip-p"
-        >ログインの鍵を失うと（パスキーも回復コードも使えない）、暗号化した復旧ドラフトは誰も読めません。</span
+        >ロックを解除できなくなると（パスキーも回復コードも使えない）、暗号化した復旧ドラフトは誰も読めません。</span
       ><span class="tip-p"
         >次回同じフォルダを開いたときに見分けるため、選んだフォルダの参照（ハンドル）も保存します。この参照を保存しても、次回の書き込みが許可されるわけではありません。</span
       ><span class="tip-p"

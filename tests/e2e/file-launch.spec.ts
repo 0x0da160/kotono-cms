@@ -52,7 +52,7 @@ test("file:// で開くと、パスキーを使えないため案内だけを出
   await page.goto(pathToFileURL(distHtml).href);
   await expect(page.getByTestId("login")).toHaveAttribute("data-phase", "nopasskey");
   await expect(page.getByTestId("login-nopasskey")).toContainText("localhost");
-  // 登録・ログイン・フォルダの選択・ロックは出さない。メニューには対応環境の確認とヘルプだけ
+  // 登録・ロック解除・フォルダの選択・ロックは出さない。メニューには対応環境の確認とヘルプだけ
   await expect(page.getByTestId("login-register-passkey")).toHaveCount(0);
   await expect(page.getByTestId("unlock-form")).toHaveCount(0);
   await expect(page.getByTestId("choose-folder")).toHaveCount(0);

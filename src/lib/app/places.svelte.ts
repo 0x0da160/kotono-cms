@@ -3,7 +3,7 @@
  *
  * 作業場所を開いたあとの記事の操作は Workspace（実フォルダと同じ処理）に任せる。
  * ここで扱うのは、作業場所の一覧・作成・取り込み・書き出し・削除と、保存領域の永続化の状態。
- * 作業場所はすべて暗号化し、起動時のログインの鍵で開く（ADR-0012）。
+ * 作業場所はすべて暗号化し、起動時のロック解除で開く鍵（ロック解除の鍵）で開く（ADR-0012）。
  */
 import type { DirHandleLike } from "../fs/types";
 import type { Workspace } from "./workspace.svelte";
@@ -45,23 +45,23 @@ export interface PlaceView {
   readonly entry: WorkspaceEntry;
   /** 表示名（平文） */
   readonly label: string;
-  /** このログインでは開けていない（別のログインで作った作業場所など。削除はできる） */
+  /** いまのロック解除の鍵では開けていない（別の鍵で作った作業場所など。削除はできる） */
   readonly locked: boolean;
 }
 
 /**
- * 起動時のログイン（ADR-0011・ADR-0012）とのつなぎ。作業場所の鍵はログイン鍵で包んで meta に置くので、
- * ログインしただけで開ける。自動ロックではログインもロックする。
+ * 起動時のロック解除（ADR-0011・ADR-0012）とのつなぎ。作業場所の鍵はロック解除の鍵で包んで meta に置くので、
+ * ロックを解除しただけで開ける。自動ロックではアプリ全体をロックする。
  */
 export interface PlaceHooks {
   /**
-   * ログイン中なら、Vault の中のログイン鍵の ID と、書き出しに入れるログインの枠。ログインしていなければ null
-   * （作業場所を作る・取り込む・開くにはログインが要る）
+   * ロック解除中なら、Vault の中のロック解除の鍵の ID と、書き出しに入れる枠（回復コード・パスキー）。ロック中は null
+   * （作業場所を作る・取り込む・開くにはロック解除が要る）
    */
   readonly login?: () => { readonly id: string; readonly slots: readonly KeySlot[] } | null;
   /** 無操作で自動ロックした */
   readonly autoLocked?: () => void;
-  /** 作業場所のほかに、自動ロックの対象（ログイン）が開いているか */
+  /** 作業場所のほかに、自動ロックの対象（ロック解除の鍵）が開いているか */
   readonly active?: () => boolean;
 }
 
@@ -87,7 +87,7 @@ export class PlacesController {
     /** 暗号化した書き出しから取り込むときの DK（同じ鍵のまま作業場所にする）。平文の zip なら null（新しい鍵） */
     key: Unlocked | null;
   } | null>(null);
-  /** 暗号化した書き出しの解錠待ち（38.2・39.4）。passkey は書き出しのログインにパスキーの枠があるか */
+  /** 回復コード・パスキーを待っている、暗号化した書き出し（38.2・39.4）。passkey は書き出しのヘッダーにパスキーの枠があるか */
   pendingSealed = $state<{ name: string; bytes: Uint8Array; passkey: boolean } | null>(null);
   /** 作業場所の一覧を読み終えたか */
   ready = $state(false);
@@ -216,17 +216,17 @@ export class PlacesController {
     return d !== null && d >= BACKUP_REMIND_DAYS;
   }
 
-  /** ログイン中なら Vault の中のログイン鍵の ID */
+  /** ロック解除中なら Vault の中のロック解除の鍵の ID */
   private get loginId(): string | null {
     return this.hooks.login?.()?.id ?? null;
   }
 
-  /** ログインしていない（作業場所を作る・取り込む・開くには、ログインが要る） */
+  /** ロックを解除していない（作業場所を作る・取り込む・開くには、ロック解除が要る） */
   get needsLogin(): boolean {
     return this.loginId === null;
   }
 
-  /** 作業場所を作る。常に暗号化し、データ鍵はログインの鍵で包む（ADR-0012：作業場所ごとの回復コードはない） */
+  /** 作業場所を作る。常に暗号化し、データ鍵はロック解除の鍵で包む（ADR-0012：作業場所ごとの回復コードはない） */
   async create(name: string): Promise<WorkspaceMeta | null> {
     if (this.busy) return null;
     if (!this.store) {
@@ -236,7 +236,7 @@ export class PlacesController {
     }
     const lid = this.loginId;
     if (!lid) {
-      this.error = "ログインしていないため、作業場所を作れません。";
+      this.error = "ロックを解除していないため、作業場所を作れません。";
       return null;
     }
     this.busy = true;
@@ -284,7 +284,7 @@ export class PlacesController {
         this.error = "暗号化した書き出しの形式が違います（壊れている可能性があります）。";
         return;
       }
-      // 同じログインで書き出したもの（この端末で書き出した）なら、そのまま開ける
+      // いまのロック解除の鍵で書き出したもの（この端末で書き出した）なら、そのまま開ける
       const lid = this.loginId;
       if (lid) {
         const r = await this.vault.openSealedExport(bytes, { kind: "login", loginId: lid }).catch(() => null);
@@ -312,7 +312,7 @@ export class PlacesController {
     this.pendingImport = { name, bytes, plan, key };
   }
 
-  /** 暗号化した書き出しを、書き出したログインの回復コード・パスキーで開く（別の端末） */
+  /** 暗号化した書き出しを、書き出した端末の回復コード・パスキーで開く（別の端末） */
   async unsealImport(method: UnlockMethod): Promise<boolean> {
     const p = this.pendingSealed;
     if (!p || this.busy) return false;
@@ -321,7 +321,7 @@ export class PlacesController {
     try {
       const r = await this.vault.openSealedExport(p.bytes, method);
       if (!r) {
-        this.error = "開けませんでした。書き出した端末のログインの回復コードを確かめてください。";
+        this.error = "開けませんでした。書き出した端末の回復コードを確かめてください。";
         return false;
       }
       this.pendingSealed = null;
@@ -340,13 +340,13 @@ export class PlacesController {
     this.pendingSealed = null;
   }
 
-  /** 新しい作業場所へ展開する。完成するまで meta を書かない（38.2）。ログインの鍵で包んで暗号化する */
+  /** 新しい作業場所へ展開する。完成するまで meta を書かない（38.2）。ロック解除の鍵で包んで暗号化する */
   async confirmImport(name: string): Promise<WorkspaceMeta | null> {
     const p = this.pendingImport;
     if (!this.store || !p || this.busy) return null;
     const lid = this.loginId;
     if (!lid) {
-      this.error = "ログインしていないため、取り込めません。";
+      this.error = "ロックを解除していないため、取り込めません。";
       return null;
     }
     this.busy = true;
@@ -380,11 +380,11 @@ export class PlacesController {
   }
 
   // -------------------------------------------------------------------------
-  // 解錠（ADR-0012）：ログインしたら、ログインの枠で開ける作業場所をすべて開く
+  // ロック解除（ADR-0012）：ロックを解除したら、ロック解除の鍵で開ける作業場所をすべて開く
 
   /**
-   * ログインしたら、ログインの枠で開ける作業場所を開く。開けた作業場所の ID を返す。
-   * 開けない作業場所（別のログインで作ったもの）は一覧に残す（削除はできる）。
+   * ロックを解除したら、ロック解除の鍵で開ける作業場所を開く。開けた作業場所の ID を返す。
+   * 開けない作業場所（別の鍵で作ったもの）は一覧に残す（削除はできる）。
    */
   async unlockAll(): Promise<string[]> {
     const lid = this.loginId;
@@ -437,7 +437,7 @@ export class PlacesController {
     for (const id of Object.keys(this.unlocked)) await this.lock(id);
   }
 
-  /** 作業場所を開く。ログインの鍵で開いていること */
+  /** 作業場所を開く。ロック解除の鍵で開いていること */
   async open(meta: WorkspaceMeta): Promise<void> {
     if (!this.store) return;
     if (!(await this.ws.confirmLeave("別の作業場所を開く前に、未保存の編集をどうしますか。"))) return;
@@ -447,7 +447,7 @@ export class PlacesController {
     let root: DirHandleLike;
     try {
       if (!vault.isUnlocked(meta.id)) {
-        this.error = "このログインでは開けません。削除することはできます。";
+        this.error = "いまのロック解除の鍵では開けません。削除することはできます。";
         return;
       }
       root = await vault.wrapOpened(await store.root(meta.id), meta.id);
@@ -492,7 +492,7 @@ export class PlacesController {
   }
 
   /**
-   * `.git` を含めて zip にして渡す（38.3）。既定は暗号化して書き出す（ログインの鍵で包んだ DK を入れる）。
+   * `.git` を含めて zip にして渡す（38.3）。既定は暗号化して書き出す（ロック解除の鍵で包んだ DK を入れる）。
    * plain なら暗号化しない zip（中身は平文）。
    */
   async export(meta: WorkspaceMeta, plain: boolean): Promise<void> {
@@ -502,7 +502,7 @@ export class PlacesController {
     this.info = null;
     try {
       const vault = this.vault;
-      if (!vault.isUnlocked(meta.id)) throw new Error("先に解錠してください。");
+      if (!vault.isUnlocked(meta.id)) throw new Error("先にロックを解除してください。");
       const root = await vault.wrapOpened(await this.store.root(meta.id), meta.id);
       const r = await exportZip(root);
       if (!r.ok) throw new Error(r.message);
@@ -510,7 +510,7 @@ export class PlacesController {
       let ext = "zip";
       if (!plain) {
         const login = this.hooks.login?.() ?? null;
-        if (!login) throw new Error("ログインしていないため、暗号化して書き出せません。");
+        if (!login) throw new Error("ロックを解除していないため、暗号化して書き出せません。");
         bytes = await vault.sealExport(meta.id, bytes, login.id, login.slots);
         ext = "kotono";
       }

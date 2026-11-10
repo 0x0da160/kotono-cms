@@ -16,7 +16,7 @@ import { detectCapabilities, supportedMode } from "../../src/lib/capabilities";
 const enc = (s: string) => new TextEncoder().encode(s);
 const dec = (b: Uint8Array) => new TextDecoder().decode(b);
 
-/** ログインの枠だけを持つ鍵の情報（作業場所はすべて暗号化する：ADR-0012） */
+/** ロック解除の鍵で包んだ枠だけを持つ鍵の情報（作業場所はすべて暗号化する：ADR-0012） */
 const loginKeyring = async () => ({ v: 1 as const, slots: [{ kind: "login" as const, wrapped: "QUJD" }] });
 
 function seq(): (n: number) => Uint8Array {
@@ -79,14 +79,14 @@ describe("作業場所（38.1）", () => {
     expect(parseMeta(enc(JSON.stringify({ ...m, v: 2 })), m.id)).toContain("未知の版");
   });
 
-  it("鍵の情報にログインの枠がない作業場所は不完全とし、使わない（ADR-0012）", async () => {
+  it("鍵の情報に、ロック解除の鍵で包んだ枠がない作業場所は不完全とし、使わない（ADR-0012）", async () => {
     const { fs, s } = await store();
     const m = await s.create({ name: "x", keyring: loginKeyring });
     const recoveryOnly = {
       ...m,
       keyring: { v: 1, slots: [{ kind: "recovery", salt: "QUJD", iterations: 600_000, wrapped: "QUJD" }] },
     };
-    expect(parseMeta(enc(JSON.stringify(recoveryOnly)), m.id)).toContain("ログインの枠がありません");
+    expect(parseMeta(enc(JSON.stringify(recoveryOnly)), m.id)).toContain("ロック解除の鍵で包んだ枠がありません");
     expect(parseMeta(enc(JSON.stringify({ ...m, keyring: null })), m.id)).toContain("鍵の情報が不正です");
     fs.write(`kotono/meta/${m.id}.json`, JSON.stringify(recoveryOnly));
     expect((await s.list())[0]).toMatchObject({ state: "incomplete" });

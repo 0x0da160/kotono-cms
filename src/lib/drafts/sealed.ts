@@ -2,13 +2,13 @@
  * 暗号化した作業場所の復旧ドラフト（仕様 3.2 第39.1節）。
  *
  * 下の保存領域（IndexedDB）には、記事ID・キー・本文・ハッシュを暗号化して置く。
- * - 作業場所のドラフトの ws は `e:<作業場所ID>`。解錠中だけ暗号化の道具（Sealer）を登録する。
+ * - 作業場所のドラフトの ws は `e:<作業場所ID>`。ロック解除中だけ暗号化の道具（Sealer）を登録する。
  * - キーとチェックサムは HMAC で置き換え（照合に使えるが元に戻せない）、本体は AES-GCM で包む。
  * - ロック中の作業場所のドラフトは一覧に出さない（消さない）。
  * 世代・破棄・保存成功の順序の保証は下の保存領域のものをそのまま使う。
  *
- * それ以外（実フォルダの作業場所）のドラフトは、ログイン鍵の道具（既定の Sealer）で同じように包む（ADR-0011）。
- * ログインしていない間は書かず、一覧にも出さない。
+ * それ以外（実フォルダの作業場所）のドラフトは、ロック解除の鍵の道具（既定の Sealer）で同じように包む（ADR-0011）。
+ * ロックを解除していない間は書かず、一覧にも出さない。
  */
 import type { DraftRecord, DraftStore, PutOutcome, WorkspaceIdentity } from "./store";
 
@@ -33,7 +33,7 @@ interface Inner {
 
 export class SealedDraftStore implements DraftStore {
   private readonly sealers = new Map<string, Sealer>();
-  /** ログイン鍵の道具。ログインしていなければ null */
+  /** ロック解除の鍵の道具。ロックを解除していなければ null */
   private fallback: Sealer | null = null;
 
   constructor(private readonly base: DraftStore) {}
@@ -46,7 +46,7 @@ export class SealedDraftStore implements DraftStore {
     this.sealers.delete(ws);
   }
 
-  /** ログイン鍵の道具を置く（null で外す）。実フォルダの作業場所のドラフトは、この道具で包む */
+  /** ロック解除の鍵の道具を置く（null で外す）。実フォルダの作業場所のドラフトは、この道具で包む */
   setDefault(s: Sealer | null): void {
     this.fallback = s;
   }
@@ -57,7 +57,7 @@ export class SealedDraftStore implements DraftStore {
 
   private sealerOf(ws: string): Sealer {
     if (!ws.startsWith(SEALED_WS_PREFIX)) {
-      if (!this.fallback) throw new Error("ログインしていないため、復旧ドラフトを扱えません。");
+      if (!this.fallback) throw new Error("ロックを解除していないため、復旧ドラフトを扱えません。");
       return this.fallback;
     }
     const s = this.sealers.get(ws);

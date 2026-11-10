@@ -81,7 +81,7 @@
       );
       if (since !== null) details.push(`書き出し・同期していない変更があります（${since} 日前から）。`);
       details.push("暗号化した作業場所です。書き出しがなければ、削除後は誰も内容を戻せません。");
-      if (v.locked) details.push("このログインでは開けない作業場所です（ログインを作り直す前に作りました）。");
+      if (v.locked) details.push("いまのロック解除の鍵では開けない作業場所です（鍵を作り直す前に作りました）。");
     } else details.push("作成・取り込みの途中で止まった作業場所です。");
     details.push("削除前の退避（退避領域）は残しますが、退避領域もブラウザのデータ消去から守られません。");
     const ok = await ws.ask({
@@ -101,7 +101,7 @@
     const v = await ws.ask({
       title: "書き出しの形式",
       message:
-        "既定では暗号化して書き出します（.kotono）。別の端末でも、このログインの回復コード（またはこのログインで登録した、同期しているパスキー）で開けます。平文の zip は誰でも中身を読めます。",
+        "既定では暗号化して書き出します（.kotono）。別の端末でも、このブラウザの回復コード（またはこのブラウザで登録した、同期しているパスキー）で開けます。平文の zip は誰でも中身を読めます。",
       buttons: [
         { label: "暗号化して書き出す", value: "sealed", variant: "primary" },
         { label: "平文の zip にする", value: "plain" },
@@ -172,7 +172,7 @@
   <form class="sub" onsubmit={create} data-testid="place-create">
     <h3>新しい作業場所</h3>
     <label>名前 <input bind:value={newName} maxlength="80" required data-testid="place-name" /></label>
-    <p class="small muted">記事・画像・Git の履歴は、ログインの鍵で暗号化して保存します。</p>
+    <p class="small muted">記事・画像・Git の履歴は、ロック解除の鍵で暗号化して保存します。</p>
     <div class="actions">
       <button type="submit" class="primary" disabled={places.busy} data-testid="place-create-run">作る</button>
     </div>
@@ -226,8 +226,8 @@
 
   {#if places.needsLogin}
     <p class="banner info" role="status" data-testid="places-need-login">
-      ブラウザ内の作業場所は、起動時のログイン（パスキー）の鍵で暗号化します。ログインしていないため、作業場所を作る・開くことはできません。https
-      の配信元から開いてログインしてください。
+      ブラウザ内の作業場所は、起動時のロック解除（パスキー）で開く鍵で暗号化します。ロックを解除していないため、作業場所を作る・開くことはできません。https
+      の配信元から開いて、ロックを解除してください。
     </p>
   {:else}
     {#if views.length > 0}
@@ -237,7 +237,7 @@
           <li data-testid="place" data-state={e.state} data-locked={v.locked}>
             <div class="head">
               <span class="name">{v.label}</span>
-              {#if e.state === "ok"}<span class="badge">{v.locked ? "開けません" : "解錠中"}</span>{/if}
+              {#if e.state === "ok"}<span class="badge">{v.locked ? "開けません" : "ロック解除中"}</span>{/if}
               {#if e.state !== "ok"}<span class="badge err">不完全</span>{/if}
             </div>
             {#if e.state === "ok"}
@@ -265,7 +265,7 @@
               </div>
               {#if v.locked}
                 <p class="muted small" data-testid="place-other-login">
-                  このログインでは開けません。ログインを作り直す前に作った作業場所です。書き出し（.kotono）があれば、その時のログインの回復コードで取り込めます。
+                  いまのロック解除の鍵では開けません。鍵を作り直す前に作った作業場所です。書き出し（.kotono）があれば、その時の回復コードで取り込めます。
                 </p>
               {/if}
             {:else}
@@ -286,8 +286,8 @@
       <div class="sub" data-testid="import-sealed">
         <h3>暗号化した書き出しを開く</h3>
         <p class="small">
-          「{s.name}」は、別の端末（または作り直す前のログイン）で書き出したものです。書き出したログインの回復コード{s.passkey
-            ? "か、そのログインで登録したパスキー"
+          「{s.name}」は、別の端末で（または、ロック解除の鍵を作り直す前に）書き出したものです。書き出したときの回復コード{s.passkey
+            ? "か、そのとき登録していたパスキー"
             : ""}で開けます。
         </p>
         <UnlockForm busy={places.busy} passkey={s.passkey} onunlock={(m) => places.unsealImport(m)} />
@@ -302,7 +302,7 @@
           {#if p.plan.strippedRoot}<li>先頭のフォルダ「{p.plan.strippedRoot}」を外して展開します。</li>{/if}
           <li>{p.plan.hasGit ? "Git の履歴（.git）を含みます。" : "Git の履歴（.git）は含まれていません。"}</li>
           {#if p.plan.skipped.length > 0}<li>OS の付属物 {p.plan.skipped.length} 件は取り込みません。</li>{/if}
-          <li>このログインの鍵で暗号化して保存します。</li>
+          <li>このブラウザのロック解除の鍵で暗号化して保存します。</li>
         </ul>
         <label>作業場所の名前 <input bind:value={importName} maxlength="80" required data-testid="import-name" /></label
         >

@@ -21,7 +21,7 @@
     sync?: Snippet;
     /**
      * アプリの外枠（docs/knowledge/product/app-shell.md）のどこに出すか。
-     * status：お知らせの帯（書き出しの状態・書き出す操作・お知らせ）。settings：「設定」の画面（解錠の方法と自動ロック）。
+     * status：お知らせの帯（書き出しの状態・書き出す操作・お知らせ）。settings：「設定」の画面（自動ロック）。
      * 作業場所の一覧・ロックは上部バーにある。
      */
     part?: "status" | "settings";
@@ -38,7 +38,7 @@
     const v = await ws.ask({
       title: "作業場所を書き出します",
       message:
-        "既定では暗号化して書き出します（.kotono）。別の端末でも、このログインの回復コード（またはこのログインで登録した、同期しているパスキー）で開けます。平文の zip は誰でも中身を読めます。",
+        "既定では暗号化して書き出します（.kotono）。別の端末でも、このブラウザの回復コード（またはこのブラウザで登録した、同期しているパスキー）で開けます。平文の zip は誰でも中身を読めます。",
       details,
       buttons: [
         { label: "暗号化して書き出す", value: "sealed", variant: "primary" },
@@ -86,7 +86,7 @@
   <section class="card settings" aria-labelledby="place-settings-heading" data-testid="place-settings">
     <h2 id="place-settings-heading">自動ロック</h2>
     <p class="small muted">
-      作業場所は起動時のログインの鍵で暗号化しています。ロックするとログインの画面に戻り、パスキーか回復コードでログインし直すと開けます。
+      作業場所はロック解除の鍵で暗号化しています。ロックするとロック解除の画面に戻り、パスキーか回復コードでロックを解除すると、また開けます。
     </p>
     <label class="row"
       >自動ロック

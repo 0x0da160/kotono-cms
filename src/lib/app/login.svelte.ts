@@ -1,15 +1,16 @@
 /**
- * 起動時のログイン（ADR-0011・ADR-0012）。
+ * 起動時のロック解除（ADR-0011・ADR-0012）。
  *
- * 最初にパスキーを登録し、以後の起動ではパスキーで認証してから使い始める。サーバーへのログインではなく、
- * 端末内の「ログイン鍵」をパスキーの PRF で開く操作で、ログイン鍵は復旧ドラフトの暗号化と、
+ * 最初にパスキーを登録し、以後の起動ではパスキーで認証してから使い始める。サーバーへ認証を送るものではなく、
+ * 端末内の「ロック解除の鍵」をパスキーの PRF で開く操作で、ロック解除の鍵は復旧ドラフトの暗号化と、
  * ブラウザ内の作業場所のデータ鍵を包むのに使う。
  *
- * - ログインはパスキーと回復コードだけ（ADR-0012）。パスフレーズはない。
+ * - 画面では「ロック」と「ロック解除」と呼ぶ（ADR-0014）。コード上の名前（login・LoginController・枠の種類 `login`）は変えていない。
+ * - ロックを解除する方法はパスキーと回復コードだけ（ADR-0012）。パスフレーズはない。
  * - パスキーを使えない開き方（file://）では使えない。https の配信元か localhost から開くよう案内するだけにする。
  * - 回復コードの枠は必ず作る（パスキーを失ったときの道）。回復コードは登録時に一度だけ表示する。
- *   回復コードでログインしたあと、この配信元で使えるパスキーがなければ、パスキーの登録を求める。
- * - ログイン鍵はログイン中だけメモリに置く。ロックで捨てる。
+ *   回復コードでロックを解除したあと、この配信元で使えるパスキーがなければ、パスキーの登録を求める。
+ * - ロック解除の鍵はロック解除中だけメモリに置く。ロックで捨てる。
  */
 import { accountName } from "../crypto/passkey";
 import type { UnlockMethod, Vault } from "../crypto/vault";
@@ -17,7 +18,7 @@ import type { SealedDraftStore } from "../drafts/sealed";
 import type { LoginRecord, LoginStore } from "../login/store";
 import type { KeyringRecord } from "../workspaces/store";
 
-/** Vault の中でログイン鍵を置く ID */
+/** Vault の中でロック解除の鍵を置く ID */
 export const LOGIN_ID = "login";
 /** パスキー・回復コードのユーザー名（パスワード管理での表示） */
 export const LOGIN_ACCOUNT = "kotono-login";
@@ -25,7 +26,7 @@ export const LOGIN_ACCOUNT = "kotono-login";
 export type LoginPhase =
   /** 記録を読んでいる */
   | "loading"
-  /** この環境ではログインできない（IndexedDB がない）。ログインなしで使う */
+  /** この環境ではロック解除を使えない（IndexedDB がない）。ロックなしで使う */
   | "unavailable"
   /** パスキーを使えない開き方（file://）：使えない。https の配信元か localhost から開くよう案内する */
   | "nopasskey"
@@ -35,10 +36,10 @@ export type LoginPhase =
   | "recovery"
   /** 2 回目以降：パスキー（または回復コード）で認証する */
   | "login"
-  /** 回復コードでログインしたが、この配信元で使えるパスキーがない：パスキーを登録し直す */
+  /** 回復コードでロックを解除したが、この配信元で使えるパスキーがない：パスキーを登録し直す */
   | "passkey"
 
-  /** ログイン済み */
+  /** ロック解除済み */
   | "ready";
 
 export class LoginController {
@@ -94,13 +95,13 @@ export class LoginController {
     try {
       this.record = await this.store.load();
     } catch (e) {
-      this.error = `ログインの記録を読めません：${(e as Error).message}`;
+      this.error = `ロック解除の記録を読めません：${(e as Error).message}`;
     } finally {
       this.loaded = true;
     }
   }
 
-  /** 初回の登録：ログイン鍵と回復コードの枠を作り、パスキーの枠を加えて保存する */
+  /** 初回の登録：ロック解除の鍵と回復コードの枠を作り、パスキーの枠を加えて保存する */
   async register(): Promise<boolean> {
     if (!this.store || this.busy || this.record) return false;
     this.busy = true;
@@ -134,7 +135,7 @@ export class LoginController {
     this.recoveryCode = null;
   }
 
-  /** ログインする（パスキーか回復コード）。失敗しても自動では繰り返さない */
+  /** ロックを解除する（パスキーか回復コード）。失敗しても自動では繰り返さない */
   async login(method: UnlockMethod): Promise<boolean> {
     const rec = this.record;
     if (!rec || this.busy) return false;
@@ -147,7 +148,7 @@ export class LoginController {
         this.failed = method.kind === "passkey";
         this.error =
           method.kind === "passkey"
-            ? "このパスキーではログインできませんでした。回復コードでログインできます。"
+            ? "このパスキーではロックを解除できませんでした。回復コードで解除できます。"
             : "回復コードが違います。";
         return false;
       }
@@ -156,7 +157,7 @@ export class LoginController {
       return true;
     } catch (e) {
       this.failed = method.kind === "passkey";
-      this.error = `ログインできませんでした：${(e as Error).message}`;
+      this.error = `ロックを解除できませんでした：${(e as Error).message}`;
       return false;
     } finally {
       this.busy = false;
@@ -172,7 +173,7 @@ export class LoginController {
     }
   }
 
-  /** ロックする（ログイン鍵を捨てる）。作業場所のロック・閉じる処理は呼び出し側で先に行う */
+  /** ロックする（ロック解除の鍵を捨てる）。作業場所のロック・閉じる処理は呼び出し側で先に行う */
   lock(): void {
     this.vault.lock(LOGIN_ID);
     this.sealed?.setDefault(null);
@@ -181,8 +182,8 @@ export class LoginController {
   }
 
   /**
-   * ログインの記録を消して、登録からやり直す。パスキー・回復コードのどちらも使えないときの道。
-   * ログイン鍵で包んだ作業場所と、ログイン鍵で暗号化した復旧ドラフトは読めなくなる（呼び出し側で削除する）。
+   * ロック解除の記録を消して、登録からやり直す（ロック解除の鍵を作り直す）。パスキー・回復コードのどちらも使えないときの道。
+   * 前の鍵で包んだ作業場所と、前の鍵で暗号化した復旧ドラフトは読めなくなる（呼び出し側で削除する）。
    */
   async reset(): Promise<void> {
     if (!this.store) return;
@@ -194,7 +195,7 @@ export class LoginController {
   }
 
   // -------------------------------------------------------------------------
-  // パスキーを足す（「設定」の画面・回復コードでログインしたあと）
+  // パスキーを足す（「設定」の画面・回復コードでロックを解除したあと）
 
   async addPasskey(): Promise<boolean> {
     const rec = this.record;

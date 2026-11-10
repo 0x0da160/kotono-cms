@@ -1,6 +1,6 @@
 /**
- * E2E 用：起動時のログイン（ADR-0011・ADR-0012）と、上部バーのメニューでの画面の切り替え。
- * ログインはパスキーだけなので、Chromium の仮想の認証器（PRF 対応）で登録・ログインする。
+ * E2E 用：起動時のロック解除（ADR-0011・ADR-0012）と、上部バーのメニューでの画面の切り替え。
+ * ロックはパスキーで解除するので、Chromium の仮想の認証器（PRF 対応）で登録・ロック解除する。
  * file:// ではパスキーを使えないため、試験は localhost から配信して開く（playwright.config.ts の webServer）。
  */
 import { expect, type CDPSession, type Page } from "@playwright/test";
@@ -42,7 +42,7 @@ export async function registerLogin(page: Page): Promise<string> {
   return code;
 }
 
-/** 2 回目以降：パスキーでログインする */
+/** 2 回目以降：パスキーでロックを解除する */
 export async function loginAgain(page: Page): Promise<void> {
   await virtualAuthenticator(page);
   await expect(page.getByTestId("login")).toHaveAttribute("data-phase", "login");

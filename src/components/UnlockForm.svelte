@@ -7,7 +7,7 @@
     account = null,
     passkey,
     onunlock,
-    submitLabel = "解錠",
+    submitLabel = "開く",
   }: {
     busy: boolean;
     /** 回復コードをパスワード管理から自動入力させるときのユーザー名 */
@@ -35,7 +35,7 @@
       class="primary"
       disabled={busy}
       onclick={() => onunlock({ kind: "passkey" })}
-      data-testid="unlock-passkey"><FingerprintPattern />パスキーで解錠</button
+      data-testid="unlock-passkey"><FingerprintPattern />パスキーで開く</button
     >
   {/if}
   {#if account}

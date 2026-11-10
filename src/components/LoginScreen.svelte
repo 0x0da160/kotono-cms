@@ -6,7 +6,7 @@
   import type { LoginController } from "../lib/app/login.svelte";
 
   /**
-   * 起動時のログイン（ADR-0011・ADR-0012）。何よりも先に出す。ログインはパスキーだけ（パスフレーズはない）。
+   * 起動時のロック解除（ADR-0011・ADR-0012）。何よりも先に出す。ロックはパスキーで解除する（パスフレーズはない）。
    * 初回はパスキーを登録し、回復コードを保存してもらう。2 回目からはパスキーで認証する（使えなければ回復コード）。
    * パスキーの認証は、ボタンを押したときにだけ始める（Safari は操作なしの要求を拒む）。
    * パスキーを使えない開き方（file://）では使えない。https の配信元か localhost から開くよう案内する。
@@ -17,7 +17,7 @@
     hosted = null,
   }: {
     login: LoginController;
-    /** ログインを作り直す（確認・ドラフトの削除は呼び出し側） */
+    /** ロック解除の鍵を作り直す（確認・ドラフトの削除は呼び出し側） */
     onreset: () => unknown;
     /** パスキーを使える配信元（https）の URL。分からなければ null */
     hosted?: string | null;
@@ -28,10 +28,10 @@
   <details class="reset">
     <summary>パスキーも回復コードも使えないとき</summary>
     <p class="small">
-      ログインを作り直せます。このブラウザの復旧ドラフトはすべて削除します（暗号化しているため、もう読めません）。ブラウザ内の作業場所もこのログインの鍵で暗号化しているため、開けなくなります。
+      ロック解除の鍵を作り直せます。このブラウザの復旧ドラフトはすべて削除します（暗号化しているため、もう読めません）。ブラウザ内の作業場所もいまの鍵で暗号化しているため、開けなくなります。
     </p>
     <button type="button" class="danger" onclick={onreset} disabled={login.busy} data-testid="login-reset"
-      >ログインを作り直す…</button
+      >ロック解除の鍵を作り直す…</button
     >
   </details>
 {/snippet}
@@ -41,8 +41,8 @@
     <RecoveryCodeNotice code={login.recoveryCode} account={login.account} ondone={() => login.confirmRecovery()} />
   {:else if login.phase === "register"}
     <h2>
-      <span id="login-heading">はじめに：パスキーの登録</span><HelpTip label="ログイン"
-        >サーバーへのログインではありません。認証はこの端末の中だけで行い、どこにも送りません。認証で開く鍵で、未保存の編集の退避（復旧ドラフト）とブラウザ内の作業場所をまとめて暗号化します。</HelpTip
+      <span id="login-heading">はじめに：パスキーの登録</span><HelpTip label="ロック解除"
+        >パスキーは、このアプリのロックを解除するために使います。認証はこの端末の中だけで行い、サーバーには何も送りません。ロックを解除すると開く鍵で、未保存の編集の退避（復旧ドラフト）とブラウザ内の作業場所をまとめて暗号化します。</HelpTip
       >
     </h2>
     <p>
@@ -59,8 +59,8 @@
   {:else if login.phase === "passkey"}
     <h2><span id="login-heading">パスキーの登録</span></h2>
     <p data-testid="login-need-passkey">
-      回復コードでログインしました。この配信元（{login.vault.passkey?.rpId ??
-        ""}）で使えるパスキーがないため、パスキーを登録してください。次からはパスキーでログインします。
+      回復コードでロックを解除しました。この配信元（{login.vault.passkey?.rpId ??
+        ""}）で使えるパスキーがないため、パスキーを登録してください。次からはパスキーでロックを解除します。
     </p>
     <button
       type="button"
@@ -70,7 +70,7 @@
       data-testid="login-add-passkey-now"><FingerprintPattern />{login.busy ? "登録中…" : "パスキーを登録"}</button
     >
   {:else if login.phase === "login"}
-    <h2><span id="login-heading">ログイン</span></h2>
+    <h2><span id="login-heading">ロック解除</span></h2>
     {#if login.hasPasskey}
       <p>パスキーで認証してください。</p>
       <button
@@ -78,19 +78,19 @@
         class={login.failed ? "" : "primary"}
         onclick={() => login.login({ kind: "passkey" })}
         disabled={login.busy}
-        data-testid="login-passkey"><FingerprintPattern />{login.busy ? "確認中…" : "パスキーでログイン"}</button
+        data-testid="login-passkey"><FingerprintPattern />{login.busy ? "確認中…" : "パスキーでロック解除"}</button
       >
-      <p class="alt small">パスキーを使えないときは、回復コードでログインできます。</p>
+      <p class="alt small">パスキーを使えないときは、回復コードでロックを解除できます。</p>
     {:else}
       <p data-testid="login-no-passkey">
-        登録したパスキーは、この配信元では使えません（別の配信元で登録したものです）。回復コードでログインし、パスキーを登録し直してください。
+        登録したパスキーは、この配信元では使えません（別の配信元で登録したものです）。回復コードでロックを解除し、パスキーを登録し直してください。
       </p>
     {/if}
     <UnlockForm
       busy={login.busy}
       account={login.account}
       passkey={false}
-      submitLabel="ログイン"
+      submitLabel="ロック解除"
       onunlock={(m) => login.login(m)}
     />
     {@render resetBlock()}
@@ -98,7 +98,7 @@
     <h2><span id="login-heading">この開き方では使えません</span></h2>
     <p data-testid="login-nopasskey">
       ファイルを直接開いたとき（file://）は、ブラウザがパスキーを使わせません。Kotono CMS
-      はパスキーでログインしてから使うので、https の配信元{hosted ? "" : "（GitHub Pages など）"}か localhost
+      はパスキーでロックを解除してから使うので、https の配信元{hosted ? "" : "（GitHub Pages など）"}か localhost
       から開いてください。
     </p>
     {#if hosted}<p><a href={hosted} rel="noopener" data-testid="login-hosted">{hosted}</a></p>{/if}

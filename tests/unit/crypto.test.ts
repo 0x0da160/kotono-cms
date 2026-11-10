@@ -154,7 +154,7 @@ describe("Vault（39.2・39.4・ADR-0012）", () => {
   const ITER = 100_000;
   const WRONG = "AAAAA-AAAAA-AAAAA-AAAAA-AAAAA";
 
-  it("ログイン鍵を回復コードで解錠する（大文字小文字・区切りを問わない）", async () => {
+  it("ロック解除の鍵を回復コードで開く（大文字小文字・区切りを問わない）", async () => {
     const v = new Vault(null, ITER);
     const login = await v.newLogin();
     v.adopt("login", login.key);
@@ -167,7 +167,7 @@ describe("Vault（39.2・39.4・ADR-0012）", () => {
     expect(v.isUnlocked("login")).toBe(true);
   });
 
-  it("作業場所のデータ鍵はログインの鍵で包み、同じログインの鍵と同じ作業場所の枠でだけ開く（ADR-0012）", async () => {
+  it("作業場所のデータ鍵はロック解除の鍵で包み、同じ鍵と同じ作業場所の枠でだけ開く（ADR-0012）", async () => {
     const v = new Vault(null, ITER);
     const login = await v.newLogin();
     v.adopt("login", login.key);
@@ -181,17 +181,17 @@ describe("Vault（39.2・39.4・ADR-0012）", () => {
     // 別の作業場所の枠に差し替えても開けない
     expect(await v.unlockWithLogin("login", b, keyring)).toBe(false);
     expect(v.isUnlocked(b)).toBe(false);
-    // ログインの鍵がなければ開けない
+    // ロック解除の鍵がなければ開けない
     v.lock("login");
     expect(await v.unlockWithLogin("login", a, keyring)).toBe(false);
-    // 別のログインの鍵では開けない
+    // 別のロック解除の鍵では開けない
     const other = new Vault(null, ITER);
     const otherLogin = await other.newLogin();
     other.adopt("login", otherLogin.key);
     expect(await other.unlockWithLogin("login", a, keyring)).toBe(false);
   });
 
-  it("パスキーの PRF で包んだ枠でログイン鍵を開く", async () => {
+  it("パスキーの PRF で包んだ枠でロック解除の鍵を開く", async () => {
     const prf = crypto.getRandomValues(new Uint8Array(32));
     const credentialId = new Uint8Array([1, 2, 3]);
     const api = {
@@ -255,7 +255,7 @@ describe("Vault（39.2・39.4・ADR-0012）", () => {
     expect(prfInputs([a, b])).toEqual({ evalByCredential: { AQ: { first: a.prfSalt }, Ag: { first: b.prfSalt } } });
   });
 
-  it("2 件目のパスキーは 1 件目と同じ塩で包み、ログインの枠は回復コードとパスキーのまま", async () => {
+  it("2 件目のパスキーは 1 件目と同じ塩で包み、ロック解除の記録の枠は回復コードとパスキーのまま", async () => {
     const salts: Uint8Array[] = [];
     let n = 0;
     const api = {
@@ -295,7 +295,7 @@ describe("Vault（39.2・39.4・ADR-0012）", () => {
     expect(await v.openToken(id, s)).toBe("github_pat_secret");
   });
 
-  it("暗号化した作業場所を書き出し、別の端末ではログインの回復コードで取り込める（38.3・ADR-0012）", async () => {
+  it("暗号化した作業場所を書き出し、別の端末では書き出した端末の回復コードで取り込める（38.3・ADR-0012）", async () => {
     const v = new Vault(null, ITER);
     const login = await v.newLogin();
     v.adopt("login", login.key);
@@ -326,7 +326,7 @@ describe("Vault（39.2・39.4・ADR-0012）", () => {
     expect(plan.ok && plan.files.map((f) => f.path)).toEqual(["content/x.md"]);
   });
 
-  it("同じログインで書き出したものはログイン鍵で開け、ヘッダーにはログインの枠だけを入れる（ADR-0012）", async () => {
+  it("同じロック解除の鍵で書き出したものはその鍵で開け、ヘッダーには回復コードの枠とパスキーの枠だけを入れる（ADR-0012）", async () => {
     const v = new Vault(null, ITER);
     const login = await v.newLogin();
     v.adopt("login", login.key);
