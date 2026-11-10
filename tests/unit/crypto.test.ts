@@ -1,14 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MemFs, type MemDir, type MemFile } from "./support/memory-fs";
-import {
-  aesEncrypt,
-  b64u,
-  deriveDataKeys,
-  newRecoveryCode,
-  normalizeRecoveryCode,
-  base32,
-  fromBase32,
-} from "../../src/lib/crypto/keys";
+import { deriveDataKeys, newRecoveryCode, normalizeRecoveryCode, base32, fromBase32 } from "../../src/lib/crypto/keys";
 import { encryptedRoot, CONTENT_OVERHEAD, type EncContext } from "../../src/lib/crypto/encfs";
 import { Vault } from "../../src/lib/crypto/vault";
 import { accountName, asciiLabel, browserPasskey, prfInputs } from "../../src/lib/crypto/passkey";
@@ -158,52 +150,48 @@ describe("暗号化する DirHandleLike（39.4）", () => {
   });
 });
 
-describe("Vault（39.2・39.4）", () => {
+describe("Vault（39.2・39.4・ADR-0012）", () => {
   const ITER = 100_000;
+  const WRONG = "AAAAA-AAAAA-AAAAA-AAAAA-AAAAA";
 
-  it("回復コード・パスフレーズで解錠する", async () => {
+  it("ロック解除の鍵を回復コードで開く（大文字小文字・区切りを問わない）", async () => {
     const v = new Vault(null, ITER);
-    const k = await v.prepareNew();
-    const id = "a".repeat(16);
-    v.adopt(id, k.key);
-    const rec = await v.withPassphrase(id, k.record, "correct horse battery");
+    const login = await v.newLogin();
+    v.adopt("login", login.key);
     v.lockAll();
-    expect(v.isUnlocked(id)).toBe(false);
-    expect(await v.unlock(id, rec, { kind: "recovery", code: "AAAAA-AAAAA-AAAAA-AAAAA-AAAAA" })).toBeNull();
-    expect(await v.unlock(id, rec, { kind: "recovery", code: k.recoveryCode.toLowerCase() })).toEqual({
-      legacyName: null,
-    });
-    v.lock(id);
-    expect(await v.unlock(id, rec, { kind: "passphrase", passphrase: "wrong passphrase!" })).toBeNull();
-    expect(await v.unlock(id, rec, { kind: "passphrase", passphrase: "correct horse battery" })).toEqual({
-      legacyName: null,
-    });
-    await expect(v.withPassphrase(id, rec, "short")).rejects.toThrow("10 文字以上");
+    expect(v.isUnlocked("login")).toBe(false);
+    expect(await v.unlock("login", login.keyring, { kind: "recovery", code: WRONG })).toBe(false);
+    expect(v.isUnlocked("login")).toBe(false);
+    const code = login.recoveryCode.toLowerCase();
+    expect(await v.unlock("login", login.keyring, { kind: "recovery", code })).toBe(true);
+    expect(v.isUnlocked("login")).toBe(true);
   });
 
-  it("新しい鍵の情報に表示名を置かない", async () => {
+  it("作業場所のデータ鍵はロック解除の鍵で包み、同じ鍵と同じ作業場所の枠でだけ開く（ADR-0012）", async () => {
     const v = new Vault(null, ITER);
-    const k = await v.prepareNew();
-    expect(k.record).not.toHaveProperty("name");
-    expect(v.keyringFor(k.record.slots)).not.toHaveProperty("name");
+    const login = await v.newLogin();
+    v.adopt("login", login.key);
+    const a = "a".repeat(16);
+    const b = "b".repeat(16);
+    const place = await v.newKey();
+    const keyring = await v.placeKeyring("login", a, place);
+    expect(keyring.slots.map((s) => s.kind)).toEqual(["login"]);
+    expect(await v.unlockWithLogin("login", a, keyring)).toBe(true);
+    expect(v.isUnlocked(a)).toBe(true);
+    // 別の作業場所の枠に差し替えても開けない
+    expect(await v.unlockWithLogin("login", b, keyring)).toBe(false);
+    expect(v.isUnlocked(b)).toBe(false);
+    // ロック解除の鍵がなければ開けない
+    v.lock("login");
+    expect(await v.unlockWithLogin("login", a, keyring)).toBe(false);
+    // 別のロック解除の鍵では開けない
+    const other = new Vault(null, ITER);
+    const otherLogin = await other.newLogin();
+    other.adopt("login", otherLogin.key);
+    expect(await other.unlockWithLogin("login", a, keyring)).toBe(false);
   });
 
-  it("以前の版の暗号化した表示名は、解錠したときに復号して返す", async () => {
-    const v = new Vault(null, ITER);
-    const k = await v.prepareNew();
-    const id = "f".repeat(16);
-    const encName = await aesEncrypt(k.key.keys.meta, enc("旧ブログ"), enc("kotono-cms/meta/name"));
-    const legacy = { ...k.record, name: b64u(encName) };
-    expect(await v.unlock(id, legacy, { kind: "recovery", code: "AAAAA-AAAAA-AAAAA-AAAAA-AAAAA" })).toBeNull();
-    expect(await v.unlock(id, legacy, { kind: "recovery", code: k.recoveryCode })).toEqual({ legacyName: "旧ブログ" });
-    // 暗号文が壊れていれば正常として扱わない
-    v.lock(id);
-    const broken = { ...k.record, name: b64u(encName.map((b, i) => (i === encName.length - 1 ? b ^ 1 : b))) };
-    expect(await v.unlock(id, broken, { kind: "recovery", code: k.recoveryCode })).toBeNull();
-    expect(v.isUnlocked(id)).toBe(false);
-  });
-
-  it("パスキーの PRF で包んだ枠で解錠する", async () => {
+  it("パスキーの PRF で包んだ枠でロック解除の鍵を開く", async () => {
     const prf = crypto.getRandomValues(new Uint8Array(32));
     const credentialId = new Uint8Array([1, 2, 3]);
     const api = {
@@ -211,12 +199,12 @@ describe("Vault（39.2・39.4）", () => {
       authenticate: async () => ({ credentialId, prf }),
     };
     const v = new Vault(api, ITER);
-    const k = await v.prepareNew();
-    const id = "b".repeat(16);
-    v.adopt(id, k.key);
-    const rec = await v.withPasskey(id, k.record, "x");
-    v.lock(id);
-    expect(await v.unlock(id, rec, { kind: "passkey" })).toEqual({ legacyName: null });
+    const login = await v.newLogin();
+    v.adopt("login", login.key);
+    const keyring = await v.withPasskey("login", login.keyring, "x");
+    v.lock("login");
+    expect(await v.unlock("login", keyring, { kind: "passkey" })).toBe(true);
+    expect(v.isUnlocked("login")).toBe(true);
   });
 
   it("登録した配信元を記録し、別の配信元ではパスキーを求めずに理由を示す", async () => {
@@ -232,16 +220,15 @@ describe("Vault（39.2・39.4）", () => {
       },
     });
     const v = new Vault(api("a.example"), ITER);
-    const k = await v.prepareNew();
-    const id = "d".repeat(16);
-    v.adopt(id, k.key);
-    const rec = await v.withPasskey(id, k.record, "x");
-    expect(rec.slots.find((s) => s.kind === "passkey")).toMatchObject({ rpId: "a.example" });
-    v.lock(id);
+    const login = await v.newLogin();
+    v.adopt("login", login.key);
+    const keyring = await v.withPasskey("login", login.keyring, "x");
+    expect(keyring.slots.find((s) => s.kind === "passkey")).toMatchObject({ rpId: "a.example" });
+    v.lock("login");
     const other = new Vault(api("b.example"), ITER);
-    await expect(other.unlock(id, rec, { kind: "passkey" })).rejects.toThrow("「a.example」で登録した");
+    await expect(other.unlock("login", keyring, { kind: "passkey" })).rejects.toThrow("「a.example」で登録した");
     expect(asked).toBe(0);
-    expect(await v.unlock(id, rec, { kind: "passkey" })).toEqual({ legacyName: null });
+    expect(await v.unlock("login", keyring, { kind: "passkey" })).toBe(true);
   });
 
   it("パスキーの NotAllowedError を、次にできることが分かる言葉に置き換える", async () => {
@@ -268,7 +255,7 @@ describe("Vault（39.2・39.4）", () => {
     expect(prfInputs([a, b])).toEqual({ evalByCredential: { AQ: { first: a.prfSalt }, Ag: { first: b.prfSalt } } });
   });
 
-  it("2 件目のパスキーは 1 件目と同じ塩で包み、外すと回復コードの枠だけ残る", async () => {
+  it("2 件目のパスキーは 1 件目と同じ塩で包み、ロック解除の記録の枠は回復コードとパスキーのまま", async () => {
     const salts: Uint8Array[] = [];
     let n = 0;
     const api = {
@@ -281,16 +268,15 @@ describe("Vault（39.2・39.4）", () => {
       },
     };
     const v = new Vault(api, ITER);
-    const k = await v.prepareNew();
-    const id = "e".repeat(16);
-    v.adopt(id, k.key);
-    const r1 = await v.withPasskey(id, k.record, "x");
-    const r2 = await v.withPasskey(id, r1, "x");
+    const login = await v.newLogin();
+    v.adopt("login", login.key);
+    const r1 = await v.withPasskey("login", login.keyring, "x");
+    const r2 = await v.withPasskey("login", r1, "x");
     expect(salts[1]).toEqual(salts[0]);
     const pks = r2.slots.filter((s) => s.kind === "passkey");
     expect(pks).toHaveLength(2);
     expect(pks[0]?.kind === "passkey" && pks[1]?.kind === "passkey" && pks[0].wrapped !== pks[1].wrapped).toBe(true);
-    expect(v.withoutPasskeys(r2).slots.map((s) => s.kind)).toEqual(["recovery"]);
+    expect(r2.slots.map((s) => s.kind)).toEqual(["recovery", "passkey", "passkey"]);
   });
 
   it("パスキーの名前は英字だけにする（日本語の名前は 1Password が認証を拒否する）", () => {
@@ -302,68 +288,69 @@ describe("Vault（39.2・39.4）", () => {
 
   it("トークンを暗号化して保存できる（40.2）", async () => {
     const v = new Vault(null, ITER);
-    const k = await v.prepareNew();
     const id = "c".repeat(16);
-    v.adopt(id, k.key);
+    v.adopt(id, await v.newKey());
     const s = await v.sealToken(id, "github_pat_secret");
     expect(s).not.toContain("secret");
     expect(await v.openToken(id, s)).toBe("github_pat_secret");
   });
 
-  it("暗号化した作業場所を書き出し、別の端末で回復コードで取り込める（38.3）", async () => {
+  it("暗号化した作業場所を書き出し、別の端末では書き出した端末の回復コードで取り込める（38.3・ADR-0012）", async () => {
     const v = new Vault(null, ITER);
+    const login = await v.newLogin();
+    v.adopt("login", login.key);
     const fs = new MemFs("opfs");
     const store = await WorkspaceStore.open(fs.root);
-    const k = await v.prepareNew();
+    const place = await v.newKey();
     const meta = await store.create({
       name: "サイト",
-      keyring: k.record,
+      keyring: (id) => v.placeKeyring("login", id, place),
       fill: async (dir, id) => {
-        const root = await v.wrapDir(dir, id, k.key);
+        const root = await v.wrapDir(dir, id, place);
         const a = await root.getDirectoryHandle("content", { create: true });
         await writeNewFile(a, "x.md", enc("中身"));
       },
     });
-    v.adopt(meta.id, k.key);
+    v.adopt(meta.id, place);
     const root = await v.wrapOpened(await store.root(meta.id), meta.id);
     const ex = await exportZip(root);
     if (!ex.ok) throw new Error(ex.message);
-    const sealed = await v.sealExport(meta.id, ex.bytes, k.record.slots);
+    const sealed = await v.sealExport(meta.id, ex.bytes, "login", login.keyring.slots);
     expect(Vault.isSealedExport(sealed)).toBe(true);
     // 別の端末
     const other = new Vault(null, ITER);
-    expect(
-      await other.openSealedExport(sealed, { kind: "recovery", code: "AAAAA-AAAAA-AAAAA-AAAAA-AAAAA" }),
-    ).toBeNull();
-    const opened = await other.openSealedExport(sealed, { kind: "recovery", code: k.recoveryCode });
+    expect(await other.openSealedExport(sealed, { kind: "recovery", code: WRONG })).toBeNull();
+    const opened = await other.openSealedExport(sealed, { kind: "recovery", code: login.recoveryCode });
     expect(opened).not.toBeNull();
     const plan = planZip(must(opened).zip);
     expect(plan.ok && plan.files.map((f) => f.path)).toEqual(["content/x.md"]);
   });
 
-  it("ログインの枠で作業場所を開き、書き出し（版 2）はログインの回復コードで開ける。別の作業場所の枠への差し替えは開けない（ADR-0012）", async () => {
+  it("同じロック解除の鍵で書き出したものはその鍵で開け、ヘッダーには回復コードの枠とパスキーの枠だけを入れる（ADR-0012）", async () => {
     const v = new Vault(null, ITER);
-    const login = await v.prepareNew();
+    const login = await v.newLogin();
     v.adopt("login", login.key);
-    const place = await v.newKey();
     const a = "a".repeat(16);
-    const b = "b".repeat(16);
-    const slot = await v.loginSlot("login", a, place);
-    expect(slot.kind).toBe("login");
-    expect(await v.unlockWithLogin("login", a, { v: 1, slots: [slot] })).toBe(true);
-    expect(await v.unlockWithLogin("login", b, { v: 1, slots: [slot] })).toBe(false);
-
-    const sealed = await v.sealExport(a, enc("zip"), [slot], { id: "login", slots: login.record.slots });
+    v.adopt(a, await v.newKey());
+    const sealed = await v.sealExport(a, enc("zip"), "login", login.keyring.slots);
     const h = Vault.readExportHeader(sealed);
-    expect(h?.header.v).toBe(2);
-    // 直接の枠にはログインの枠を入れない（ほかの端末では意味がない）
-    expect(h?.header.slots).toEqual([]);
+    expect(h?.header.v).toBe(1);
+    expect(h?.header.login.slots.map((s) => s.kind)).toEqual(["recovery"]);
     expect(await v.openSealedExport(sealed, { kind: "login", loginId: "login" })).not.toBeNull();
     const other = new Vault(null, ITER);
-    expect(
-      await other.openSealedExport(sealed, { kind: "recovery", code: "AAAAA-AAAAA-AAAAA-AAAAA-AAAAA" }),
-    ).toBeNull();
+    expect(await other.openSealedExport(sealed, { kind: "recovery", code: WRONG })).toBeNull();
     const opened = await other.openSealedExport(sealed, { kind: "recovery", code: login.recoveryCode });
     expect(opened && dec(opened.zip)).toBe("zip");
+  });
+
+  it("以前の版の形式（直接の枠を持つ版 2）の書き出しは読まない（後方互換はない）", () => {
+    const magic = enc("KOTONO-EXPORT/1\n");
+    const h = enc(JSON.stringify({ v: 2, slots: [], login: { slots: [], wrapped: "AAAA" } }));
+    const out = new Uint8Array(magic.length + 4 + h.length + 16);
+    out.set(magic, 0);
+    new DataView(out.buffer).setUint32(magic.length, h.length);
+    out.set(h, magic.length + 4);
+    expect(Vault.isSealedExport(out)).toBe(true);
+    expect(Vault.readExportHeader(out)).toBeNull();
   });
 });

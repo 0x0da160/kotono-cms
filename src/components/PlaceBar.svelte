@@ -21,14 +21,13 @@
     sync?: Snippet;
     /**
      * アプリの外枠（docs/knowledge/product/app-shell.md）のどこに出すか。
-     * status：お知らせの帯（書き出しの状態・書き出す操作・お知らせ）。settings：「設定」の画面（解錠の方法と自動ロック）。
+     * status：お知らせの帯（書き出しの状態・書き出す操作・お知らせ）。settings：「設定」の画面（自動ロック）。
      * 作業場所の一覧・ロックは上部バーにある。
      */
     part?: "status" | "settings";
   } = $props();
 
   const days = $derived(places.remindDays(meta));
-  const encrypted = $derived(meta.keyring !== null);
 
   /** 書き出し前に、未保存・未コミットを示す（38.3） */
   async function exportNow() {
@@ -38,21 +37,15 @@
     if (changed > 0) details.push(`未コミットの記事が ${changed} 件あります（ファイルとしては書き出しに含まれます）。`);
     const v = await ws.ask({
       title: "作業場所を書き出します",
-      message: encrypted
-        ? "既定では暗号化して書き出します（.kotono）。別の端末でも、このログインの回復コード（またはこのログインで登録した、同期しているパスキー）で開けます。平文の zip は誰でも中身を読めます。"
-        : "作業場所を .git を含めて zip にします。共有シートまたはダウンロードで保存先を選んでください。",
+      message:
+        "既定では暗号化して書き出します（.kotono）。別の端末でも、このブラウザの回復コード（またはこのブラウザで登録した、同期しているパスキー）で開けます。平文の zip は誰でも中身を読めます。",
       details,
-      buttons: encrypted
-        ? [
-            { label: "暗号化して書き出す", value: "sealed", variant: "primary" },
-            { label: "平文の zip にする", value: "plain" },
-            { label: "キャンセル", value: "cancel" },
-          ]
-        : [
-            { label: "書き出す", value: "plain", variant: "primary" },
-            { label: "キャンセル", value: "cancel" },
-          ],
-      initial: encrypted ? "sealed" : "plain",
+      buttons: [
+        { label: "暗号化して書き出す", value: "sealed", variant: "primary" },
+        { label: "平文の zip にする", value: "plain" },
+        { label: "キャンセル", value: "cancel" },
+      ],
+      initial: "sealed",
     });
     if (v === "cancel") return;
     await places.export(meta, v === "plain");
@@ -89,11 +82,11 @@
     {/if}
     {@render sync?.()}
   </div>
-{:else if encrypted}
+{:else}
   <section class="card settings" aria-labelledby="place-settings-heading" data-testid="place-settings">
     <h2 id="place-settings-heading">自動ロック</h2>
     <p class="small muted">
-      作業場所は起動時のログインの鍵で暗号化しています。ロックするとログインの画面に戻り、パスキーか回復コードでログインし直すと開けます。
+      作業場所はロック解除の鍵で暗号化しています。ロックするとロック解除の画面に戻り、パスキーか回復コードでロックを解除すると、また開けます。
     </p>
     <label class="row"
       >自動ロック

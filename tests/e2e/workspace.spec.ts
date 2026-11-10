@@ -1,6 +1,6 @@
 /**
  * ブラウザ内の作業場所（仕様 3.2 第38・39章）。OPFS は安全な配信元が要るため、dist を localhost から配信して開く。
- * iPhone の画面幅で、作成・記事の保存・ロックとログイン・暗号化した書き出しと取り込みを通す。
+ * iPhone の画面幅で、作成・記事の保存・ロックとロック解除・暗号化した書き出しと取り込みを通す。
  * Chromium での確認であり、iOS Safari 実機（TG13〜15）の代替ではない。
  */
 import { createServer, type Server } from "node:http";
@@ -44,10 +44,10 @@ test.afterAll(() => {
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
-/** 開いて、起動時のログイン（パスキー）を登録する。ログインの回復コードを返す */
+/** 開いて、起動時のロック解除（パスキー）を登録する。回復コードを返す */
 async function open(page: Page): Promise<string> {
   await page.goto(`${base}/kotono-cms.html?storage=workspace`);
-  // 何よりも先にログイン（パスキーの登録）を求める。作業場所の一覧はまだ出さない
+  // 何よりも先にパスキーの登録を求める。作業場所の一覧はまだ出さない
   await expect(page.getByTestId("login")).toHaveAttribute("data-phase", "register");
   await expect(page.getByTestId("places")).toHaveCount(0);
   const code = await registerLogin(page);
@@ -55,7 +55,7 @@ async function open(page: Page): Promise<string> {
   return code;
 }
 
-test("作業場所はログインの鍵で暗号化し、作業場所ごとの回復コードなしで作って開ける。暗号化した書き出しは別の端末でログインの回復コードで取り込める（38・39、ADR-0012）", async ({
+test("作業場所はロック解除の鍵で暗号化し、作業場所ごとの回復コードなしで作って開ける。暗号化した書き出しは別の端末で、書き出した端末の回復コードで取り込める（38・39、ADR-0012）", async ({
   page,
   browser,
 }) => {
@@ -98,15 +98,22 @@ test("作業場所はログインの鍵で暗号化し、作業場所ごとの�
   expect(names).not.toContain("index.md");
   expect(names).not.toContain("PLAINTEXT");
 
-  // ロックすると、起動時と同じログインの画面に戻る。ログインしただけで作業場所も開ける
+  // ロックすると、起動時と同じロック解除の画面に戻る。ロックを解除しただけで作業場所も開ける
+  await page.getByTestId("menu-toggle").click();
+  await expect(page.getByTestId("app-lock")).toHaveText("ロック");
   await menu(page, "app-lock");
   await expect(page.getByTestId("login")).toHaveAttribute("data-phase", "login");
   await expect(page.getByTestId("places")).toHaveCount(0);
+  // 表現は「ロック」と「ロック解除」で対にする。「ログイン」とは呼ばない（ADR-0014）
+  await expect(page.getByRole("heading", { name: "ロック解除" })).toBeVisible();
+  await expect(page.getByTestId("login-passkey")).toHaveText("パスキーでロック解除");
+  await expect(page.getByTestId("unlock-run")).toHaveText("ロック解除");
+  await expect(page.getByTestId("login")).not.toContainText("ログイン");
   // パスフレーズの欄はない
   await expect(page.getByRole("radio", { name: "パスフレーズ" })).toHaveCount(0);
   await loginAgain(page);
   await expect(page.getByTestId("place")).toHaveAttribute("data-locked", "false");
-  // 作業場所ごとのロック・解錠はない
+  // 作業場所ごとのロック・ロック解除はない
   await expect(page.getByTestId("place-lock")).toHaveCount(0);
   await page.getByTestId("place-open").click();
   await expect(page.getByTestId("article-row").filter({ hasText: "iPhone の記事" })).toBeVisible();
@@ -120,7 +127,7 @@ test("作業場所はログインの鍵で暗号化し、作業場所ごとの�
   expect(bytes.subarray(0, 15).toString()).toBe("KOTONO-EXPORT/1");
   expect(bytes.includes(Buffer.from("iPhone の記事"))).toBe(false);
 
-  // 別の端末（新しいプロファイル・別のログイン）で、書き出した端末のログインの回復コードで取り込む
+  // 別の端末（新しいプロファイル・別のロック解除の鍵）で、書き出した端末の回復コードで取り込む
   const other = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const p2 = await other.newPage();
   await open(p2);
@@ -138,7 +145,7 @@ test("作業場所はログインの鍵で暗号化し、作業場所ごとの�
   await other.close();
 });
 
-test("起動し直すとパスキーでログインして作業場所を開ける。パスキーが見つからなければ自動で繰り返さず、回復コードでログインできる（ADR-0011）", async ({
+test("起動し直すとパスキーでロックを解除して作業場所を開ける。パスキーが見つからなければ自動で繰り返さず、回復コードでロックを解除できる（ADR-0011）", async ({
   page,
 }) => {
   const loginCode = await open(page);
@@ -147,7 +154,7 @@ test("起動し直すとパスキーでログインして作業場所を開け�
   await page.getByTestId("place-create-run").click();
   await expect(page.getByTestId("folder-name")).toHaveText("作業場所：ブログ");
 
-  // 起動し直すと、何よりも先にパスキーでのログインを求める
+  // 起動し直すと、何よりも先にパスキーでのロック解除を求める
   await page.reload();
   await expect(page.getByTestId("login")).toHaveAttribute("data-phase", "login");
   await expect(page.getByTestId("places")).toHaveCount(0);
@@ -157,11 +164,11 @@ test("起動し直すとパスキーでログインして作業場所を開け�
   await page.getByTestId("place-open").click();
   await expect(page.getByTestId("folder-name")).toHaveText("作業場所：ブログ");
 
-  // ロックすると、またログインの画面に戻る
+  // ロックすると、またロック解除の画面に戻る
   await menu(page, "app-lock");
   await expect(page.getByTestId("login")).toHaveAttribute("data-phase", "login");
 
-  // パスキーが見つからない（別の端末など）：自動で繰り返さず、回復コードでログインできる
+  // パスキーが見つからない（別の端末など）：自動で繰り返さず、回復コードでロックを解除できる
   await cdp.send("WebAuthn.clearCredentials", { authenticatorId });
   let asked = 0;
   cdp.on("WebAuthn.credentialAsserted", () => asked++);

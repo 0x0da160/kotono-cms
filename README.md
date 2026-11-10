@@ -5,7 +5,7 @@
 Kotono CMS（コトノ シーエムエス）は、Webメディアの記事を作成・編集するためのローカルCMSです。単一のHTMLファイル `kotono-cms.html` を https の配信元（または localhost）からデスクトップ版の Chrome・Edge で開き、ユーザーが選んだローカルフォルダに Markdown＋YAML frontmatter の記事を保存します。サーバーも外部CDNも使いません。
 
 > **現在の状態：P1 MVP（実装完了・実機検証前）**
-> フォルダ選択、記事一覧（検索・絞り込み・ソート）、新規作成、frontmatter フォームと Markdown 原文の編集、外部変更を検出する手動保存、記事IDと slug の検証、ID・createdAt の専用修正、YAML の往復保持、Markdown プレビュー（対象8言語のコードハイライト）、画像の取り込み（縮小・メタデータ削除による最適化と、表示用の派生画像の生成）・挿入・カバー選択・削除、本文の見たまま編集（WYSIWYG）、前回開いたフォルダの記憶、記事の複製・削除（リポジトリ外への検証済み退避が必須）、起動時のパスキーでのログイン（パスキーだけ。`file://` では使えない）、ログインの鍵で暗号化したブラウザ内復旧ドラフト（既定で有効）とブラウザ内の作業場所、ローカル Git（記事単位のコミット・初期化・状態と履歴の表示）を実装しています。仕様の数値と方式は技術成立性ゲート（仕様 第2.2節）で確認する前の受け入れ要件であり、実機（Windows・macOS の Chrome・Edge）での検証はまだ行っていません。実装方式と未検証の項目は [ADR-0002](docs/knowledge/decisions/0002-p1-editing-and-save.md)・[ADR-0003](docs/knowledge/decisions/0003-p1-preview-media-drafts.md)・[ADR-0004](docs/knowledge/decisions/0004-p1-git-and-remaining.md)・[ADR-0005](docs/knowledge/decisions/0005-wysiwyg-images-recent-folder.md)・[ADR-0011](docs/knowledge/decisions/0011-passkey-first-and-compact-ui.md)・[ADR-0012](docs/knowledge/decisions/0012-passkey-only-login-whole-app-encryption.md) を参照してください。
+> フォルダ選択、記事一覧（検索・絞り込み・ソート）、新規作成、frontmatter フォームと Markdown 原文の編集、外部変更を検出する手動保存、記事IDと slug の検証、ID・createdAt の専用修正、YAML の往復保持、Markdown プレビュー（対象8言語のコードハイライト）、画像の取り込み（縮小・メタデータ削除による最適化と、表示用の派生画像の生成）・挿入・カバー選択・削除、本文の見たまま編集（WYSIWYG）、前回開いたフォルダの記憶、記事の複製・削除（リポジトリ外への検証済み退避が必須）、起動時のパスキーでのロック解除（パスキーだけ。`file://` では使えない）、ロック解除の鍵で暗号化したブラウザ内復旧ドラフト（既定で有効）とブラウザ内の作業場所、ローカル Git（記事単位のコミット・初期化・状態と履歴の表示）を実装しています。仕様の数値と方式は技術成立性ゲート（仕様 第2.2節）で確認する前の受け入れ要件であり、実機（Windows・macOS の Chrome・Edge）での検証はまだ行っていません。実装方式と未検証の項目は [ADR-0002](docs/knowledge/decisions/0002-p1-editing-and-save.md)・[ADR-0003](docs/knowledge/decisions/0003-p1-preview-media-drafts.md)・[ADR-0004](docs/knowledge/decisions/0004-p1-git-and-remaining.md)・[ADR-0005](docs/knowledge/decisions/0005-wysiwyg-images-recent-folder.md)・[ADR-0011](docs/knowledge/decisions/0011-passkey-first-and-compact-ui.md)・[ADR-0012](docs/knowledge/decisions/0012-passkey-only-login-whole-app-encryption.md)・[ADR-0014](docs/knowledge/decisions/0014-lock-unlock-wording-and-no-backward-compat.md) を参照してください。
 
 ## 特徴（仕様より）
 
@@ -22,13 +22,13 @@ Kotono CMS（コトノ シーエムエス）は、Webメディアの記事を作
 
 ## 対応環境
 
-| 項目     | 内容                                                                                                                                                                          |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ブラウザ | デスクトップ版 Chrome・Edge の安定版、iOS・iPadOS 26 以降の Safari（仕様 3.2。実機検証は未了）                                                                                |
-| OS       | Windows・macOS・iOS・iPadOS                                                                                                                                                   |
-| 起動     | https の配信元（または localhost）から開き、パスキーでログインする。`file://` で直接開くとパスキーを使えないため使えない（ADR-0012）。iPhone・iPad はホーム画面に追加して使う |
-| 保存先   | デスクトップは選んだフォルダ。iPhone・iPad はブラウザ内の作業場所（ログインの鍵で暗号化。`?storage=workspace` でデスクトップでも選べる）                                      |
-| 対象外   | Firefox・Android                                                                                                                                                              |
+| 項目     | 内容                                                                                                                                                                              |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ブラウザ | デスクトップ版 Chrome・Edge の安定版、iOS・iPadOS 26 以降の Safari（仕様 3.2。実機検証は未了）                                                                                    |
+| OS       | Windows・macOS・iOS・iPadOS                                                                                                                                                       |
+| 起動     | https の配信元（または localhost）から開き、パスキーでロックを解除する。`file://` で直接開くとパスキーを使えないため使えない（ADR-0012）。iPhone・iPad はホーム画面に追加して使う |
+| 保存先   | デスクトップは選んだフォルダ。iPhone・iPad はブラウザ内の作業場所（ロック解除の鍵で暗号化。`?storage=workspace` でデスクトップでも選べる）                                        |
+| 対象外   | Firefox・Android                                                                                                                                                                  |
 
 ## 開発
 
