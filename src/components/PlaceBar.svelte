@@ -69,8 +69,6 @@
       {:else}
         <span class="muted small" data-testid="unsynced-none">書き出し・同期していない変更はありません</span>
       {/if}
-      {#if places.sharedOrigin}<span class="badge err" title="他のページと保存領域を共有する配信元です">開発版</span
-        >{/if}
       {#if places.persist !== "persisted"}<span class="badge unknown" title="ブラウザが保存領域を消去することがあります"
           >消去されることがあります</span
         >{/if}
