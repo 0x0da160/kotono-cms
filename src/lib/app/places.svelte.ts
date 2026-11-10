@@ -37,7 +37,6 @@ export interface StorageHost {
     standalone?: boolean;
   };
   matchMedia?: (q: string) => { matches: boolean };
-  location?: { hostname?: string };
 }
 
 export interface PlaceView {
@@ -115,11 +114,6 @@ export class PlacesController {
   lockMinutes = $state(DEFAULT_LOCK_MINUTES);
   private lastActive = 0;
   private hiddenAt: number | null = null;
-
-  /** 開発版の配信元（他のページと保存領域を共有する：38.5）なら true */
-  get sharedOrigin(): boolean {
-    return /\.github\.io$/i.test(this.host.location?.hostname ?? "");
-  }
 
   /** ホーム画面から開いているか（38.4：ブラウザでの利用時は推奨を表示する） */
   get standalone(): boolean {

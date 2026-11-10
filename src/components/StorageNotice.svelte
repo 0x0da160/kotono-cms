@@ -10,11 +10,6 @@
 </script>
 
 <div class="notices" data-testid="storage-notice">
-  {#if places.sharedOrigin}
-    <p class="note warn" data-testid="shared-origin">
-      開発版です。この配信元（github.io）は他のページと保存領域を共有するため、実際の記事データでの利用は推奨しません。
-    </p>
-  {/if}
   <p class="note" class:warn={places.persist !== "persisted"} data-testid="persist-state" data-state={places.persist}>
     {#if places.persist === "persisted"}
       このブラウザに保存領域を消さないよう求めました（許可済み）。それでも、ブラウザのデータ消去・アプリの削除では消えます。
