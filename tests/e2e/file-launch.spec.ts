@@ -25,12 +25,17 @@ test("単一HTMLを配信元から起動できる（仕様 2.1・A01）", async 
 
   await expect(page).toHaveTitle("Kotono CMS");
   await expect(page.getByRole("heading", { level: 1, name: "Kotono CMS" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "対応環境の確認" })).toBeVisible();
   await expect(page.getByTestId("spec-version")).toHaveText("3.2");
+  // 対応環境の確認はメニューの中にある。すべて使えるときは、項目の一覧を畳んで要約だけを見せる
+  await page.getByTestId("menu-toggle").click();
+  await page.getByTestId("env-open").click();
+  const env = page.getByTestId("env-dialog");
+  await expect(env.getByRole("heading", { name: "対応環境の確認" })).toBeVisible();
   await expect(page.locator('[data-capability="secure-context"]')).toHaveAttribute("data-ok", "true");
-  // すべて使えるときは、項目の一覧を畳んで要約だけを見せる
-  await expect(page.getByTestId("env-summary")).toContainText("このブラウザで使えます");
+  await expect(env.getByTestId("env-summary")).toContainText("このブラウザで使えます");
   await expect(page.locator('[data-capability="secure-context"]')).toBeHidden();
+  await page.keyboard.press("Escape");
+  await expect(env).toBeHidden();
 
   // インラインWorkerが CSP の下で起動する（仕様 16.1.1）
   await expect(page.getByTestId("worker-probe")).toHaveAttribute("data-state", "ok");
@@ -47,11 +52,15 @@ test("file:// で開くと、パスキーを使えないため案内だけを出
   await page.goto(pathToFileURL(distHtml).href);
   await expect(page.getByTestId("login")).toHaveAttribute("data-phase", "nopasskey");
   await expect(page.getByTestId("login-nopasskey")).toContainText("localhost");
-  // 登録・ログイン・フォルダの選択・メニューを出さない
+  // 登録・ログイン・フォルダの選択・ロックは出さない。メニューには対応環境の確認とヘルプだけ
   await expect(page.getByTestId("login-register-passkey")).toHaveCount(0);
   await expect(page.getByTestId("unlock-form")).toHaveCount(0);
   await expect(page.getByTestId("choose-folder")).toHaveCount(0);
-  await expect(page.getByTestId("menu-toggle")).toHaveCount(0);
+  await page.getByTestId("menu-toggle").click();
+  await expect(page.getByTestId("env-open")).toBeVisible();
+  await expect(page.getByTestId("help-open")).toBeVisible();
+  await expect(page.getByTestId("recovery-open")).toHaveCount(0);
+  await expect(page.getByTestId("app-lock")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 

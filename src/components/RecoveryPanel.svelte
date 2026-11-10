@@ -1,11 +1,14 @@
 <script lang="ts">
-  import HelpTip from "./HelpTip.svelte";
   import type { Workspace } from "../lib/app/workspace.svelte";
   import { encodeUtf8, sha256Hex } from "../lib/core/bytes";
   import type { DraftRecord } from "../lib/drafts/store";
   import { readDiskArticle } from "../lib/fs/save";
 
-  let { ws }: { ws: Workspace } = $props();
+  /**
+   * 復旧ドラフトの候補。上部バーのメニュー「復旧ドラフト」の窓に出す。
+   * count：候補の数（メニューの項目の数と、トグルの印に使う）。
+   */
+  let { ws, count = $bindable(0) }: { ws: Workspace; count?: number } = $props();
 
   const dc = $derived(ws.drafts);
   const mine = $derived((dc?.records ?? []).filter((r) => r.ws === dc?.wsId).sort((a, b) => b.savedAt - a.savedAt));
@@ -13,6 +16,11 @@
   /** 記事ごとの最新世代だけを候補に出し、古い世代は折りたたむ */
   const latest = $derived(mine.filter((r, i) => mine.findIndex((x) => x.key === r.key) === i && !isOpen(r)));
   const older = $derived(mine.filter((r) => !latest.includes(r) && !isOpen(r)));
+  const total = $derived(latest.length + older.length + others.length);
+
+  $effect(() => {
+    count = total;
+  });
 
   let disk = $state<Record<string, string>>({});
   let checks = $state<Record<string, boolean>>({});
@@ -101,13 +109,12 @@
   </li>
 {/snippet}
 
-{#if dc && dc.mode !== "unavailable" && latest.length + older.length + others.length > 0}
-  <section class="card recovery" aria-labelledby="recovery-heading" data-testid="recovery-panel">
-    <h2>
-      <span id="recovery-heading">復旧ドラフト</span><HelpTip label="復旧ドラフト"
-        >ブラウザ内に退避した未保存の編集です。ディスクへは自動で書き込みません。戻せるのは、実際に退避に成功した内容までです。</HelpTip
-      >
-    </h2>
+{#if dc && dc.mode === "unavailable"}
+  <p class="muted" data-testid="recovery-unavailable">このブラウザでは復旧ドラフトを使えません。</p>
+{:else if total === 0}
+  <p class="muted" data-testid="recovery-empty">復旧ドラフトはありません。</p>
+{:else}
+  <div data-testid="recovery-panel">
     {#if latest.length > 0}
       <ul class="list">
         {#each latest as r (k(r))}{@render row(r, true)}{/each}
@@ -132,21 +139,10 @@
         </ul>
       </details>
     {/if}
-  </section>
+  </div>
 {/if}
 
 <style>
-  .recovery {
-    border: 1px solid var(--color-border-subtle);
-    border-radius: var(--radius-lg);
-    padding: var(--panel-pad);
-    margin-bottom: var(--space-12);
-    background: var(--color-bg-surface);
-  }
-  h2 {
-    margin: 0 0 var(--space-4);
-    font-size: var(--font-size-18);
-  }
   .list {
     list-style: none;
     margin: var(--space-8) 0 0;

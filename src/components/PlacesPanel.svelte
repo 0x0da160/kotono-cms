@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Ellipsis from "@lucide/svelte/icons/ellipsis";
   import HelpTip from "./HelpTip.svelte";
   import type { PlacesController, PlaceView } from "../lib/app/places.svelte";
   import type { Workspace } from "../lib/app/workspace.svelte";
@@ -13,6 +14,8 @@
   let newName = $state("");
   let importName = $state("");
   let unlocking = $state<string | null>(null);
+  /** 「…」（書き出す・削除をまとめる）を開いている行の ID */
+  let moreOpen = $state<string | null>(null);
   let fileInput: HTMLInputElement | undefined = $state();
 
   const views = $derived(places.views());
@@ -22,6 +25,33 @@
   $effect(() => {
     if (places.pendingImport) importName = places.pendingImport.name;
   });
+
+  /** 「…」を開く・閉じる（別の行の「…」を押したら、その行へ移る） */
+  function toggleMore(id: string) {
+    moreOpen = moreOpen === id ? null : id;
+  }
+
+  /** 「…」を閉じる。refocus のとき、その「…」へ戻す（キーボードの位置を失わせない） */
+  function closeMore(refocus = false) {
+    const id = moreOpen;
+    moreOpen = null;
+    if (refocus && id !== null) document.querySelector<HTMLElement>(`[data-more-toggle="${CSS.escape(id)}"]`)?.focus();
+  }
+
+  /** 「…」の外を押したら閉じる */
+  function onWindowPointer(e: PointerEvent) {
+    if (moreOpen === null) return;
+    if (e.target instanceof Element && e.target.closest(".more")) return;
+    moreOpen = null;
+  }
+
+  /** Esc で「…」を閉じて、その「…」へ戻す */
+  function onWindowKey(e: KeyboardEvent) {
+    if (moreOpen !== null && e.key === "Escape") {
+      e.preventDefault();
+      closeMore(true);
+    }
+  }
 
   async function create(e: SubmitEvent) {
     e.preventDefault();
@@ -120,6 +150,80 @@
   }
 </script>
 
+<svelte:window onpointerdown={onWindowPointer} onkeydown={onWindowKey} />
+
+<!-- 行の「…」：書き出す（暗号化・平文の選択つき）と削除をまとめる。書き出せるのは開ける作業場所だけ -->
+{#snippet more(v: PlaceView, exportMeta: WorkspaceMeta | null)}
+  <div class="more">
+    <button
+      type="button"
+      class="more-toggle"
+      aria-expanded={moreOpen === v.id}
+      aria-label="「{v.label}」のほかの操作"
+      title="ほかの操作"
+      data-more-toggle={v.id}
+      onclick={() => toggleMore(v.id)}
+      data-testid="place-more"><Ellipsis aria-hidden="true" /></button
+    >
+    {#if moreOpen === v.id}
+      <div class="more-list" data-testid="place-more-list">
+        {#if exportMeta}
+          <button
+            type="button"
+            onclick={() => {
+              closeMore(true);
+              void exportPlace(exportMeta);
+            }}
+            disabled={places.busy}
+            data-testid="place-export">書き出す</button
+          >
+        {/if}
+        <button
+          type="button"
+          class="danger"
+          onclick={() => {
+            closeMore(true);
+            void remove(v);
+          }}
+          disabled={places.busy}
+          data-testid="place-remove">削除</button
+        >
+      </div>
+    {/if}
+  </div>
+{/snippet}
+
+<!-- 新しい作業場所・取り込み。作業場所がもうあるときは、折り畳んだ中に出す -->
+{#snippet addForms()}
+  <form class="sub" onsubmit={create} data-testid="place-create">
+    <h3>新しい作業場所</h3>
+    <label>名前 <input bind:value={newName} maxlength="80" required data-testid="place-name" /></label>
+    {#if places.vault}<p class="small muted">
+        ログインの鍵で暗号化して保存します。作業場所ごとの回復コード・パスキーはありません。
+      </p>{/if}
+    <div class="actions">
+      <button type="submit" class="primary" disabled={places.busy} data-testid="place-create-run">作る</button>
+    </div>
+  </form>
+  <div class="sub">
+    <h3>
+      取り込む<HelpTip label="取り込み"
+        >リポジトリのフォルダを zip にしたもの、または Kotono CMS
+        で暗号化して書き出したファイル（.kotono）を選びます。既存の作業場所へは上書きしません。</HelpTip
+      >
+    </h3>
+    <input
+      bind:this={fileInput}
+      type="file"
+      accept=".zip,.kotono,application/zip"
+      class="sr-only"
+      onchange={onFile}
+      data-testid="import-file"
+    />
+    <button type="button" onclick={() => fileInput?.click()} disabled={places.busy}>ファイルを選ぶ</button>
+  </div>
+{/snippet}
+
 <section class="card" aria-labelledby="places-heading" data-testid="places">
   <h2>
     <span id="places-heading">作業場所</span><HelpTip label="作業場所"
@@ -197,20 +301,8 @@
                     disabled={places.busy}
                     data-testid="place-open">開く</button
                   >
-                  <button
-                    type="button"
-                    onclick={() => exportPlace(e.meta)}
-                    disabled={places.busy}
-                    data-testid="place-export">書き出す</button
-                  >
                 {/if}
-                <button
-                  type="button"
-                  class="danger"
-                  onclick={() => remove(v)}
-                  disabled={places.busy}
-                  data-testid="place-remove">削除</button
-                >
+                {@render more(v, v.locked ? null : e.meta)}
               </div>
               {#if v.locked && !hasSlot(e.meta, "recovery")}
                 <p class="muted small" data-testid="place-other-login">
@@ -238,7 +330,7 @@
             {:else}
               <p class="muted small">{e.reason}</p>
               <div class="actions">
-                <button type="button" class="danger" onclick={() => remove(v)} disabled={places.busy}>削除</button>
+                {@render more(v, null)}
               </div>
             {/if}
           </li>
@@ -285,33 +377,14 @@
         </div>
       </form>
     {:else if places.store && !places.needsLogin}
-      <form class="sub" onsubmit={create} data-testid="place-create">
-        <h3>新しい作業場所</h3>
-        <label>名前 <input bind:value={newName} maxlength="80" required data-testid="place-name" /></label>
-        {#if places.vault}<p class="small muted">
-            ログインの鍵で暗号化して保存します。作業場所ごとの回復コード・パスキーはありません。
-          </p>{/if}
-        <div class="actions">
-          <button type="submit" class="primary" disabled={places.busy} data-testid="place-create-run">作る</button>
-        </div>
-      </form>
-      <div class="sub">
-        <h3>
-          取り込む<HelpTip label="取り込み"
-            >リポジトリのフォルダを zip にしたもの、または Kotono CMS
-            で暗号化して書き出したファイル（.kotono）を選びます。既存の作業場所へは上書きしません。</HelpTip
-          >
-        </h3>
-        <input
-          bind:this={fileInput}
-          type="file"
-          accept=".zip,.kotono,application/zip"
-          class="sr-only"
-          onchange={onFile}
-          data-testid="import-file"
-        />
-        <button type="button" onclick={() => fileInput?.click()} disabled={places.busy}>ファイルを選ぶ</button>
-      </div>
+      {#if views.length === 0}
+        {@render addForms()}
+      {:else}
+        <details class="add" data-testid="place-add">
+          <summary>新しい作業場所・取り込み</summary>
+          {@render addForms()}
+        </details>
+      {/if}
     {/if}
   {/if}
 </section>
@@ -363,6 +436,63 @@
     flex-wrap: wrap;
     gap: var(--control-gap);
     margin-top: var(--space-8);
+  }
+  /* 「…」：行の中の操作を1つにまとめる。開いた一覧は、ほかの要素の上に重ねる */
+  .more {
+    position: relative;
+  }
+  .more-toggle {
+    padding-inline: var(--space-8);
+  }
+  .more-list {
+    position: absolute;
+    inset-inline-end: 0;
+    top: calc(100% + var(--space-4));
+    z-index: var(--z-popover);
+    display: flex;
+    flex-direction: column;
+    min-width: 9rem;
+    padding: var(--space-4);
+    background: var(--color-bg-raised);
+    border: 1px solid var(--color-border-control);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-2);
+  }
+  .more-list button {
+    justify-content: flex-start;
+    text-align: start;
+    border-color: transparent;
+    background: transparent;
+  }
+  .more-list button:not(:disabled):hover {
+    background: var(--color-bg-hover);
+  }
+  @media (pointer: coarse) {
+    .more-toggle,
+    .more-list button {
+      min-height: var(--touch-target);
+    }
+  }
+  /* 新しい作業場所・取り込み：作業場所がもうあるときは、折り畳んでおく */
+  .add {
+    border-top: 1px solid var(--color-border-subtle);
+    padding-top: var(--space-12);
+    margin-top: var(--space-12);
+  }
+  .add > summary {
+    display: flex;
+    align-items: center;
+    min-height: 2rem;
+    cursor: pointer;
+    font-weight: var(--font-weight-strong);
+  }
+  .add[open] > summary {
+    margin-block-end: var(--space-8);
+  }
+  @media (pointer: coarse) {
+    .add > summary {
+      min-height: var(--touch-target-sm);
+    }
   }
   .sub {
     border-top: 1px solid var(--color-border-subtle);
