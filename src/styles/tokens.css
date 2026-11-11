@@ -137,6 +137,7 @@
   --color-border-subtle: var(--palette-neutral-200); /* 装飾の区切り（基準の対象外） */
   --color-border-control: var(--palette-neutral-600); /* 入力欄・ボタンの枠（3:1 以上） */
   --color-border-strong: var(--palette-neutral-700); /* 浮いた面の枠など、強い境界 */
+  --color-brand: var(--palette-brand-petrol); /* ロゴの記号・CMS（Petrol Blue） */
   --color-accent: var(--palette-brand-petrol); /* 主な操作の面（文字には使わない） */
   --color-accent-hover: var(--palette-petrol-800); /* 主な操作の hover */
   --color-accent-pressed: var(--palette-petrol-900); /* 主な操作の押下 */
@@ -294,6 +295,7 @@
     --color-border-subtle: var(--palette-neutral-800);
     --color-border-control: var(--palette-neutral-500);
     --color-border-strong: var(--palette-neutral-400);
+    --color-brand: var(--palette-petrol-300);
     --color-accent: var(--palette-petrol-300);
     --color-accent-hover: var(--palette-petrol-200);
     --color-accent-pressed: var(--palette-petrol-400);

@@ -123,6 +123,8 @@ export const SEMANTIC: readonly SemanticColor[] = [
   { name: "border-subtle", light: "neutral-200", dark: "neutral-800", role: "装飾の区切り（基準の対象外）" },
   { name: "border-control", light: "neutral-600", dark: "neutral-500", role: "入力欄・ボタンの枠（3:1 以上）" },
   { name: "border-strong", light: "neutral-700", dark: "neutral-400", role: "浮いた面の枠など、強い境界" },
+  // ブランド：ロゴの記号と CMS（Petrol Blue。部品の文字には使わない）
+  { name: "brand", light: "brand-petrol", dark: "petrol-300", role: "ロゴの記号・CMS（Petrol Blue）" },
   // 主な操作
   { name: "accent", light: "brand-petrol", dark: "petrol-300", role: "主な操作の面（文字には使わない）" },
   { name: "accent-hover", light: "petrol-800", dark: "petrol-200", role: "主な操作の hover" },
@@ -253,6 +255,12 @@ export const CONTRAST_RULES: readonly ContrastRule[] = [
   { fg: "fg-placeholder", on: [...SURFACES, "editor-bg"], min: 4.5, why: "入力例" },
   { fg: "link", on: [...SURFACES, ...STATUS_BG], min: 4.5, why: "リンク（お知らせの中も）" },
   { fg: "link-hover", on: SURFACES, min: 4.5, why: "リンクの hover" },
+  {
+    fg: "brand",
+    on: ["bg-surface", "bg-raised"],
+    min: 4.5,
+    why: "ロゴの記号と CMS（ロゴの文字は WCAG の対象外だが、同じ基準で測る）",
+  },
   { fg: "border-control", on: SURFACES, min: 3, why: "入力欄・ボタンの枠（1.4.11）" },
   { fg: "border-strong", on: SURFACES, min: 3, why: "強い境界" },
   {

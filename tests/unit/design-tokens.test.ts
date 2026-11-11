@@ -84,10 +84,10 @@ describe("パレット（デザインシステム 0.4.0）", () => {
     }
   });
 
-  it("検査対象は 178 組（ライト・ダークで 356 組）で、重複がない", () => {
+  it("検査対象は 180 組（ライト・ダークで 360 組）で、重複がない", () => {
     const pairs = CONTRAST_RULES.flatMap((r) => r.on.map((bg) => `${r.fg}|${bg}`));
     expect(new Set(pairs).size).toBe(pairs.length);
-    expect(pairs).toHaveLength(178);
+    expect(pairs).toHaveLength(180);
   });
 
   const cases = (["light", "dark"] as const).flatMap((theme) =>

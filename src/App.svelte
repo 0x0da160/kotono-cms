@@ -20,6 +20,7 @@
   import CommitDialog from "./components/CommitDialog.svelte";
   import GitPanel from "./components/GitPanel.svelte";
   import HelpDialog from "./components/HelpDialog.svelte";
+  import Logotype from "./components/Logotype.svelte";
   import HelpTip from "./components/HelpTip.svelte";
   import ConfirmDialog from "./components/ConfirmDialog.svelte";
   import DraftSettings from "./components/DraftSettings.svelte";
@@ -395,7 +396,7 @@
 -->
 <header class="app-bar" class:workbench bind:this={barEl} data-sticky-chrome data-testid="app-bar">
   <div class="brand">
-    <h1>Kotono CMS</h1>
+    <h1><Logotype height="1.25em" /></h1>
   </div>
   {#if workbench}<p class="where" data-testid="current-section">{sectionLabel}</p>{/if}
   {#if ws.root}
