@@ -129,3 +129,32 @@ describe("tokens.css", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe("ブラウザの枠の色（ADR-0015）", () => {
+  // CSS の変数を読めない場所（index.html・manifest）には値を直接書くので、正本とずれないよう確かめる
+  it("index.html の theme-color は、上部バーの面の色（bg-surface）と同じ", () => {
+    const html = readFileSync(join(ROOT, "index.html"), "utf8");
+    for (const theme of ["light", "dark"] as const) {
+      const m = new RegExp(
+        `name="theme-color" content="(#[0-9a-f]{6})" media="\\(prefers-color-scheme: ${theme}\\)"`,
+      ).exec(html);
+      expect(m?.[1]).toBe(semanticHex("bg-surface", theme));
+    }
+  });
+
+  it("manifest の色は、ライトの面の色（bg-surface）と地の色（bg-page）と同じ", () => {
+    const manifest = JSON.parse(readFileSync(join(ROOT, "public/manifest.webmanifest"), "utf8")) as {
+      theme_color: string;
+      background_color: string;
+    };
+    expect(manifest.theme_color).toBe(semanticHex("bg-surface", "light"));
+    expect(manifest.background_color).toBe(semanticHex("bg-page", "light"));
+  });
+
+  it("画面の端まで使い（viewport-fit=cover）、拡大は止めない", () => {
+    const html = readFileSync(join(ROOT, "index.html"), "utf8");
+    const viewport = /name="viewport" content="([^"]*)"/.exec(html)?.[1] ?? "";
+    expect(viewport).toContain("viewport-fit=cover");
+    expect(viewport).not.toMatch(/user-scalable|maximum-scale/);
+  });
+});

@@ -64,7 +64,7 @@
   };
   const conditionText = $derived(
     [
-      `状態：${STATUS_LABEL[status]}`,
+      `原稿状態：${STATUS_LABEL[status]}`,
       tags.length > 0 ? `タグ ${tags.length}件` : null,
       `${SORT_LABEL[sort]}の${dir === "desc" ? "降順" : "昇順"}`,
     ]
@@ -122,6 +122,9 @@
         type="search"
         bind:value={keyword}
         placeholder="キーワードで検索"
+        autocapitalize="off"
+        autocorrect="off"
+        enterkeyhint="search"
         aria-describedby="kw-hint"
       />
     </div>
@@ -132,7 +135,7 @@
       >
       <div class="row">
         <label>
-          <span>状態</span>
+          <span>原稿状態</span>
           <select bind:value={status}>
             <option value="all">すべて</option>
             <option value="draft">下書き</option>
@@ -173,7 +176,7 @@
             <span class="chip-text">{t}</span>
             <button
               type="button"
-              class="chip-x"
+              class="chip-x touch-inline"
               aria-label={`タグ「${t}」の絞り込みを外す`}
               onclick={() => (tags = tags.filter((x) => x !== t))}>×</button
             >
@@ -188,9 +191,9 @@
       読み込み中…{#if ws.scanProgress && ws.scanProgress.total > 0}（{ws.scanProgress.done} / {ws.scanProgress
           .total}）{/if}
     {:else if !ws.scan}
-      メタデータ未取得
+      まだ読み込んでいません
     {:else if entries.length === 0}
-      記事がありません
+      記事はまだありません。「新規作成」から始められます。
     {:else if filtered.length === 0}
       条件に一致する記事はありません（全{entries.length}件）
     {:else}
@@ -332,10 +335,8 @@
     font-size: var(--font-size-12);
     color: var(--color-fg-muted);
   }
-  /* 指で操作する画面では、開閉の見出しを 32px 以上にする（app.css の表：WCAG 2.5.8） */
   @media (pointer: coarse) {
     .cond > summary {
-      min-height: var(--touch-target-sm);
       align-items: center;
     }
   }

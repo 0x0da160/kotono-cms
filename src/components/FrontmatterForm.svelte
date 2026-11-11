@@ -169,6 +169,8 @@
         type="text"
         value={values.slug ?? ""}
         spellcheck="false"
+        autocapitalize="off"
+        autocorrect="off"
         autocomplete="off"
         oninput={(e) => apply("slug", e.currentTarget.value, e.currentTarget)}
         aria-describedby="f-slug-hint"
@@ -187,7 +189,7 @@
               <span class="chip-text">{a}</span>
               <button
                 type="button"
-                class="chip-x"
+                class="chip-x touch-inline"
                 aria-label={`旧 slug「${a}」を外す`}
                 onclick={() =>
                   apply(
@@ -203,7 +205,10 @@
             type="text"
             aria-labelledby="f-aliases-label"
             placeholder="旧 slug を入力して Enter"
+            enterkeyhint="done"
             spellcheck="false"
+            autocapitalize="off"
+            autocorrect="off"
             autocomplete="off"
             bind:value={aliasDraft}
             onkeydown={(e) => onEnter(e, addAlias)}
@@ -232,6 +237,8 @@
           value={values.publishedAt ?? ""}
           placeholder="未設定（例：2026-11-03T22:08:00+09:00）"
           spellcheck="false"
+          autocapitalize="off"
+          autocorrect="off"
           oninput={(e) =>
             apply("publishedAt", e.currentTarget.value === "" ? null : e.currentTarget.value, e.currentTarget)}
           aria-describedby="f-published-hint"
@@ -247,7 +254,7 @@
           )}）。{:else if timing === "past"}公開日時：過去または現在（{formatForDisplay(
             values.publishedAt ?? "",
           )}）。{/if}
-        公開日時を設定しただけでは、サイトはビルドも配信もされません。配信の状態は本CMSでは確認しません。
+        公開日時を設定しただけでは、サイトはビルドも配信もされません。配信の状態は CMS では確認しません。
       </p>
       {#each errorsFor("publishedAt") as m, i (i)}<p class="err">{m}</p>{/each}
     </div>
@@ -265,6 +272,8 @@
           value={values.revisedAt ?? ""}
           placeholder="未設定（例：2026-11-03T22:08:00+09:00）"
           spellcheck="false"
+          autocapitalize="off"
+          autocorrect="off"
           oninput={(e) =>
             apply("revisedAt", e.currentTarget.value === "" ? null : e.currentTarget.value, e.currentTarget)}
         />
@@ -297,6 +306,8 @@
                   type="text"
                   value={c.at}
                   spellcheck="false"
+                  autocapitalize="off"
+                  autocorrect="off"
                   oninput={(e) => setCorrection(i, { at: e.currentTarget.value }, e.currentTarget)}
                 />
               </label>
@@ -342,7 +353,7 @@
               <span class="chip-text">{visibleSpaces(t)}</span>
               <button
                 type="button"
-                class="chip-x"
+                class="chip-x touch-inline"
                 aria-label={`タグ「${t}」を外す`}
                 onclick={() =>
                   apply(
@@ -359,6 +370,8 @@
           type="text"
           aria-labelledby="f-tags-label"
           placeholder="タグを入力して Enter"
+          autocapitalize="off"
+          enterkeyhint="done"
           bind:value={tagDraft}
           onkeydown={onTagKey}
           oncompositionstart={() => (composing = true)}
@@ -386,7 +399,7 @@
               <span class="chip-text">{authorName(a) ? `${authorName(a)}（${a}）` : a}</span>
               <button
                 type="button"
-                class="chip-x"
+                class="chip-x touch-inline"
                 aria-label={`著者「${authorName(a) ?? a}」を外す`}
                 onclick={() =>
                   apply(
@@ -404,7 +417,10 @@
           aria-labelledby="f-authors-label"
           placeholder={knownAuthors.length > 0 ? "著者を選ぶか、著者 ID を入力して Enter" : "著者 ID を入力して Enter"}
           list="f-authors-list"
+          enterkeyhint="done"
           spellcheck="false"
+          autocapitalize="off"
+          autocorrect="off"
           autocomplete="off"
           bind:value={authorDraft}
           onkeydown={(e) => onEnter(e, addAuthor)}
@@ -444,6 +460,8 @@
               type="text"
               value={values.cover.src}
               spellcheck="false"
+              autocapitalize="off"
+              autocorrect="off"
               oninput={(e) =>
                 apply("cover", { src: e.currentTarget.value, alt: values.cover?.alt ?? "" }, e.currentTarget)}
             />

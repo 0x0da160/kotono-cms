@@ -87,7 +87,7 @@
         type="button"
         onclick={() => sync.pull()}
         disabled={sync.busy || !sync.hasToken || sync.merge !== null}
-        data-testid="sync-pull">取得（pull）</button
+        data-testid="sync-pull">取得する（pull）</button
       >
       <button
         type="button"
@@ -315,16 +315,6 @@
   .config label.check {
     flex-direction: row;
     align-items: center;
-  }
-  input:not([type="checkbox"]):not([type="radio"]) {
-    font: inherit;
-    font-size: var(--font-size-16);
-    line-height: var(--control-line-height);
-    padding: var(--control-pad-y) var(--space-8);
-    border: 1px solid var(--color-border-subtle);
-    border-radius: var(--radius-md);
-    background: transparent;
-    color: inherit;
   }
   .conflicts {
     list-style: none;

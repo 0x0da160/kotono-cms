@@ -102,7 +102,7 @@
       {#if importing}
         <button type="button" onclick={() => ws.cancelImport()}>次のファイルから中止</button>
       {/if}
-      <button type="button" onclick={() => ws.refreshMedia()} disabled={ws.busy}>一覧を更新</button>
+      <button type="button" onclick={() => ws.refreshMedia()} disabled={ws.busy}>画像の一覧を再読み込み</button>
     </div>
   </div>
 
@@ -131,7 +131,7 @@
               data-testid="job-insert">{j.inserted ? "もう一度挿入" : "本文に挿入"}</button
             >
             <button type="button" onclick={() => j.name && ws.setCover(j.name, j.alt)} disabled={!editable}
-              >カバーにする</button
+              >カバー画像にする</button
             >
           {/if}
         </li>
@@ -179,7 +179,7 @@
                 >本文に挿入</button
               >
               <button type="button" onclick={() => ws.setCover(f.name, alts[f.name] ?? "")} disabled={!editable}
-                >カバーにする</button
+                >カバー画像にする</button
               >
               <button type="button" onclick={() => show(f.name)}>表示</button>
               <button
