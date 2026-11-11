@@ -5,7 +5,7 @@
  * 寸法の名前は px の値（`--space-12` は 12px）。rem で書き出すので、文字の拡大に追従する。
  * 段の選び方は docs/knowledge/product/design-system.md。
  */
-import { HUES, SCALES, SEMANTIC } from "./palette";
+import { BRAND, HUES, SCALES, SEMANTIC } from "./palette";
 
 type TokenGroup = { title: string; tokens: readonly (readonly [name: string, value: string, note?: string])[] };
 
@@ -128,12 +128,14 @@ export function renderTokensCss(): string {
   }
   out.push("  /* 意味の色（ライト） */");
   for (const s of SEMANTIC) out.push(line(`color-${s.name}`, `var(--${s.light})`, s.role));
+  out.push(line("color-brand", BRAND.light, BRAND.role));
   for (const g of STATIC_GROUPS) {
     out.push("", `  /* ${g.title} */`);
     for (const [n, v, note] of g.tokens) out.push(line(n, v, note));
   }
   out.push("}", "", "@media (prefers-color-scheme: dark) {", "  :root {", "    /* 意味の色（ダーク） */");
   for (const s of SEMANTIC) out.push(`  ${line(`color-${s.name}`, `var(--${s.dark})`)}`);
+  out.push(`  ${line("color-brand", BRAND.dark)}`);
   out.push("  }", "}", "");
   return out.join("\n");
 }

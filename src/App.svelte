@@ -14,6 +14,7 @@
   import CommitDialog from "./components/CommitDialog.svelte";
   import GitPanel from "./components/GitPanel.svelte";
   import HelpDialog from "./components/HelpDialog.svelte";
+  import Logotype from "./components/Logotype.svelte";
   import HelpTip from "./components/HelpTip.svelte";
   import ConfirmDialog from "./components/ConfirmDialog.svelte";
   import DraftSettings from "./components/DraftSettings.svelte";
@@ -206,7 +207,7 @@
 <!-- 上部バー：アプリ名・画面の切り替え・開いている場所とその操作・ヘルプ（docs/knowledge/product/app-shell.md） -->
 <header class="app-bar" class:workbench>
   <div class="brand">
-    <h1>Kotono CMS</h1>
+    <h1 class="logo-title"><Logotype height={workbench ? "1.25em" : "1.4em"} /></h1>
     {#if !workbench}<p class="tagline">手元のMarkdownで記事をつくる、ローカルCMS。</p>{/if}
   </div>
   {#if workbench}
@@ -523,7 +524,7 @@
     white-space: nowrap;
   }
   .tagline {
-    margin: 0;
+    margin: var(--space-4) 0 0;
     color: var(--color-muted);
     font-size: var(--font-size-14);
   }

@@ -101,6 +101,17 @@ export const SEMANTIC: readonly SemanticColor[] = [
 ];
 
 /**
+ * ブランドの色（固定の 16 進）。ロゴの記号・CMS の文字に使う。
+ * 値は design-system 0.4.0 の Petrol Blue と、そのダーク用の petrol-300 をそのまま写す。
+ * パレットの段（Oklab で生成）には乗せない：ブランドの値を段の格子に丸めないため。
+ */
+export const BRAND: { light: string; dark: string; role: string } = {
+  light: "#0573aa",
+  dark: "#85cdff",
+  role: "ロゴの記号・CMS・ブランドの強調（Petrol Blue）",
+};
+
+/**
  * コントラストの検査対象（WCAG 2.1 AA）。
  * 文字は 4.5:1（1.4.3）、部品の境界とフォーカスの輪は 3:1（1.4.11・2.4.7）。
  * `on` に並べた背景のすべてに対して満たすこと。
@@ -127,6 +138,10 @@ export const CONTRAST_RULES: readonly ContrastRule[] = [
     why: "フォーカスの輪（1.4.11・2.4.7）。輪は部品の 2px 外側に描くので、隣り合う背景と面に対して測る",
   },
 ];
+
+export function brandHex(theme: "light" | "dark"): string {
+  return theme === "light" ? BRAND.light : BRAND.dark;
+}
 
 export function semanticHex(name: string, theme: "light" | "dark"): string {
   const s = SEMANTIC.find((x) => x.name === name);

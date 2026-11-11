@@ -81,6 +81,7 @@
   --color-focus: var(--accent-48); /* フォーカスの輪 */
   --color-ok: var(--success-48); /* 成功・保存済み・公開対象 */
   --color-ng: var(--danger-48); /* エラー・未保存・削除・警告 */
+  --color-brand: #0573aa; /* ロゴの記号・CMS・ブランドの強調（Petrol Blue） */
 
   /* 文字 */
   --font-sans: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, sans-serif; /* 外部フォントは使わない（仕様 2.1・16.3） */
@@ -160,5 +161,6 @@
     --color-focus: var(--accent-72);
     --color-ok: var(--success-72);
     --color-ng: var(--danger-72);
+    --color-brand: #85cdff;
   }
 }

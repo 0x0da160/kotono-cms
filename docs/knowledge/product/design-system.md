@@ -30,7 +30,7 @@ sources:
 
 | 場所 | 中身 | 手で直すか |
 |---|---|---|
-| `src/lib/design/palette.ts` | 色相ごとのパレット（Oklab の L・C・h）、意味の色の割り当て、コントラストの検査対象 | 直す |
+| `src/lib/design/palette.ts` | 色相ごとのパレット（Oklab の L・C・h）、意味の色の割り当て、コントラストの検査対象、ブランドの色（`BRAND`） | 直す |
 | `src/lib/design/tokens.ts` | 文字・余白・角丸・影・フォーカスの輪・重なり順 | 直す |
 | `src/lib/design/oklab.ts` | Oklab と sRGB の変換、色域への収め方、WCAG のコントラスト比 | 通常は直さない |
 | `src/styles/tokens.css` | 上の2つから作る CSS カスタムプロパティ | 直さない（`pnpm tokens`） |
@@ -74,6 +74,8 @@ sources:
 | `--color-ok` | 成功・保存済み・公開対象 | `success-48` #00722a | `success-72` #59be6c |
 | `--color-ng` | エラー・未保存・削除・警告 | `danger-48` #b00d10 | `danger-72` #ff7264 |
 
+ブランドの色 `--color-brand`（ロゴの記号・CMS・ブランドの強調）は、パレットの段ではなく `palette.ts` の `BRAND` に値を持つ。ライトは #0573aa（Petrol Blue）、ダークは #85cdff（petrol-300）で、どちらもデザインシステム 0.4.0 のブランド色に一致する。部品の CSS からは他の意味の色と同じく `--color-brand` だけを使う。ロゴの規則は [ブランドのロゴ](brand-logo.md)。
+
 ### コントラスト（WCAG 2.1 AA）
 
 文字は 4.5:1（1.4.3）、入力欄の枠とフォーカスの輪は 3:1（1.4.11・2.4.7）。値は 8 ビットに丸めた後の 16 進で計算したもの。
@@ -95,11 +97,14 @@ sources:
 | `field-border` | `surface` | 3:1 | 3.96 | 3.57 |
 | `focus` | `bg` | 3:1 | 6.08 | 7.21 |
 | `focus` | `surface` | 3:1 | 6.82 | 6.57 |
+| `brand` | `bg` | 4.5:1 | 4.63 | 10.50 |
+| `brand` | `surface` | 4.5:1 | 5.20 | 9.57 |
 
 - `border` は装飾の区切り（領域・ボタンの枠）で、基準の対象外。部品を見分けるのに必要な境界には `field-border` を使う。
 - 無効なボタン（`opacity: 0.55`）は WCAG の対象外。
 - 状態は色だけで伝えない。バッジには必ず文字を入れ、通知には記号を付ける（仕様 14.1）。
 - 警告用の色は持たない（`ng` と記号で区別する）。使う場所が 2 か所以上になったら、`warning` の色相を足して同じ規則で検査する。
+- `brand` は `CONTRAST_RULES` の外に置き、同じ 4.5:1 を `tests/unit/brand.test.ts` で確かめる。
 
 ## 文字
 

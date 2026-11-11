@@ -1,5 +1,9 @@
 # Directory Update Log
 
+## 2026-11-11
+* **Addition**: [Kotono CMS のロゴ（記号・ロゴタイプ・アプリアイコン）](/product/brand-logo.md) を追加。ブランドの色を `--color-brand` として正本（palette.ts）に加え、上部バーのロゴタイプとアプリアイコン（PWA を含む）を差し替え。
+* **Update**: [Kotono CMS のデザインシステム](/product/design-system.md) に、ブランドの色（`--color-brand`）とそのコントラストの基準を追加。
+
 ## 2026-11-08
 * **Addition**: [ADR-0009 記事の任意の標準項目](/decisions/0009-optional-article-fields.md) を追加。[他の CMS との比較](/research/cms-comparison.md) の P1 の 5 件を実装済みと更新。
 * **Addition**: [他の CMS との比較](/research/cms-comparison.md) を追加（調査・未決定）。
