@@ -1,16 +1,21 @@
 ---
 type: Design System
 title: "Kotono CMS のデザインシステム（トークンと使い方の規則）"
-description: "デザインシステム 0.4.0。デザイントークン（色・文字・余白・角丸・影・フォーカスの輪・重なり順・動き）の正本の場所、ブランド6色と OKLCH のパレット、面の段と意味の色、状態色（情報・成功・注意・危険）、部品の操作状態、コントラストの基準（ライト・ダーク）、部品の CSS を書くときの規則。"
-tags: ["デザインシステム", "デザイントークン", "Oklab", "OKLCH", "カラーパレット", "コントラスト", "WCAG", "ダークモード", "CSS"]
+description: "デザインシステム 0.5.0。デザイントークン（色・文字・余白・角丸・影・フォーカスの輪・重なり順・動き・画面の端とキーボード）の正本の場所、ブランド6色と OKLCH のパレット、面の段と意味の色、状態色（情報・成功・注意・危険）、部品の操作状態、指の画面の規則（44px・安全領域・画面キーボード・下の操作バー・シート）、コントラストの基準（ライト・ダーク）、部品の CSS を書くときの規則。"
+tags: ["デザインシステム", "デザイントークン", "Oklab", "OKLCH", "カラーパレット", "コントラスト", "WCAG", "ダークモード", "CSS", "iPhone", "タッチ", "安全領域"]
 status: stable
-generated: { by: claude-code/2.1.318, at: 2026-11-09T13:30:00Z }
+generated: { by: claude-code/2.1.322, at: 2026-11-11T06:00:00Z }
 sources:
   - id: request-2026-11-09-design-system-0-4
     resource: "0x0da160 の依頼（2026-11-09）：添付のデザインシステム（0.3.0）を敵対的にレビューして完成させ、このプロジェクトに導入して適用する"
     title: "デザインシステム 0.4.0 の導入の依頼"
     author: human:0x0da160
     last_modified: 2026-11-09T13:02:37Z
+  - id: request-2026-11-10-iphone-17
+    resource: "0x0da160 の依頼（2026-11-10）：iPhone 17 Safari をメインターゲットとして UI を最適化する。UI コンポーネントやレイアウトを見直し、不足があればデザインシステムを改訂する。用語やワーディングも改善する"
+    title: "iPhone 17 の Safari に向けた UI の最適化の依頼"
+    author: human:0x0da160
+    last_modified: 2026-11-10T16:18:30Z
   - id: design-system-0-4-zip
     resource: "Kotono-Design-System-0.4.0.zip（プロジェクトの共有フォルダ design-system/0.4.0/）"
     title: "Kotono CMS Design System 0.4.0（設計仕様・生成器・見本）"
@@ -22,26 +27,28 @@ sources:
     author: human:bottosson
     last_modified: 2020-12-23T00:00:00Z
   - id: wcag22
-    resource: "https://www.w3.org/TR/WCAG22/（1.4.3 コントラスト（最低限）、1.4.11 非テキストのコントラスト、2.4.7 フォーカスの可視化、2.5.8 ターゲットの大きさ（最低限））"
+    resource: "https://www.w3.org/TR/WCAG22/（1.4.3 コントラスト（最低限）、1.4.11 非テキストのコントラスト、2.4.7 フォーカスの可視化、2.5.5 ターゲットの大きさ（高度）、2.5.8 ターゲットの大きさ（最低限））"
     title: "Web Content Accessibility Guidelines (WCAG) 2.2"
     author: team:w3c
     last_modified: 2024-12-12T00:00:00Z
 ---
 # デザインシステム
 
-デザインシステム 0.4.0。決定の経緯は [ADR-0010](../decisions/0010-design-system-0-4.md)（その前の再構築は [ADR-0007](../decisions/0007-design-system-oklab.md)）。ここには、部品の CSS を書くときに守る規則を置く。領域の配置と画面の切り替えは [アプリの外枠](app-shell.md)。
+デザインシステム 0.5.0。色とパレットは 0.4.0 のまま（[ADR-0010](../decisions/0010-design-system-0-4.md)。その前の再構築は [ADR-0007](../decisions/0007-design-system-oklab.md)）。0.5.0 では、iPhone 17 の Safari を主な対象にして、指の画面の規則と、画面の端・キーボードのトークンを足した（[ADR-0015](../decisions/0015-iphone-17-safari-first-ui.md)）。ここには、部品の CSS を書くときに守る規則を置く。領域の配置と画面の切り替えは [アプリの外枠](app-shell.md)。
 
 ## 正本と生成物
 
 | 場所 | 中身 | 手で直すか |
 |---|---|---|
 | `src/lib/design/palette.ts` | ブランド6色、系列と段、意味の色の割り当て、影と暗幕、コントラストの検査対象 | 直す |
-| `src/lib/design/tokens.ts` | 文字・余白・操作部品の寸法・角丸・線・フォーカスの輪・重なり順・動き・ブレークポイント | 直す |
+| `src/lib/design/tokens.ts` | 文字・余白・操作部品の寸法・画面の端とキーボード・角丸・線・フォーカスの輪・重なり順・動き・ブレークポイント | 直す |
 | `src/lib/design/oklab.ts` | Oklab と sRGB の変換、色域への収め方、WCAG のコントラスト比 | 通常は直さない |
 | `src/styles/tokens.css` | 上の2つから作る CSS カスタムプロパティ | 直さない（`pnpm tokens`） |
-| `src/app.css` | 全体の基本スタイル（`button`・`input`・`a`・`code`・`.badge` など）と操作状態。トークンを名前で使う | 直す |
+| `src/app.css` | 全体の基本スタイル（`button`・`input`・`a`・`code`・`.badge` など）と操作状態、指の画面の規則、下の操作バー、シート。トークンを名前で使う | 直す |
+| `src/lib/ui/viewport.ts` | 画面キーボードの高さを測り、`--keyboard-inset` と `data-keyboard` を `<html>` に書く | 通常は直さない |
+| `src/lib/ui/media.svelte.ts` | 狭い画面（60rem 以下）・指の画面かどうかを、部品のスクリプトから読むための値 | 通常は直さない |
 
-`tests/unit/design-tokens.test.ts` が、tokens.css と正本の一致、ブランド6色の再現、パレットの明度、面の段がテーマごとに互いに異なること、すべてのコントラストの基準、部品のスタイルに 16 進の色・パレット・旧い変数名がないことを確かめる。
+`tests/unit/design-tokens.test.ts` が、tokens.css と正本の一致、ブランド6色の再現、パレットの明度、面の段がテーマごとに互いに異なること、すべてのコントラストの基準、部品のスタイルに 16 進の色・パレット・旧い変数名がないこと、`index.html` と manifest に直接書いたブラウザの枠の色が正本と同じことを確かめる。`tests/e2e/iphone.spec.ts` が、iPhone 17 の大きさ（402×874・タッチ）で、押せる大きさ・入力欄の文字・横スクロールのないことを確かめる。
 
 共有フォルダの `design-system/0.4.0/` にある ZIP（仕様・独立した生成器・見本の HTML）が設計の出典。値はアプリの正本と同じで、アプリでは `--kc-*` の代わりに次の名前を使う：意味の色は `--color-<名前>`、パレットは `--palette-<名前>`、それ以外は接頭辞なし（`--space-8` など）。今後の変更はアプリの正本で行う。
 
@@ -146,7 +153,7 @@ page・surface・raised・hover・pressed は、どちらのテーマでも互�
 | `--line-height-body`・`-tight`・`-prose` | 1.6・1.5・1.75 | 基本・一覧のタイトル・本文の見たまま編集とプレビュー |
 | `--font-weight-regular`・`-strong` | 400・600 | |
 
-段の外の大きさは使わない。値は rem で書き出すので、文字の拡大に追従する。指で操作する画面では入力欄を 16px 以上にする（`app.css`）。
+段の外の大きさは使わない。値は rem で書き出すので、文字の拡大に追従する。指で操作する画面では、入力欄・選択欄・本文欄・見たまま編集を 16px 以上にする（`app.css` の 1 か所で指定する。部品で小さい文字を指定していても 16px になる）。16px より小さいと、iOS の Safari がフォーカスのときに画面を拡大するため。
 
 ## 余白・間隔
 
@@ -163,13 +170,55 @@ page・surface・raised・hover・pressed は、どちらのテーマでも互�
 | `--control-gap` | 6px | 横に並べた操作の間隔 |
 | `--panel-pad` | 12px 16px | カード・パネルの内側 |
 | `--panel-pad-sm` | 8px 12px | 入れ子の枠・お知らせ・問題の一覧の内側 |
-| `--touch-target` | 44px | 指の画面のメニューの項目・メニューの開閉（Apple HIG） |
-| `--touch-target-md` | 36px | 指の画面の標準のボタン・入力欄・選択欄（WCAG 2.5.8 ＋余裕） |
-| `--touch-target-sm` | 32px | 指の画面の詰めたボタン・開閉の見出し（WCAG 2.5.8） |
+| `--touch-target` | 44px | 指の画面の、押せる部品すべての下限（Apple HIG・WCAG 2.5.5） |
+| `--touch-target-inline` | 32px | 文や行の中の小さな部品の見た目の下限。押せる範囲は 44px に広げる（`.touch-inline`） |
 
-- 指で操作する画面（`@media (pointer: coarse)`）では、押せる高さの下限を部品の種類で分ける（[ADR-0011](../decisions/0011-passkey-first-and-compact-ui.md)）。標準のボタン・入力欄・選択欄は `--touch-target-md`（36px）、詰めたボタン（`button.compact`）と開閉の見出し（`summary`）は `--touch-target-sm`（32px）、メニューの項目と開閉は `--touch-target`（44px）。どれも WCAG 2.2 の 2.5.8（AA：24px）を床にし、44px（2.5.5 AAA・Apple HIG）は画面の端で頻繁に押す移動だけにする。
+- 指で操作する画面の規則は、下の「指の画面」にまとめた。0.4.0 の `--touch-target-md`（36px）・`--touch-target-sm`（32px）はなくした。
 - マウスの画面での押せる大きさは 24px 以上（WCAG 2.2 の 2.5.8）。詰めた部品でも 27px あり、「?」の説明（24px）がいちばん小さい。
 - 2026-11-08 に詰めた（標準 40px → 34px、詰め 32px → 27px、並べた操作の間隔 8px → 6px、外側のカードの余白 16px 20px → 12px 16px）。
+
+## 指の画面（iPhone の Safari が主な対象）
+
+[ADR-0015](../decisions/0015-iphone-17-safari-first-ui.md)。規則は `app.css` に置き、部品には書かない。
+
+### 押せる大きさ
+
+| 部品 | 指の画面（`pointer: coarse`） | 指定の場所 |
+|---|---|---|
+| ボタン・選択欄・入力欄・タブ・開閉の見出し・メニューの項目 | 高さ 44px 以上 | `app.css`（部品では指定しない） |
+| アイコンだけのボタン | 44×44px 以上 | 部品で `min-width: var(--touch-target)` |
+| 文や行の中の小さな部品（「?」・チップの「×」・トーストの「×」） | 見た目 32px、押せる範囲 44px | クラス `touch-inline` |
+| チェックボックス・ラジオ | 22px。ラベルの行が 44px | `app.css` |
+| 文の中のリンク | 文字の大きさのまま（WCAG 2.5.8 の例外） | — |
+
+- 隣り合う `touch-inline` は、押せる範囲が重ならないよう 12px 以上あける。
+- hover の見た目は `@media (hover: hover)` の中に書く。押している間の色（`:active`）は外に書く。
+- 押下の灰色の反転（`-webkit-tap-highlight-color`）は消してある。押下の色は `bg-pressed` などで出す。
+
+### 画面の端とキーボード
+
+| トークン | 値 | 用途 |
+|---|---|---|
+| `--safe-top`・`--safe-right`・`--safe-bottom`・`--safe-left` | `env(safe-area-inset-*, 0px)` | 安全領域（ノッチ・Dynamic Island・ホームインジケーター）。`viewport-fit=cover` で画面の端まで使うので、端に付く部品はこれを余白に足す |
+| `--page-gutter` | 16px | 画面の左右の余白。安全領域はこれに足す |
+| `--keyboard-inset` | 0px（`viewport.ts` が書く） | 画面キーボードが下から覆っている高さ。出ている間は `html[data-keyboard="open"]` |
+| `--bottom-bar-height` | 0px（`app.css` が書く） | 下の操作バーの高さ。バーのない画面では 0px |
+
+- 画面の下に固定する部品は `bottom: var(--keyboard-inset)` で置く。キーボードが出ている間は `--safe-bottom` を足さない。
+- 下に固定した部品の上に、スクロールする中身の余白を取る（`--bottom-bar-height` ＋ `--keyboard-inset`）。フォーカスした欄が隠れないよう、`scroll-padding-bottom` にも同じ値を足す。
+- 高さに `100vh` を使わない。iOS の Safari ではアドレスバーの分だけ大きくなる。`100dvh` を使う。
+
+### 下の操作バー（`[data-bottom-bar]`）
+
+狭い画面（60rem 以下）で、その画面の主な操作を画面の下に固定する帯。属性を付けるだけで、位置・余白・安全領域・キーボードへの追従が付く。いまは編集画面の操作列だけが使う。
+
+- 主な操作（`button.primary`）を 1 つ、幅を使って置く。そのほかはアイコン（44px）にし、名前は読み上げ用に残す（`.t` を見えなくする）。
+- 4 つより多く置かない。頻度の低い操作は「…」に入れ、メニューは上へ開く。
+- 1 つの画面に 1 つだけ。
+
+### シート（30rem 以下のダイアログ）
+
+`dialog:modal` は、30rem 以下では画面の下から出すシートになる（`app.css`）。幅は画面いっぱい、上の角だけ `--radius-lg`、高さは上部バーの分を残し、キーボードが出ている間はその上に載る。`.buttons` は縦に並び、幅いっぱいになる。部品の側では何も指定しない。
 
 ## 角丸・線・重なり順・動き
 
@@ -184,7 +233,7 @@ page・surface・raised・hover・pressed は、どちらのテーマでも互�
 | `--duration-fast`・`--duration-normal`・`--easing-standard` | 120ms・200ms | hover・押下の色の変化・開閉。動きを減らす設定では 0ms |
 | `--breakpoint-sm`・`-md`・`-lg` | 30rem・60rem・75rem | 参照用（`@media` では変数を使えない）。各部品の `@media` と同じ値 |
 | `--line-height-heading` | 1.35 | 見出し |
-| `--target-min` | 24px | マウスで押せる最小の大きさ |
+| `--target-min` | 24px | マウスで押せる最小の大きさ（指の画面は `--touch-target`） |
 
 ## 操作状態（`app.css`）
 
@@ -213,6 +262,9 @@ page・surface・raised・hover・pressed は、どちらのテーマでも互�
 5. 新しい意味の色を足すときは、`palette.ts` の `SEMANTIC` と `CONTRAST_RULES` の両方に足し、`pnpm tokens` で書き直す。
 6. 旧い名前（`--color-bg`・`--color-surface`・`--color-text`・`--color-muted`・`--color-border`・`--color-field-border`・`--color-focus`・`--color-ok`・`--color-ng`、さらに古い `--bg` など）は廃止した。使うと試験が落ちる。
 7. 親の文字に比例させたい所（`code` の 0.9em など）は em のままでよい。
+8. 指の画面のための高さ・文字の大きさを部品に書かない（`app.css` が付ける）。アイコンだけのボタンの幅と、`touch-inline` だけを部品で指定する。
+9. hover は `@media (hover: hover)` の中に書く。
+10. 画面の端（上・下・左右）に付く部品は、安全領域（`--safe-*`）を余白に足す。下に固定する部品は `--keyboard-inset` の上に置く。
 
 ## 対象外
 

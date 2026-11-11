@@ -207,7 +207,7 @@ test("content/articles/ がなければ確認後に作成する（3.1）", async
     [],
   );
   await page.getByTestId("prepare-articles").click();
-  await expect(page.getByTestId("list-summary")).toHaveText("記事がありません");
+  await expect(page.getByTestId("list-summary")).toHaveText("記事はまだありません。「新規作成」から始められます。");
 });
 
 test("説明文・著者・読者向けの更新日時・訂正・カバーのキャプションをフォームで入れ、公開後の slug 変更で旧 slug を残す", async ({

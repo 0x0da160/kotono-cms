@@ -168,7 +168,7 @@
 <section class="preview" aria-labelledby="preview-heading">
   <div class="head">
     <h3 id="preview-heading">プレビュー</h3>
-    <button type="button" onclick={reloadImages}>画像を読み直す</button>
+    <button type="button" onclick={reloadImages}>画像を再読み込み</button>
   </div>
   <p class="muted small">
     未保存の内容を表示します。公開サイトの見た目・URL は保証しません。スクリプト・生 HTML・外部画像は表示しません。

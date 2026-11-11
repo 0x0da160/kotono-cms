@@ -72,7 +72,7 @@
     const v = await ws.ask({
       title: "復旧ドラフトを削除します",
       message: `${r.isNew ? "未保存の新規記事" : r.articleId} のドラフト（${new Date(r.savedAt).toLocaleString("ja-JP")}）を削除します。`,
-      details: ["削除したドラフトは戻せません。必要なら先に「原文を退避」してください。"],
+      details: ["削除したドラフトは戻せません。必要なら先に「原文をダウンロード」してください。"],
       buttons: [
         { label: "削除する", value: "delete", variant: "danger" },
         { label: "キャンセル", value: "cancel" },
@@ -103,8 +103,8 @@
       {#if associated && checks[k(r)]}
         <button type="button" class="primary" onclick={() => ws.openDraft(r)} disabled={ws.busy}>編集として開く</button>
       {/if}
-      <button type="button" onclick={() => download(r)}>原文を退避</button>
-      <button type="button" class="danger" onclick={() => remove(r)}>削除</button>
+      <button type="button" onclick={() => download(r)}>原文をダウンロード</button>
+      <button type="button" class="danger" onclick={() => remove(r)}>削除…</button>
     </div>
   </li>
 {/snippet}
@@ -132,7 +132,7 @@
       <details>
         <summary>関連先未確認のドラフト（{others.length}件）</summary>
         <p class="muted small">
-          この作業フォルダと同じか確認できないドラフトです。別の記事へ自動では適用しません。原文を退避して内容を確認してください。
+          この作業フォルダと同じか確認できないドラフトです。別の記事へ自動では適用しません。原文をダウンロードして内容を確認してください。
         </p>
         <ul class="list">
           {#each others as r (k(r))}{@render row(r, false)}{/each}

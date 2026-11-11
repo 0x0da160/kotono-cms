@@ -18,16 +18,14 @@
     variant?: "footer" | "page";
   } = $props();
 
-  const modeLabel = $derived(
-    dc.mode === "enabled" ? "有効" : dc.mode === "disabled" ? "無効（復旧退避なし）" : "利用できません",
-  );
+  const modeLabel = $derived(dc.mode === "enabled" ? "有効" : dc.mode === "disabled" ? "無効" : "利用できません");
 
   async function enable() {
     await dc.enable();
     await ws.attachDrafts();
     // 有効にする前から開いていた未保存の編集も、退避の対象にする
     if (ws.session) dc.onEdit(ws.session);
-    ws.announce("ブラウザ内復旧ドラフトを有効にしました。");
+    ws.announce("復旧ドラフトを有効にしました。");
   }
 
   async function turnOff() {
@@ -150,12 +148,6 @@
   /* フッターで文字を詰めても、操作できる高さは 24px 以上にする（段階4 4章、WCAG 2.5.8） */
   .settings summary {
     cursor: pointer;
-    min-height: 1.5rem;
-    padding-block: 0.15rem;
-  }
-  @media (pointer: coarse) {
-    .settings summary {
-      min-height: var(--touch-target-sm);
-    }
+    min-height: var(--target-min);
   }
 </style>

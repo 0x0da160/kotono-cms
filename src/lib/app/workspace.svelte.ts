@@ -321,7 +321,7 @@ export class Workspace {
     if (!(await this.confirmLeave("別のフォルダを開く前に、未保存の編集をどうしますか。"))) return;
     const h = this.recentHandle;
     if (!looksLikeDirHandle(h)) {
-      this.folderError = `前回のフォルダ「${this.recent.name}」を開けません。「フォルダを選択」から選び直してください。`;
+      this.folderError = `前回のフォルダ「${this.recent.name}」を開けません。「フォルダを開く」から選び直してください。`;
       return;
     }
     const dir = h as DirHandleLike;

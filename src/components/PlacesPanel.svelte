@@ -79,7 +79,8 @@
         m.lastExportAt ? `最後に書き出しを開始した日時：${fmt(m.lastExportAt)}` : "まだ書き出していません。",
         m.lastSyncAt ? `最後に同期した日時：${fmt(m.lastSyncAt)}` : "GitHub と同期していません。",
       );
-      if (since !== null) details.push(`書き出し・同期していない変更があります（${since} 日前から）。`);
+      if (since !== null)
+        details.push(`書き出し・同期していない変更があります${since > 0 ? `（${since} 日前から）` : ""}。`);
       details.push("暗号化した作業場所です。書き出しがなければ、削除後は誰も内容を戻せません。");
       if (v.locked) details.push("いまのロック解除の鍵では開けない作業場所です（鍵を作り直す前に作りました）。");
     } else details.push("作成・取り込みの途中で止まった作業場所です。");
@@ -149,7 +150,7 @@
               void exportPlace(exportMeta);
             }}
             disabled={places.busy}
-            data-testid="place-export">書き出す</button
+            data-testid="place-export">書き出す…</button
           >
         {/if}
         <button
@@ -160,7 +161,7 @@
             void remove(v);
           }}
           disabled={places.busy}
-          data-testid="place-remove">削除</button
+          data-testid="place-remove">削除…</button
         >
       </div>
     {/if}
@@ -244,7 +245,9 @@
               {@const days = places.remindDays(e.meta)}
               <p class="muted small meta">
                 {#if days !== null}
-                  <span class:warn={places.shouldRemind(e.meta)}>書き出し・同期していない変更あり（{days} 日）</span>
+                  <span class:warn={places.shouldRemind(e.meta)}
+                    >書き出し・同期していない変更あり{#if days > 0}（{days} 日前から）{/if}</span
+                  >
                 {:else if e.meta.lastExportAt || e.meta.lastSyncAt}
                   書き出し・同期していない変更はありません
                 {/if}
@@ -399,13 +402,23 @@
     border-color: transparent;
     background: transparent;
   }
-  .more-list button:not(:disabled):hover {
-    background: var(--color-bg-hover);
+  @media (hover: hover) {
+    .more-list button:not(:disabled):hover {
+      background: var(--color-bg-hover);
+    }
+  }
+  .more-list button:not(:disabled):active {
+    background: var(--color-bg-pressed);
   }
   @media (pointer: coarse) {
-    .more-toggle,
-    .more-list button {
-      min-height: var(--touch-target);
+    .more-toggle {
+      min-width: var(--touch-target);
+    }
+  }
+  /* 狭い画面：「開く」を広く取り、「…」は右端に置く。「…」の中身は右端をそろえて開く */
+  @media (max-width: 30rem) {
+    .places .actions > .primary {
+      flex: 1 1 auto;
     }
   }
   /* 新しい作業場所・取り込み：作業場所がもうあるときは、折り畳んでおく */
@@ -424,11 +437,6 @@
   .add[open] > summary {
     margin-block-end: var(--space-8);
   }
-  @media (pointer: coarse) {
-    .add > summary {
-      min-height: var(--touch-target-sm);
-    }
-  }
   .sub {
     border-top: 1px solid var(--color-border-subtle);
     padding-top: var(--space-12);
@@ -439,15 +447,6 @@
     flex-direction: column;
     gap: var(--space-4);
     margin-block: var(--space-8);
-  }
-  input:not([type="checkbox"]) {
-    font: inherit;
-    line-height: var(--control-line-height);
-    padding: var(--control-pad-y) var(--space-8);
-    border: 1px solid var(--color-border-subtle);
-    border-radius: var(--radius-md);
-    background: var(--bg, transparent);
-    color: inherit;
   }
   .banner {
     border: 1px solid var(--color-danger-border);

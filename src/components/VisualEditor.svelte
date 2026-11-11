@@ -12,6 +12,7 @@
   import { PREVIEW_MAX_IMAGES, PROVISIONAL_PREVIEW_IMAGE_MAX_BYTES } from "../lib/core/budgets";
   import { classifyUrl } from "../lib/core/markdown";
   import { listVariants, loadDisplayImage } from "../lib/fs/media";
+  import { coarsePointer } from "../lib/ui/media.svelte";
   import { renderTree } from "../lib/visual/render";
   import { serializeRoot, type PristineBlock, type VNode } from "../lib/visual/serialize";
 
@@ -403,9 +404,27 @@
   const keep = (e: MouseEvent) => e.preventDefault();
 
   // ---------------------------------------------------------------------------
-  // カーソルの近くに出す書式の帯（ADR-0011）
+  // 書式の帯。マウスの画面ではカーソルの近くに浮かべる（ADR-0011）。
+  // 指の画面（iPhone・iPad）では画面の下に付け、キーボードが出ている間はその上に載せる（ADR-0015）。
+  // カーソルの近くに浮かべると、iOS の選択のメニュー（コピー・ペースト）や選択のつまみと重なるため。
 
-  const barShown = $derived(editable && focused && barPos !== null);
+  const docked = $derived(coarsePointer.matches);
+  const barShown = $derived(editable && focused && (docked || barPos !== null));
+
+  /**
+   * 画面の下に付けた帯・操作バー・キーボードに、キャレットの行が隠れないようにする。
+   * 見えている範囲（visualViewport）の下端から、帯と操作バーの高さを引いた位置より下にあれば、その分だけ送る。
+   */
+  function keepCaretVisible() {
+    if (!docked || !focused || !bar) return;
+    const c = caretRect();
+    if (!c) return;
+    const vv = window.visualViewport;
+    const bottom = vv ? vv.offsetTop + vv.height : innerHeight;
+    const bottomBar = document.querySelector<HTMLElement>("[data-bottom-bar]")?.offsetHeight ?? 0;
+    const limit = bottom - bar.offsetHeight - bottomBar - 8;
+    if (c.bottom > limit) scrollBy({ top: c.bottom - limit });
+  }
 
   /** キャレット・選択範囲の画面上の矩形。見えなければ null */
   function caretRect(): DOMRect | null {
@@ -438,7 +457,7 @@
   function place() {
     cancelAnimationFrame(raf);
     raf = requestAnimationFrame(() => {
-      if (!box || !editable || !focused) {
+      if (!box || !editable || !focused || docked) {
         barPos = null;
         return;
       }
@@ -492,12 +511,17 @@
     const onSel = () => {
       if (focused) place();
     };
+    const onCaret = () => {
+      if (focused) requestAnimationFrame(keepCaretVisible);
+    };
     document.addEventListener("selectionchange", onSel);
+    document.addEventListener("selectionchange", onCaret);
     addEventListener("scroll", onSel, { capture: true, passive: true });
     addEventListener("resize", onSel, { passive: true });
     return () => {
       cancelAnimationFrame(raf);
       document.removeEventListener("selectionchange", onSel);
+      document.removeEventListener("selectionchange", onCaret);
       removeEventListener("scroll", onSel, { capture: true });
       removeEventListener("resize", onSel);
     };
@@ -513,12 +537,13 @@
   <div
     bind:this={bar}
     class="fmt"
+    class:docked
     class:below={barPos?.below}
     role="toolbar"
     aria-label="書式（Alt+F10 で移動、Esc で本文へ）"
     hidden={!barShown}
-    style:top={barPos ? `${barPos.top}px` : undefined}
-    style:left={barPos ? `${barPos.left}px` : undefined}
+    style:top={barPos && !docked ? `${barPos.top}px` : undefined}
+    style:left={barPos && !docked ? `${barPos.left}px` : undefined}
     data-testid="fmt-bar"
   >
     <div class="fmt-row">
@@ -630,12 +655,15 @@
             bind:this={linkInput}
             bind:value={linkUrl}
             type="url"
+            autocapitalize="off"
+            autocorrect="off"
+            enterkeyhint="done"
             onkeydown={onLinkKeydown}
             data-testid="link-url"
           /></label
         >
         <button type="button" class="compact primary" onclick={applyLink} data-testid="link-apply">適用</button>
-        <button type="button" class="compact" onclick={removeLink}>外す</button>
+        <button type="button" class="compact" onclick={removeLink}>リンクを外す</button>
         <button
           type="button"
           class="compact"
@@ -690,7 +718,60 @@
     background: var(--color-bg-raised);
     border: 1px solid var(--color-border-control);
     border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-2);
+  }
+  /*
+   * 指の画面：画面の下に付ける（下部の操作バーがあればその上、キーボードが出ていればその上）。
+   * 1 行に並べて横へ送る。ボタンは 44px（app.css の下限）。
+   */
+  .fmt.docked {
+    position: fixed;
+    inset-inline: 0;
+    bottom: calc(var(--keyboard-inset) + var(--bottom-bar-height));
+    z-index: var(--z-raised);
+    max-width: none;
+    gap: 0;
+    padding: var(--space-2) calc(var(--space-8) + var(--safe-right)) var(--space-2)
+      calc(var(--space-8) + var(--safe-left));
+    border: none;
+    border-top: var(--border-width) solid var(--color-border-control);
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .fmt.docked .fmt-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+  .fmt.docked .fmt-row::-webkit-scrollbar {
+    display: none;
+  }
+  .fmt.docked button {
+    flex: none;
+    min-width: var(--touch-target);
+    padding-inline: var(--space-6);
+    font-size: var(--font-size-14);
+    white-space: nowrap;
+  }
+  .fmt.docked .sep {
+    align-self: center;
+    height: 1.5rem;
+  }
+  .fmt.docked .fmt-row + .fmt-row {
+    border-top: var(--border-width) solid var(--color-border-subtle);
+  }
+  /* リンク先の入力は折り返して、入力欄を 1 行に取る */
+  .fmt.docked .link-row {
+    flex-wrap: wrap;
+    padding: var(--space-4) 0;
+  }
+  .fmt.docked .link-row label {
+    flex: 1 1 100%;
+  }
+  /* 操作バーもキーボードもないとき（iPad の外付けキーボードなど）は、ホームインジケーターの分をあける */
+  :global(:root:not([data-keyboard]):not(:has([data-bottom-bar]))) .fmt.docked {
+    padding-bottom: calc(var(--space-2) + var(--safe-bottom));
   }
   .fmt[hidden] {
     display: none;
@@ -708,8 +789,10 @@
     border-color: transparent;
     background: transparent;
   }
-  .fmt button:hover:not(:disabled) {
-    background: var(--color-bg-hover);
+  @media (hover: hover) {
+    .fmt button:hover:not(:disabled) {
+      background: var(--color-bg-hover);
+    }
   }
   .fmt button[aria-expanded="true"] {
     background: var(--color-accent-subtle);

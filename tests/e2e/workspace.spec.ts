@@ -234,6 +234,13 @@ async function createArticle(page: Page, title: string): Promise<void> {
   await expect(page.getByTestId("save-status")).toHaveText("保存済み");
 }
 
+/** 狭い画面のコミットは「原文の退避・その他」の中にある */
+async function openCommit(page: Page): Promise<void> {
+  const commit = page.getByTestId("commit-button");
+  if (!(await commit.isVisible())) await page.getByTestId("more-actions").click();
+  await commit.click();
+}
+
 /** 無操作のまま 16 分たつ（既定の自動ロックは 15 分）。ロック解除の画面に戻る */
 async function idleUntilLocked(page: Page): Promise<void> {
   await page.clock.fastForward("16:00");
@@ -249,7 +256,7 @@ test("復旧ドラフトの窓と確認を開いたまま自動ロックがか�
   await createArticle(page, "ひみつの記事");
   // 未保存の編集を退避してから読み込み直すと、復旧ドラフトの候補になる
   await page.getByLabel("タイトル", { exact: true }).fill("ひみつの下書き");
-  await expect(page.getByTestId("draft-status")).toContainText("復旧退避済み", { timeout: 10_000 });
+  await expect(page.getByTestId("draft-status")).toContainText("復旧ドラフト：退避済み", { timeout: 10_000 });
   await page.reload();
   await loginAgain(page);
   await page.getByTestId("place-open").click();
@@ -277,7 +284,7 @@ test("復旧ドラフトの窓と確認を開いたまま自動ロックがか�
   await page.getByTestId("place-open").click();
   await menu(page, "recovery-open");
   await expect(candidate).toContainText(id);
-  await expect(candidate.getByRole("button", { name: "原文を退避" })).toBeVisible();
+  await expect(candidate.getByRole("button", { name: "原文をダウンロード" })).toBeVisible();
 });
 
 test("コミットの窓を開いたまま自動ロックがかかっても、ロック解除の画面に題名を残さない。ロックを解除すると、またコミットできる（39.3）", async ({
@@ -291,7 +298,7 @@ test("コミットの窓を開いたまま自動ロックがかかっても、�
   await page.getByRole("button", { name: "初期化する", exact: true }).click();
   await expect(page.getByTestId("git-notice")).toContainText("初期化しました");
   await menu(page, "nav-editor");
-  await page.getByTestId("commit-button").click();
+  await openCommit(page);
   await page.getByRole("button", { name: "理解して続ける" }).click();
   const commit = page.getByTestId("commit-dialog");
   await expect(commit).toBeVisible();
@@ -305,7 +312,7 @@ test("コミットの窓を開いたまま自動ロックがかかっても、�
   await loginAgain(page);
   await page.getByTestId("place-open").click();
   await page.getByRole("button", { name: /ひみつの記事/ }).click();
-  await page.getByTestId("commit-button").click();
+  await openCommit(page);
   await page.getByRole("button", { name: "理解して続ける" }).click();
   await expect(commit).toContainText("ひみつの記事");
   await page.getByTestId("commit-name").fill("山田 太郎");
