@@ -221,3 +221,95 @@ test("保存領域を消さないよう求めると、ブラウザが許可し�
   await expect(page.getByTestId("persist-answer")).toContainText("ブラウザは許可しませんでした");
   await expect(page.getByTestId("persist-ask")).toBeEnabled();
 });
+
+/** 作業場所を作り、記事を 1 件保存する */
+async function createArticle(page: Page, title: string): Promise<void> {
+  await page.getByTestId("place-name").fill("ブログ");
+  await page.getByTestId("place-create-run").click();
+  await expect(page.getByTestId("folder-name")).toHaveText("作業場所：ブログ");
+  await page.getByRole("button", { name: "新規作成" }).click();
+  await page.getByLabel("タイトル", { exact: true }).fill(title);
+  await page.getByLabel("slug", { exact: true }).fill("himitsu");
+  await page.getByTestId("save-button").click();
+  await expect(page.getByTestId("save-status")).toHaveText("保存済み");
+}
+
+/** 無操作のまま 16 分たつ（既定の自動ロックは 15 分）。ロック解除の画面に戻る */
+async function idleUntilLocked(page: Page): Promise<void> {
+  await page.clock.fastForward("16:00");
+  await expect(page.getByTestId("login")).toHaveAttribute("data-phase", "login");
+}
+
+test("復旧ドラフトの窓と確認を開いたまま自動ロックがかかっても、ロック解除の画面に復号した内容を残さない（39.3）", async ({
+  page,
+}) => {
+  // 無操作の時間を進めるために、時計を差し替える（時間はそのまま流れ、fastForward で先へ進める）
+  await page.clock.install();
+  await open(page);
+  await createArticle(page, "ひみつの記事");
+  // 未保存の編集を退避してから読み込み直すと、復旧ドラフトの候補になる
+  await page.getByLabel("タイトル", { exact: true }).fill("ひみつの下書き");
+  await expect(page.getByTestId("draft-status")).toContainText("復旧退避済み", { timeout: 10_000 });
+  await page.reload();
+  await loginAgain(page);
+  await page.getByTestId("place-open").click();
+  await expect(page.getByTestId("folder-name")).toHaveText("作業場所：ブログ");
+  await menu(page, "recovery-open");
+  const dialog = page.getByTestId("recovery-dialog");
+  const candidate = dialog.getByTestId("draft-candidate").first();
+  await expect(candidate).toBeVisible();
+  const id = (await candidate.locator("strong").textContent()) ?? "";
+  expect(id).toMatch(/^[0-9a-z]{7}$/);
+  // 候補の削除の確認を開いたまま、席を離れる
+  await candidate.getByRole("button", { name: "削除" }).click();
+  await expect(page.getByRole("button", { name: "削除する" })).toBeVisible();
+  await expect(page.locator("dialog[open]")).toHaveCount(2);
+
+  await idleUntilLocked(page);
+  // ロック解除の画面の上に、窓・候補・記事の ID（読み上げ用の文を含む）を残さない
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+  await expect(page.getByTestId("draft-candidate")).toHaveCount(0);
+  await expect(page.getByTestId("announcer")).toHaveText("");
+  await expect(page.locator("#app")).not.toContainText(id);
+
+  // 確認は取り消しただけで、ドラフトは消していない。ロックを解除して開き直すと、また候補に出る
+  await loginAgain(page);
+  await page.getByTestId("place-open").click();
+  await menu(page, "recovery-open");
+  await expect(candidate).toContainText(id);
+  await expect(candidate.getByRole("button", { name: "原文を退避" })).toBeVisible();
+});
+
+test("コミットの窓を開いたまま自動ロックがかかっても、ロック解除の画面に題名を残さない。ロックを解除すると、またコミットできる（39.3）", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await open(page);
+  await createArticle(page, "ひみつの記事");
+  await menu(page, "nav-changes");
+  await page.getByTestId("git-init").click();
+  await page.getByRole("button", { name: "初期化する", exact: true }).click();
+  await expect(page.getByTestId("git-notice")).toContainText("初期化しました");
+  await menu(page, "nav-editor");
+  await page.getByTestId("commit-button").click();
+  await page.getByRole("button", { name: "理解して続ける" }).click();
+  const commit = page.getByTestId("commit-dialog");
+  await expect(commit).toBeVisible();
+  await expect(commit).toContainText("ひみつの記事");
+
+  await idleUntilLocked(page);
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+  await expect(page.locator("#app")).not.toContainText("ひみつの記事");
+
+  // コミットは取り消しただけで、処理中のまま残さない。ロックを解除すると、またコミットできる
+  await loginAgain(page);
+  await page.getByTestId("place-open").click();
+  await page.getByRole("button", { name: /ひみつの記事/ }).click();
+  await page.getByTestId("commit-button").click();
+  await page.getByRole("button", { name: "理解して続ける" }).click();
+  await expect(commit).toContainText("ひみつの記事");
+  await page.getByTestId("commit-name").fill("山田 太郎");
+  await page.getByTestId("commit-email").fill("taro@example.com");
+  await page.getByTestId("commit-confirm").click();
+  await expect(page.getByTestId("git-notice-strip")).toContainText("コミットしました");
+});

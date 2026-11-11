@@ -14,6 +14,11 @@
     el?.showModal();
   }
 
+  /** 開いていれば閉じる（ロックしたとき） */
+  export function close() {
+    el?.close();
+  }
+
   function onClose() {
     opener?.focus();
     opener = null;

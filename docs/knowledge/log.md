@@ -1,5 +1,9 @@
 # Directory Update Log
 
+## 2026-11-11
+* **Update**: [Kotono CMS のアプリの外枠（シェル）](/product/app-shell.md) に、ロックしたとき（自動ロックを含む）の片付けを追加。開いているダイアログを閉じ、待っている確認とコミットの画面を取り消し、復号した復旧ドラフトの一覧と読み上げ用の文を捨てる。
+* **Update**: [ADR-0013](/decisions/0013-header-menu-consolidation.md) の、メニューから開くダイアログの項目に、ロックしたときの扱いの注記を追加。
+
 ## 2026-11-10
 * **Addition**: [ADR-0014 以前の版との互換をなくし、表現を「ロック」と「ロック解除」の対にする](/decisions/0014-lock-unlock-wording-and-no-backward-compat.md) を追加。ADR-0012 の互換の項目（パスフレーズの枠・以前の版の作業場所・以前の形式の書き出し）と、ADR-0013 で未決だった「ロック」の名前を置き換えた。
 * **Update**: [Kotono CMS のアプリの外枠（シェル）](/product/app-shell.md) の「ログイン」を「ロック解除」に改め、パスフレーズと作業場所ごとの解錠の記述を外した。
