@@ -375,9 +375,14 @@
     gap: var(--control-gap);
     margin-top: var(--space-8);
   }
-  /* 「…」：行の中の操作を1つにまとめる。開いた一覧は、ほかの要素の上に重ねる */
+  /*
+   * 「…」：行の中の操作を1つにまとめる。開いた一覧は、ほかの要素の上に重ねる。
+   * 「…」は行の右端に置き（開く・操作がないときも）、一覧は右端をそろえて開く。
+   * 左寄りに置くと、一覧が画面の左の端からはみ出す（iPhone の縦で見切れた）。
+   */
   .more {
     position: relative;
+    margin-inline-start: auto;
   }
   .more-toggle {
     padding-inline: var(--space-8);
