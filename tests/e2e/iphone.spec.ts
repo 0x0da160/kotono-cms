@@ -171,6 +171,25 @@ test("どの画面でも、押せる部品は 44px 以上・入力欄の文字�
   expect(more.x + more.width).toBeLessThanOrEqual(W);
 });
 
+test("作業場所の「…」は、「開く」がない行（開けない作業場所）でも右端に置き、一覧を画面の中に開く", async ({
+  page,
+}) => {
+  await open(page);
+  await menu(page, "place-leave");
+  await expect(page.getByTestId("place")).toBeVisible();
+  // 開けない作業場所の行は「開く」がなく、「…」だけが行の左に並ぶ。その形を作って確かめる
+  await page.getByTestId("place-open").evaluate((el) => {
+    (el as HTMLElement).style.display = "none";
+  });
+  await page.getByTestId("place-more").click();
+  const toggle = await box(page, "place-more");
+  expect(toggle.x).toBeGreaterThan(W / 2);
+  const more = await box(page, "place-more-list");
+  expect(more.x).toBeGreaterThanOrEqual(0);
+  expect(more.x + more.width).toBeLessThanOrEqual(W);
+  await expect(page.getByTestId("place-remove")).toBeVisible();
+});
+
 test("編集は「本文」「記事情報」をタブで分け、記事の操作を画面の下のバーに置く", async ({ page }) => {
   await open(page);
   await page.getByRole("button", { name: "新規作成" }).click();
