@@ -121,6 +121,13 @@
   });
   /** 狭い画面での単一ペイン切替（14.1） */
   let pane = $state<"list" | "editor">("list");
+  // 記事を閉じたら一覧へ戻す。狭い画面で、空の編集画面に取り残さないため
+  let hadSession = false;
+  $effect(() => {
+    const open = ws.session !== null;
+    if (hadSession && !open) pane = "list";
+    hadSession = open;
+  });
   /**
    * 上部バーで切り替える画面（docs/knowledge/product/app-shell.md）。
    * 切り替えても各画面は閉じずに隠すだけなので、編集中の内容・取り消し履歴・スクロール位置はそのまま残る。
@@ -561,7 +568,7 @@
               class={ws.recent ? "" : "primary"}
               onclick={() => ws.chooseFolder()}
               disabled={ws.busy}
-              data-testid="choose-folder"><FolderOpen />フォルダを選択</button
+              data-testid="choose-folder"><FolderOpen />フォルダを開く</button
             >
           </div>
           {#if ws.recent}
@@ -722,14 +729,17 @@
    * 画面の切り替え・場所の操作・復旧ドラフト・対応環境の確認・ヘルプ・ロックは右端の「メニュー」にまとめる（ハンバーガーメニュー）。
    */
   .app-bar {
-    --gutter: max(var(--space-16), (100% - 96rem) / 2 + var(--space-16));
+    /* 左右の余白：内容の最大幅に合わせ、横向きではノッチ・Dynamic Island の分（安全領域）を足す */
+    --gutter-start: max(var(--page-gutter) + var(--safe-left), (100% - 96rem) / 2 + var(--page-gutter));
+    --gutter-end: max(var(--page-gutter) + var(--safe-right), (100% - 96rem) / 2 + var(--page-gutter));
     position: sticky;
     top: 0;
     z-index: var(--z-raised);
     display: flex;
     align-items: center;
     gap: var(--space-4) var(--space-12);
-    padding: var(--space-4) var(--gutter);
+    /* ホーム画面から開いたときは、ステータスバーの下から始める（安全領域） */
+    padding: calc(var(--space-4) + var(--safe-top)) var(--gutter-end) var(--space-4) var(--gutter-start);
     background: var(--color-bg-surface);
     border-bottom: 1px solid var(--color-border-subtle);
     margin-bottom: var(--space-12);
@@ -798,10 +808,9 @@
   .folder-name + .menu-toggle {
     margin-inline-start: 0;
   }
-  /* メニューの開閉は画面の端で頻繁に押すので、指の画面では 44px（Apple HIG）にする */
+  /* 指の画面では 44px の正方形にする（高さは app.css の下限。幅をそろえる） */
   @media (pointer: coarse) {
     .menu-toggle {
-      min-height: var(--touch-target);
       min-width: var(--touch-target);
     }
   }
@@ -810,15 +819,16 @@
   .menu {
     position: absolute;
     top: calc(100% + var(--space-4));
-    right: var(--gutter);
+    right: var(--gutter-end);
     z-index: var(--z-popover);
     display: flex;
     flex-direction: column;
     gap: var(--space-8);
     min-width: 14rem;
-    max-width: calc(100vw - 2 * var(--space-16));
-    max-height: calc(100dvh - var(--app-bar-h, 3rem) - var(--space-16));
+    max-width: calc(100vw - 2 * var(--page-gutter) - var(--safe-left) - var(--safe-right));
+    max-height: calc(100dvh - var(--app-bar-h, 3rem) - var(--space-16) - var(--safe-bottom) - var(--keyboard-inset));
     overflow: auto;
+    overscroll-behavior: contain;
     padding: var(--space-8);
     background: var(--color-bg-raised);
     border: 1px solid var(--color-border-control);
@@ -854,8 +864,13 @@
     padding: var(--control-pad-y) var(--space-8);
     white-space: nowrap;
   }
-  .menu button:not(:disabled):hover {
-    background: var(--color-bg-hover);
+  @media (hover: hover) {
+    .menu button:not(:disabled):hover {
+      background: var(--color-bg-hover);
+    }
+  }
+  .menu button:not(:disabled):active {
+    background: var(--color-bg-pressed);
   }
   .menu button:disabled {
     background: transparent;
@@ -897,12 +912,6 @@
   .env-summary.warn {
     color: var(--color-warning-fg);
   }
-  /* メニューの項目は指の画面で 44px（Apple HIG：頻繁に押す移動） */
-  @media (pointer: coarse) {
-    .menu button {
-      min-height: var(--touch-target);
-    }
-  }
   .narrow-only {
     display: none !important;
   }
@@ -912,7 +921,7 @@
   .app-footer {
     max-width: 48rem;
     margin-inline: auto;
-    padding-inline: var(--space-16);
+    padding-inline: calc(var(--page-gutter) + var(--safe-left)) calc(var(--page-gutter) + var(--safe-right));
   }
   main.wide,
   .app-footer.wide {
@@ -973,6 +982,11 @@
     font-size: var(--font-size-14);
     padding: var(--control-pad-y-sm) var(--control-pad-x-sm);
   }
+  @media (pointer: coarse) {
+    .git-strip button {
+      min-width: var(--touch-target);
+    }
+  }
   .git-strip button :global(svg.lucide-icon) {
     margin: 0;
   }
@@ -992,11 +1006,6 @@
     font-size: var(--font-size-14);
     color: var(--color-fg-muted);
     min-height: 1.5rem;
-  }
-  @media (pointer: coarse) {
-    .env-details summary {
-      min-height: var(--touch-target-sm);
-    }
   }
   .env-details[open] summary {
     margin-block-end: var(--space-8);
@@ -1090,6 +1099,17 @@
   @media (max-width: 60rem) {
     :global(html) {
       scroll-padding-top: calc(var(--app-bar-h, 0px) + var(--space-8));
+      /* 下部の操作バー・キーボードの下に、フォーカスした部品が隠れないようにする */
+      scroll-padding-bottom: calc(var(--bottom-bar-height) + var(--keyboard-inset) + var(--space-8));
+    }
+    /* ページの終わり：下部の操作バーとホームインジケーターの分をあける */
+    main {
+      padding-block-end: calc(
+        max(var(--bottom-bar-height), var(--safe-bottom)) + var(--keyboard-inset) + var(--space-16)
+      );
+    }
+    main:not(.workbench) {
+      padding-block-end: 0;
     }
     .wide-only {
       display: none !important;
@@ -1107,6 +1127,10 @@
   }
   /* とても狭い画面（iPhone の縦）：場所の名前は外し（メニューと画面の中にある）、メニューの開閉は右端に寄せる */
   @media (max-width: 30rem) {
+    /* メニューは画面の幅いっぱいに出す（項目の文字を折り返さず、右手でも左手でも押しやすい） */
+    .menu {
+      left: var(--gutter-start);
+    }
     .folder-name {
       display: none;
     }
@@ -1192,7 +1216,7 @@
     font-size: var(--font-size-14);
   }
   .app-footer {
-    padding-block: var(--space-24) var(--space-32);
+    padding-block: var(--space-24) calc(var(--space-32) + var(--safe-bottom));
     color: var(--color-fg-muted);
     font-size: var(--font-size-14);
   }

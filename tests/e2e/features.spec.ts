@@ -262,7 +262,7 @@ test("画像の削除は、未参照の画像だけを退避の後に削除す�
   await page.getByTestId("body-editor").fill("画像なし\n");
   await page.getByTestId("save-button").click();
   await expect(page.getByTestId("save-status")).toHaveText("保存済み");
-  await page.getByRole("button", { name: "一覧を更新" }).click();
+  await page.getByRole("button", { name: "画像の一覧を再読み込み" }).click();
   await expect(page.getByText("未参照（保存済み本文・cover）")).toBeVisible();
   await page.getByTestId("media-delete").click();
   await page.evaluate(() => (window as unknown as { __fakeFs: FakeFsApi }).__fakeFs.pickNext("backup"));
@@ -278,7 +278,7 @@ test("復旧ドラフトは既定で有効で、暗号化して退避する。�
   await launch(page);
   await openA(page);
   await page.getByTestId("body-editor").fill("退避される編集\n");
-  await expect(page.getByTestId("draft-status")).toContainText("復旧退避済み", { timeout: 10_000 });
+  await expect(page.getByTestId("draft-status")).toContainText("復旧ドラフト：退避済み", { timeout: 10_000 });
   // ブラウザ内（IndexedDB）には本文を平文で置かない
   const raw = await page.evaluate(
     () =>
@@ -306,7 +306,7 @@ test("復旧ドラフトは既定で有効で、暗号化して退避する。�
   await panel.getByText(/関連先未確認のドラフト/).click();
   await expect(panel.getByTestId("draft-candidate").first()).toContainText("チェックサム一致");
   await expect(panel.getByRole("button", { name: "編集として開く" })).toHaveCount(0);
-  await expect(panel.getByRole("button", { name: "原文を退避" }).first()).toBeVisible();
+  await expect(panel.getByRole("button", { name: "原文をダウンロード" }).first()).toBeVisible();
 });
 
 test("復旧ドラフトは「設定」で無効にでき、無効の間は退避しない（ADR-0011）", async ({ page }) => {
@@ -318,11 +318,11 @@ test("復旧ドラフトは「設定」で無効にでき、無効の間は退�
   await expect(card.getByTestId("draft-encryption")).toContainText("パスキー");
   await card.getByRole("button", { name: "無効にする…" }).click();
   await page.getByRole("button", { name: "無効にして既存を保持" }).click();
-  await expect(card).toContainText("状態：無効（復旧退避なし）");
+  await expect(card).toContainText("状態：無効");
   await menu(page, "nav-articles");
   await openA(page);
   await page.getByTestId("body-editor").fill("退避しない編集\n");
-  await expect(page.getByTestId("draft-status")).toContainText("復旧退避なし（ブラウザ内復旧ドラフトは無効）");
+  await expect(page.getByTestId("draft-status")).toContainText("復旧ドラフト：無効");
 });
 
 test("上部バーは固定して大きさを変えず、画面の切り替えはメニューにまとめる。切り替えても編集中の内容は残る（アプリの外枠）", async ({
@@ -476,14 +476,14 @@ test("一覧の絞り込み・並び順は折り畳んでも今の条件を見�
   await launch(page);
   const cond = page.getByTestId("list-conditions");
   await expect(cond).not.toHaveAttribute("open", "");
-  await expect(page.getByTestId("list-conditions-summary")).toHaveText("状態：すべて・更新日時の降順");
+  await expect(page.getByTestId("list-conditions-summary")).toHaveText("原稿状態：すべて・更新日時の降順");
   // キーボードで開いて条件を変える
   await cond.locator("summary").focus();
   await page.keyboard.press("Enter");
-  await page.getByLabel("状態").selectOption("draft");
+  await page.getByLabel("原稿状態").selectOption("draft");
   await page.getByLabel("方向").selectOption("asc");
   await cond.locator("summary").click();
-  await expect(page.getByTestId("list-conditions-summary")).toHaveText("状態：下書き・更新日時の昇順");
+  await expect(page.getByTestId("list-conditions-summary")).toHaveText("原稿状態：下書き・更新日時の昇順");
 });
 
 test("説明は「?」で開いて Esc で閉じ、長い説明は上部バーの「ヘルプ」にまとめる", async ({ page }) => {

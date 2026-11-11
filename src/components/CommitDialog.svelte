@@ -81,7 +81,15 @@
       <label class="field"><span>名前</span><input type="text" bind:value={req.name} data-testid="commit-name" /></label
       >
       <label class="field"
-        ><span>メールアドレス</span><input type="text" bind:value={req.email} data-testid="commit-email" /></label
+        ><span>メールアドレス</span><input
+          type="text"
+          inputmode="email"
+          autocapitalize="off"
+          autocorrect="off"
+          spellcheck="false"
+          bind:value={req.email}
+          data-testid="commit-email"
+        /></label
       >
       {#if !req.identityFromConfig}
         <label class="check"

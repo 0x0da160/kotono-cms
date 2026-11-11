@@ -28,6 +28,7 @@ Kotono CMS（コトノ シーエムエス）は、Webメディアの記事を作
 | OS       | Windows・macOS・iOS・iPadOS                                                                                                                                                       |
 | 起動     | https の配信元（または localhost）から開き、パスキーでロックを解除する。`file://` で直接開くとパスキーを使えないため使えない（ADR-0012）。iPhone・iPad はホーム画面に追加して使う |
 | 保存先   | デスクトップは選んだフォルダ。iPhone・iPad はブラウザ内の作業場所（ロック解除の鍵で暗号化。`?storage=workspace` でデスクトップでも選べる）                                        |
+| 画面     | iPhone 17 の Safari（縦向き 402×874）を主な対象にして整えている（ADR-0015）。広い画面では一覧と編集を横に並べる                                                                   |
 | 対象外   | Firefox・Android                                                                                                                                                                  |
 
 ## 開発

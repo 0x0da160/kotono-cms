@@ -90,8 +90,7 @@
     <p data-testid="git-none">
       Git で管理されていません。記事はこのまま編集できます。初期化すると、記事ごとにコミットして履歴を残せます。
     </p>
-    <button type="button" onclick={() => git.init()} disabled={git.busy} data-testid="git-init">Git を初期化する</button
-    >
+    <button type="button" onclick={() => git.init()} disabled={git.busy} data-testid="git-init">Git を初期化…</button>
   {:else if git.info?.kind === "unsupported"}
     <p class="err" data-testid="git-unsupported">{git.info.message}</p>
   {:else if repo}
@@ -138,7 +137,7 @@
                   type="button"
                   onclick={() => git.commitArticle(st.id)}
                   disabled={git.busy || ws.busy || repo.blockers.length > 0 || git.staged.length > 0}
-                  data-testid="git-commit-article">この記事をコミット</button
+                  data-testid="git-commit-article">この記事をコミット…</button
                 >
               {/if}
             </div>

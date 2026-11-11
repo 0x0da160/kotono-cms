@@ -57,20 +57,20 @@
     <div class="status">
       {#if days !== null}
         <span class="unsynced" class:warn={places.shouldRemind(meta)} data-testid="unsynced"
-          >書き出し・同期していない変更あり（{days} 日）</span
+          >書き出し・同期していない変更あり{#if days > 0}（{days} 日前から）{/if}</span
         >
       {:else}
         <span class="muted small" data-testid="unsynced-none">書き出し・同期していない変更はありません</span>
       {/if}
-      {#if places.persist !== "persisted"}<span class="badge unknown" title="ブラウザが保存領域を消去することがあります"
-          >消去されることがあります</span
+      {#if places.persist !== "persisted"}<span class="badge unknown" data-testid="persist-badge"
+          >保存領域は消えることがあります</span
         >{/if}
       <button
         type="button"
         class="export"
         onclick={exportNow}
         disabled={places.busy || ws.busy}
-        data-testid="place-export-open"><Download />書き出す</button
+        data-testid="place-export-open"><Download />書き出す…</button
       >
     </div>
     {#if places.error}<p class="banner" role="alert">{places.error}</p>{/if}
@@ -109,6 +109,28 @@
   }
   .export {
     margin-inline-start: auto;
+  }
+  /* 狭い画面：状態の文と印を左に積み、「書き出す」を右に置いて 1 段（44px）に収める */
+  @media (max-width: 30rem) {
+    .status {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 0 var(--space-8);
+    }
+    .status > :not(.export) {
+      grid-column: 1;
+      justify-self: start;
+      font-size: var(--font-size-13);
+      line-height: var(--line-height-heading);
+    }
+    .status > .badge {
+      font-size: var(--font-size-12);
+    }
+    .export {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+      align-self: center;
+    }
   }
   .card {
     background: var(--color-bg-surface);
@@ -151,16 +173,6 @@
     align-items: center;
     gap: var(--control-gap);
     margin-top: var(--space-8);
-  }
-  select {
-    font: inherit;
-    font-size: var(--font-size-16);
-    line-height: var(--control-line-height);
-    padding: var(--control-pad-y) var(--space-8);
-    border: 1px solid var(--color-border-subtle);
-    border-radius: var(--radius-md);
-    background: transparent;
-    color: inherit;
   }
   .small {
     font-size: var(--font-size-13);

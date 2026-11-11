@@ -1,5 +1,5 @@
 /*
- * デザイントークン（生成物。手で直さない）。デザインシステム 0.4.0。
+ * デザイントークン（生成物。手で直さない）。デザインシステム 0.5.0（色は 0.4.0 のまま）。
  * 正本：src/lib/design/tokens.ts・palette.ts。書き直し：pnpm tokens
  * 規則：docs/knowledge/product/design-system.md
  */
@@ -232,10 +232,18 @@
   --control-gap: var(--space-6); /* 横に並べた操作の間隔 */
   --panel-pad: var(--space-12) var(--space-16); /* カード・パネルの内側 */
   --panel-pad-sm: var(--space-8) var(--space-12); /* 中に入れ子にした枠・お知らせの内側 */
-  --touch-target: 2.75rem; /* 指で押す主な移動（メニューの項目・上部バーの開閉）の高さ（44px。Apple HIG の 44pt） */
-  --touch-target-md: 2.25rem; /* 指で押す標準のボタン・入力欄・選択欄の高さ（36px。WCAG 2.5.8 の 24px に余裕を足す） */
-  --touch-target-sm: 2rem; /* 指で押す詰めた部品（行の中・道具の帯・開閉の見出し）の高さ（32px。WCAG 2.5.8） */
+  --touch-target: 2.75rem; /* 指で押す部品（ボタン・入力欄・選択欄・タブ・メニューの項目・開閉の見出し）の高さと幅の下限（44px。Apple HIG の 44pt） */
+  --touch-target-inline: 2rem; /* 指で押す、文の中の小さな部品（「?」の説明・チップの「×」）の見た目の大きさ（32px）。押せる範囲は 44px まで広げる */
   --target-min: 1.5rem; /* 押せる最小の大きさ（24px。WCAG 2.2 の 2.5.8。マウスでも指でも下回らない） */
+
+  /* 画面の端とキーボード */
+  --safe-top: env(safe-area-inset-top, 0px); /* 上の安全領域（ホーム画面から開いたときのステータスバー） */
+  --safe-right: env(safe-area-inset-right, 0px); /* 右の安全領域（横向き） */
+  --safe-bottom: env(safe-area-inset-bottom, 0px); /* 下の安全領域（ホームインジケーター） */
+  --safe-left: env(safe-area-inset-left, 0px); /* 左の安全領域（横向き） */
+  --page-gutter: var(--space-16); /* 画面の左右の余白（安全領域はこれに足す） */
+  --keyboard-inset: 0px; /* 画面キーボードが覆っている高さ（viewport.ts が上書きする） */
+  --bottom-bar-height: 0px; /* 下部の操作バーの高さ（バーがあるとき app.css が上書きする。本文の下の余白・トースト・書式の帯の位置に使う） */
 
   /* 角丸 */
   --radius-sm: 4px; /* 小さな部品（等幅の囲み・つまみ） */

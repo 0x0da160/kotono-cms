@@ -14,7 +14,7 @@
     pwa: PwaController;
     /** 新しい版へ切り替える（未保存の編集の確認は呼び出し側） */
     onapply: () => void;
-    /** ページを読み込み直す（未保存の編集の確認は呼び出し側） */
+    /** ページを再読み込み（未保存の編集の確認は呼び出し側） */
     onreload: () => void;
   } = $props();
 </script>
@@ -52,7 +52,7 @@
     </p>
   {:else}
     <p class="row">
-      <button type="button" onclick={onreload} data-testid="update-reload"><RefreshCw />ページを読み込み直す</button>
+      <button type="button" onclick={onreload} data-testid="update-reload"><RefreshCw />ページを再読み込み</button>
       <span class="muted" data-testid="update-unavailable"
         >このブラウザでは新しい版を確かめられません。読み込み直すと、配信されている版になります。</span
       >

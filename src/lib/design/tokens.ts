@@ -52,8 +52,8 @@ export const STATIC_GROUPS: readonly TokenGroup[] = [
     /*
      * 操作部品（ボタン・入力欄・選択欄）の内側の余白と、並べたときの間隔・面の余白。
      * 高さ＝文字 × 行間 ＋ 上下の余白 ＋ 枠：標準 16px で 34px、詰め 14px で 27px。
-     * 指で操作する画面では、見た目の余白は同じまま、押せる高さを部品の種類ごとの下限まで広げる（app.css・ADR-0011）。
-     * 下限の根拠：WCAG 2.2 の 2.5.8（AA：24px）を全体の床にし、画面の端で頻繁に押すものだけ Apple HIG の 44pt にする。
+     * 指で操作する画面では、見た目の余白は同じまま、押せる高さを 44px（Apple HIG の 44pt）まで広げる（app.css・ADR-0015）。
+     * 主な対象は iPhone の Safari。マウスの画面の下限は 24px（WCAG 2.2 の 2.5.8）のまま。
      */
     title: "操作部品の寸法",
     tokens: [
@@ -68,15 +68,35 @@ export const STATIC_GROUPS: readonly TokenGroup[] = [
       [
         "touch-target",
         "2.75rem",
-        "指で押す主な移動（メニューの項目・上部バーの開閉）の高さ（44px。Apple HIG の 44pt）",
+        "指で押す部品（ボタン・入力欄・選択欄・タブ・メニューの項目・開閉の見出し）の高さと幅の下限（44px。Apple HIG の 44pt）",
       ],
       [
-        "touch-target-md",
-        "2.25rem",
-        "指で押す標準のボタン・入力欄・選択欄の高さ（36px。WCAG 2.5.8 の 24px に余裕を足す）",
+        "touch-target-inline",
+        "2rem",
+        "指で押す、文の中の小さな部品（「?」の説明・チップの「×」）の見た目の大きさ（32px）。押せる範囲は 44px まで広げる",
       ],
-      ["touch-target-sm", "2rem", "指で押す詰めた部品（行の中・道具の帯・開閉の見出し）の高さ（32px。WCAG 2.5.8）"],
       ["target-min", "1.5rem", "押せる最小の大きさ（24px。WCAG 2.2 の 2.5.8。マウスでも指でも下回らない）"],
+    ],
+  },
+  {
+    /*
+     * 画面の端（ノッチ・Dynamic Island・ホームインジケーター・角の丸み）を避ける余白。index.html の viewport-fit=cover と対で使う。
+     * 画面の端に付く部品（上部バー・下部の操作バー・下から出すダイアログ・トースト）は、内側の余白にこれを足す。
+     * --keyboard-inset は、画面キーボードが下から覆っている高さ。src/lib/ui/viewport.ts が html に書く（既定は 0px）。
+     */
+    title: "画面の端とキーボード",
+    tokens: [
+      ["safe-top", "env(safe-area-inset-top, 0px)", "上の安全領域（ホーム画面から開いたときのステータスバー）"],
+      ["safe-right", "env(safe-area-inset-right, 0px)", "右の安全領域（横向き）"],
+      ["safe-bottom", "env(safe-area-inset-bottom, 0px)", "下の安全領域（ホームインジケーター）"],
+      ["safe-left", "env(safe-area-inset-left, 0px)", "左の安全領域（横向き）"],
+      ["page-gutter", "var(--space-16)", "画面の左右の余白（安全領域はこれに足す）"],
+      ["keyboard-inset", "0px", "画面キーボードが覆っている高さ（viewport.ts が上書きする）"],
+      [
+        "bottom-bar-height",
+        "0px",
+        "下部の操作バーの高さ（バーがあるとき app.css が上書きする。本文の下の余白・トースト・書式の帯の位置に使う）",
+      ],
     ],
   },
   {
@@ -141,7 +161,7 @@ export function renderTokensCss(): string {
   const out: string[] = [];
   out.push(
     "/*",
-    " * デザイントークン（生成物。手で直さない）。デザインシステム 0.4.0。",
+    " * デザイントークン（生成物。手で直さない）。デザインシステム 0.5.0（色は 0.4.0 のまま）。",
     " * 正本：src/lib/design/tokens.ts・palette.ts。書き直し：pnpm tokens",
     " * 規則：docs/knowledge/product/design-system.md",
     " */",

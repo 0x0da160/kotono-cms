@@ -86,7 +86,7 @@
 <span class="helptip" onkeydown={onKey}>
   <button
     type="button"
-    class="tip-btn"
+    class="tip-btn touch-inline"
     bind:this={btn}
     onclick={toggle}
     aria-expanded={open}
@@ -116,10 +116,9 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    /* 操作対象は 24px 以上（WCAG 2.5.8） */
-    width: 1.5rem;
-    height: 1.5rem;
-    min-height: 1.5rem;
+    /* 操作対象は 24px 以上（WCAG 2.5.8）。指の画面では .touch-inline が 32px に広げ、押せる範囲を 44px にする */
+    width: var(--target-min);
+    height: var(--target-min);
     padding: 0;
     margin: 0 var(--space-2);
     border: none;
@@ -137,19 +136,12 @@
     width: 1rem;
     height: 1rem;
   }
-  @media (pointer: coarse) {
-    .tip-btn {
-      width: 2rem;
-      height: 2rem;
-      min-height: 2rem;
-    }
-  }
   .tip-pop {
     position: fixed;
     z-index: var(--z-tooltip);
     display: block;
     width: max-content;
-    max-width: min(22rem, calc(100vw - 1rem));
+    max-width: min(22rem, calc(100vw - 1rem - var(--safe-left) - var(--safe-right)));
     padding: var(--panel-pad-sm);
     border: 1px solid var(--color-border-strong);
     border-radius: var(--radius-md);
