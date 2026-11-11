@@ -1,87 +1,198 @@
 /*
- * デザイントークン（生成物。手で直さない）。
+ * デザイントークン（生成物。手で直さない）。デザインシステム 0.5.0（色は 0.4.0 のまま）。
  * 正本：src/lib/design/tokens.ts・palette.ts。書き直し：pnpm tokens
  * 規則：docs/knowledge/product/design-system.md
  */
 :root {
   color-scheme: light dark;
 
-  /* パレット：neutral（Oklab。色相 107°、目標の彩度 0.005、明度 0.04 ごと） */
-  --neutral-100: #ffffff; /* L 1.00 C 0.000 */
-  --neutral-96: #f2f2ee; /* L 0.96 C 0.005 */
-  --neutral-92: #e5e5e1; /* L 0.92 C 0.005 */
-  --neutral-88: #d8d8d4; /* L 0.88 C 0.005 */
-  --neutral-84: #cbcbc7; /* L 0.84 C 0.005 */
-  --neutral-80: #bebeba; /* L 0.80 C 0.005 */
-  --neutral-76: #b1b1ae; /* L 0.76 C 0.005 */
-  --neutral-72: #a5a5a1; /* L 0.72 C 0.005 */
-  --neutral-68: #989895; /* L 0.68 C 0.005 */
-  --neutral-64: #8c8c89; /* L 0.64 C 0.005 */
-  --neutral-60: #80807d; /* L 0.60 C 0.005 */
-  --neutral-56: #757571; /* L 0.56 C 0.005 */
-  --neutral-52: #696966; /* L 0.52 C 0.005 */
-  --neutral-48: #5e5e5b; /* L 0.48 C 0.005 */
-  --neutral-44: #535350; /* L 0.44 C 0.005 */
-  --neutral-40: #484845; /* L 0.40 C 0.005 */
-  --neutral-36: #3d3d3a; /* L 0.36 C 0.005 */
-  --neutral-32: #333330; /* L 0.32 C 0.005 */
-  --neutral-28: #292926; /* L 0.28 C 0.005 */
-  --neutral-24: #1f1f1d; /* L 0.24 C 0.005 */
-  --neutral-20: #161614; /* L 0.20 C 0.005 */
-  --neutral-16: #0d0d0b; /* L 0.16 C 0.005 */
+  /* パレット：neutral（OKLCH。色相 85°、目標の彩度 0.004）：背景・面・文字・境界 */
+  --palette-neutral-50: #fbfaf7; /* L 0.985 C 0.004 */
+  --palette-neutral-100: #f0eeeb; /* L 0.95 C 0.004 */
+  --palette-neutral-200: #dfdedb; /* L 0.9 C 0.004 */
+  --palette-neutral-300: #c5c4c1; /* L 0.82 C 0.004 */
+  --palette-neutral-400: #acaba8; /* L 0.74 C 0.004 */
+  --palette-neutral-500: #93928f; /* L 0.66 C 0.004 */
+  --palette-neutral-600: #81807d; /* L 0.6 C 0.004 */
+  --palette-neutral-700: #6d6c69; /* L 0.53 C 0.004 */
+  --palette-neutral-800: #565553; /* L 0.45 C 0.004 */
+  --palette-neutral-900: #3b3a38; /* L 0.35 C 0.004 */
+  --palette-neutral-950: #22211f; /* L 0.25 C 0.004 */
+  --palette-neutral-150: #e7e6e3; /* L 0.925 C 0.004 */
+  --palette-neutral-850: #494745; /* L 0.4 C 0.004 */
+  --palette-neutral-925: #2f2e2c; /* L 0.3 C 0.004 */
+  --palette-neutral-975: #151412; /* L 0.19 C 0.004 */
 
-  /* パレット：accent（Oklab。色相 261°、目標の彩度 0.2、明度 0.08 ごと） */
-  --accent-96: #ebf2ff; /* L 0.96 C 0.019 */
-  --accent-88: #c2d9ff; /* L 0.88 C 0.059 */
-  --accent-80: #99bfff; /* L 0.80 C 0.101 */
-  --accent-72: #6fa3ff; /* L 0.72 C 0.145 */
-  --accent-64: #4386ff; /* L 0.64 C 0.193 */
-  --accent-56: #266be7; /* L 0.56 C 0.200 */
-  --accent-48: #0852cb; /* L 0.48 C 0.200 */
-  --accent-40: #003da2; /* L 0.40 C 0.173 */
-  --accent-32: #002b77; /* L 0.32 C 0.138 */
-  --accent-24: #001a4f; /* L 0.24 C 0.104 */
-  --accent-16: #000a2a; /* L 0.16 C 0.069 */
+  /* パレット：petrol（OKLCH。色相 240°、目標の彩度 0.12）：主な操作・リンク・選択・フォーカス・情報 */
+  --palette-petrol-50: #f6fbff; /* L 0.985 C 0.008 */
+  --palette-petrol-100: #dff1ff; /* L 0.95 C 0.027 */
+  --palette-petrol-200: #bee4ff; /* L 0.9 C 0.054 */
+  --palette-petrol-300: #85cdff; /* L 0.82 C 0.101 */
+  --palette-petrol-400: #5cb4ef; /* L 0.74 C 0.120 */
+  --palette-petrol-500: #419bd4; /* L 0.66 C 0.120 */
+  --palette-petrol-600: #2b88c0; /* L 0.6 C 0.120 */
+  --palette-petrol-700: #0573aa; /* L 0.53 C 0.120 */
+  --palette-petrol-800: #005b88; /* L 0.45 C 0.103 */
+  --palette-petrol-900: #003f60; /* L 0.35 C 0.080 */
+  --palette-petrol-950: #00243a; /* L 0.25 C 0.057 */
 
-  /* パレット：success（Oklab。色相 148°、目標の彩度 0.15、明度 0.08 ごと） */
-  --success-96: #d4ffd9; /* L 0.96 C 0.067 */
-  --success-88: #8ef29e; /* L 0.88 C 0.150 */
-  --success-80: #73d885; /* L 0.80 C 0.150 */
-  --success-72: #59be6c; /* L 0.72 C 0.150 */
-  --success-64: #3da454; /* L 0.64 C 0.150 */
-  --success-56: #1d8b3d; /* L 0.56 C 0.150 */
-  --success-48: #00722a; /* L 0.48 C 0.139 */
-  --success-40: #00581f; /* L 0.40 C 0.116 */
-  --success-32: #003f14; /* L 0.32 C 0.093 */
-  --success-24: #00280a; /* L 0.24 C 0.069 */
-  --success-16: #001203; /* L 0.16 C 0.046 */
+  /* パレット：iris（OKLCH。色相 300°、目標の彩度 0.135）：補助の識別（状態の意味を持たない） */
+  --palette-iris-50: #fbf9ff; /* L 0.985 C 0.008 */
+  --palette-iris-100: #f1ebff; /* L 0.95 C 0.028 */
+  --palette-iris-200: #e3d6ff; /* L 0.9 C 0.057 */
+  --palette-iris-300: #ceb5ff; /* L 0.82 C 0.106 */
+  --palette-iris-400: #b896f3; /* L 0.74 C 0.135 */
+  --palette-iris-500: #9f7dd8; /* L 0.66 C 0.135 */
+  --palette-iris-600: #8d6bc4; /* L 0.6 C 0.135 */
+  --palette-iris-700: #7956ad; /* L 0.53 C 0.135 */
+  --palette-iris-800: #623f94; /* L 0.45 C 0.135 */
+  --palette-iris-900: #472275; /* L 0.35 C 0.135 */
+  --palette-iris-950: #2e0056; /* L 0.25 C 0.133 */
 
-  /* パレット：danger（Oklab。色相 28°、目標の彩度 0.19、明度 0.08 ごと） */
-  --danger-96: #ffedea; /* L 0.96 C 0.020 */
-  --danger-88: #ffc8c0; /* L 0.88 C 0.064 */
-  --danger-80: #ffa194; /* L 0.80 C 0.115 */
-  --danger-72: #ff7264; /* L 0.72 C 0.174 */
-  --danger-64: #e95145; /* L 0.64 C 0.190 */
-  --danger-56: #cc342d; /* L 0.56 C 0.190 */
-  --danger-48: #b00d10; /* L 0.48 C 0.190 */
-  --danger-40: #8b0006; /* L 0.40 C 0.163 */
-  --danger-32: #660003; /* L 0.32 C 0.131 */
-  --danger-24: #430001; /* L 0.24 C 0.098 */
-  --danger-16: #230000; /* L 0.16 C 0.065 */
+  /* パレット：apricot（OKLCH。色相 60°、目標の彩度 0.1）：補助の識別（状態の意味を持たない） */
+  --palette-apricot-50: #fff9f4; /* L 0.985 C 0.009 */
+  --palette-apricot-100: #ffeada; /* L 0.95 C 0.031 */
+  --palette-apricot-200: #ffd5b3; /* L 0.9 C 0.065 */
+  --palette-apricot-300: #f4b581; /* L 0.82 C 0.100 */
+  --palette-apricot-400: #d99c68; /* L 0.74 C 0.100 */
+  --palette-apricot-500: #bf8350; /* L 0.66 C 0.100 */
+  --palette-apricot-600: #ac713e; /* L 0.6 C 0.100 */
+  --palette-apricot-700: #955c28; /* L 0.53 C 0.100 */
+  --palette-apricot-800: #7d460b; /* L 0.45 C 0.100 */
+  --palette-apricot-900: #592e00; /* L 0.35 C 0.082 */
+  --palette-apricot-950: #351900; /* L 0.25 C 0.059 */
+
+  /* パレット：sea-glass（OKLCH。色相 170°、目標の彩度 0.07）：補助の識別（状態の意味を持たない） */
+  --palette-sea-glass-50: #edfff8; /* L 0.985 C 0.021 */
+  --palette-sea-glass-100: #c0fee7; /* L 0.95 C 0.070 */
+  --palette-sea-glass-200: #b0eed7; /* L 0.9 C 0.070 */
+  --palette-sea-glass-300: #96d3bd; /* L 0.82 C 0.070 */
+  --palette-sea-glass-400: #7dbaa4; /* L 0.74 C 0.070 */
+  --palette-sea-glass-500: #65a08c; /* L 0.66 C 0.070 */
+  --palette-sea-glass-600: #538e7a; /* L 0.6 C 0.070 */
+  --palette-sea-glass-700: #3e7966; /* L 0.53 C 0.070 */
+  --palette-sea-glass-800: #25624f; /* L 0.45 C 0.070 */
+  --palette-sea-glass-900: #004635; /* L 0.35 C 0.069 */
+  --palette-sea-glass-950: #00291e; /* L 0.25 C 0.049 */
+
+  /* パレット：success（OKLCH。色相 150°、目標の彩度 0.13）：成功・保存済み・追加 */
+  --palette-success-50: #f0fff2; /* L 0.985 C 0.024 */
+  --palette-success-100: #c7ffd1; /* L 0.95 C 0.083 */
+  --palette-success-200: #9df7b0; /* L 0.9 C 0.130 */
+  --palette-success-300: #83dc97; /* L 0.82 C 0.130 */
+  --palette-success-400: #69c27e; /* L 0.74 C 0.130 */
+  --palette-success-500: #4fa866; /* L 0.66 C 0.130 */
+  --palette-success-600: #3b9555; /* L 0.6 C 0.130 */
+  --palette-success-700: #218041; /* L 0.53 C 0.130 */
+  --palette-success-800: #00672d; /* L 0.45 C 0.124 */
+  --palette-success-900: #00481d; /* L 0.35 C 0.096 */
+  --palette-success-950: #002a0e; /* L 0.25 C 0.069 */
+
+  /* パレット：warning（OKLCH。色相 75°、目標の彩度 0.14）：注意：未保存・未コミット・未送信・変更 */
+  --palette-warning-50: #fff9f1; /* L 0.985 C 0.012 */
+  --palette-warning-100: #ffebd1; /* L 0.95 C 0.041 */
+  --palette-warning-200: #ffd7a0; /* L 0.9 C 0.083 */
+  --palette-warning-300: #f9b64f; /* L 0.82 C 0.140 */
+  --palette-warning-400: #de9c31; /* L 0.74 C 0.140 */
+  --palette-warning-500: #c38400; /* L 0.66 C 0.139 */
+  --palette-warning-600: #ac7300; /* L 0.6 C 0.127 */
+  --palette-warning-700: #916100; /* L 0.53 C 0.112 */
+  --palette-warning-800: #734c00; /* L 0.45 C 0.095 */
+  --palette-warning-900: #513400; /* L 0.35 C 0.074 */
+  --palette-warning-950: #301d00; /* L 0.25 C 0.053 */
+
+  /* パレット：danger（OKLCH。色相 25°、目標の彩度 0.18）：失敗・危険：保存失敗・競合・削除・入力の誤り */
+  --palette-danger-50: #fff8f8; /* L 0.985 C 0.007 */
+  --palette-danger-100: #ffe9e6; /* L 0.95 C 0.025 */
+  --palette-danger-200: #ffd1cd; /* L 0.9 C 0.052 */
+  --palette-danger-300: #ffaba3; /* L 0.82 C 0.101 */
+  --palette-danger-400: #ff7e77; /* L 0.74 C 0.158 */
+  --palette-danger-500: #ec5b57; /* L 0.66 C 0.180 */
+  --palette-danger-600: #d74745; /* L 0.6 C 0.180 */
+  --palette-danger-700: #be2e31; /* L 0.53 C 0.180 */
+  --palette-danger-800: #a20519; /* L 0.45 C 0.180 */
+  --palette-danger-900: #73000d; /* L 0.35 C 0.142 */
+  --palette-danger-950: #470005; /* L 0.25 C 0.101 */
+
+  /* パレット：ブランドと白・黒 */
+  --palette-brand-petrol: #0573aa;
+  --palette-brand-iris: #7956ad;
+  --palette-brand-apricot: #eeae7b;
+  --palette-brand-sea-glass: #90cdb7;
+  --palette-brand-paper: #fbfaf7;
+  --palette-brand-ink: #232a2e;
+  --palette-white: #ffffff;
+  --palette-black: #000000;
 
   /* 意味の色（ライト） */
-  --color-bg: var(--neutral-96); /* 画面の背景 */
-  --color-surface: var(--neutral-100); /* 面（パネル・入力欄・ボタン・選択中の行） */
-  --color-text: var(--neutral-24); /* 本文の文字 */
-  --color-muted: var(--neutral-48); /* 補助の文字 */
-  --color-border: var(--neutral-88); /* 領域の区切り・ボタンの枠（装飾） */
-  --color-field-border: var(--neutral-60); /* 入力欄の枠（部品の境界、3:1 以上） */
-  --color-accent: var(--accent-48); /* 主な操作の面・選択・リンク */
-  --color-on-accent: var(--neutral-100); /* accent の面に載せる文字 */
-  --color-focus: var(--accent-48); /* フォーカスの輪 */
-  --color-ok: var(--success-48); /* 成功・保存済み・公開対象 */
-  --color-ng: var(--danger-48); /* エラー・未保存・削除・警告 */
-  --color-brand: #0573aa; /* ロゴの記号・CMS・ブランドの強調（Petrol Blue） */
+  --color-bg-page: var(--palette-neutral-100); /* 画面の背景 */
+  --color-bg-surface: var(--palette-brand-paper); /* 基本の面（パネル・ボタン・カード） */
+  --color-bg-raised: var(--palette-white); /* 浮いた面（入力欄・ダイアログ・メニュー・トースト） */
+  --color-bg-sunken: var(--palette-neutral-100); /* 沈んだ面（読み取り専用の入力欄） */
+  --color-bg-hover: var(--palette-neutral-150); /* hover */
+  --color-bg-pressed: var(--palette-neutral-200); /* 押下 */
+  --color-fg-default: var(--palette-brand-ink); /* 本文の文字 */
+  --color-fg-muted: var(--palette-neutral-800); /* 補足の文字 */
+  --color-fg-placeholder: var(--palette-neutral-800); /* 入力例（ラベルの代わりにしない） */
+  --color-border-subtle: var(--palette-neutral-200); /* 装飾の区切り（基準の対象外） */
+  --color-border-control: var(--palette-neutral-600); /* 入力欄・ボタンの枠（3:1 以上） */
+  --color-border-strong: var(--palette-neutral-700); /* 浮いた面の枠など、強い境界 */
+  --color-brand: var(--palette-brand-petrol); /* ロゴの記号・CMS（Petrol Blue） */
+  --color-accent: var(--palette-brand-petrol); /* 主な操作の面（文字には使わない） */
+  --color-accent-hover: var(--palette-petrol-800); /* 主な操作の hover */
+  --color-accent-pressed: var(--palette-petrol-900); /* 主な操作の押下 */
+  --color-on-accent: var(--palette-white); /* accent の面に載せる文字 */
+  --color-accent-text: var(--palette-petrol-800); /* アクセント色の文字（選択中のタブなど） */
+  --color-accent-subtle: var(--palette-petrol-100); /* 選択中の切り替え・タブの面 */
+  --color-link: var(--palette-petrol-800); /* リンク（常に下線） */
+  --color-link-hover: var(--palette-petrol-900); /* リンクの hover */
+  --color-focus-ring: var(--palette-petrol-700); /* フォーカスの輪 */
+  --color-selection-bg: var(--palette-petrol-200); /* 選択中の行の面 */
+  --color-selection-fg: var(--palette-brand-ink); /* 選択中の行の文字 */
+  --color-editor-bg: var(--palette-brand-paper); /* 原稿の面 */
+  --color-editor-fg: var(--palette-brand-ink); /* 原稿の文字（7:1 以上） */
+  --color-editor-caret: var(--palette-petrol-800); /* 原稿のカーソル */
+  --color-editor-selection-bg: var(--palette-petrol-200); /* 原稿の選択範囲 */
+  --color-editor-selection-fg: var(--palette-brand-ink); /* 原稿の選択範囲の文字 */
+  --color-code-bg: var(--palette-neutral-100); /* アプリ内のコード・パスの面 */
+  --color-code-fg: var(--palette-brand-ink); /* アプリ内のコード・パスの文字 */
+  --color-disabled-bg: var(--palette-neutral-200); /* 無効な部品の面 */
+  --color-disabled-fg: var(--palette-neutral-700); /* 無効な部品の文字 */
+  --color-disabled-border: var(--palette-neutral-200); /* 無効な部品の枠 */
+  --color-info-bg: var(--palette-petrol-100); /* 情報・処理中・復旧の面 */
+  --color-info-fg: var(--palette-petrol-800); /* 情報の文字 */
+  --color-info-mark: var(--palette-petrol-700); /* 情報の記号 */
+  --color-info-border: var(--palette-petrol-700); /* 情報の枠 */
+  --color-success-bg: var(--palette-success-100); /* 成功の面 */
+  --color-success-fg: var(--palette-success-800); /* 成功・保存済み・追加の文字 */
+  --color-success-mark: var(--palette-success-700); /* 成功の記号 */
+  --color-success-border: var(--palette-success-700); /* 成功の枠 */
+  --color-warning-bg: var(--palette-warning-100); /* 注意の面 */
+  --color-warning-fg: var(--palette-warning-800); /* 注意（未保存・未コミット・一部だけ）の文字 */
+  --color-warning-mark: var(--palette-warning-700); /* 注意の記号 */
+  --color-warning-border: var(--palette-warning-700); /* 注意の枠 */
+  --color-danger-bg: var(--palette-danger-100); /* 失敗・危険の面 */
+  --color-danger-fg: var(--palette-danger-800); /* 失敗・競合・削除・入力の誤りの文字 */
+  --color-danger-mark: var(--palette-danger-700); /* 失敗・危険の記号 */
+  --color-danger-border: var(--palette-danger-700); /* 失敗・危険の枠 */
+  --color-danger-solid: var(--palette-danger-700); /* 削除の確定ボタンの面 */
+  --color-danger-solid-hover: var(--palette-danger-800); /* 削除の確定ボタンの hover */
+  --color-danger-solid-pressed: var(--palette-danger-900); /* 削除の確定ボタンの押下 */
+  --color-on-danger: var(--palette-white); /* danger-solid に載せる文字 */
+  --color-decor-iris-bg: var(--palette-iris-100); /* 副色 Iris の面 */
+  --color-decor-iris-fg: var(--palette-iris-800); /* 副色 Iris の文字 */
+  --color-decor-iris-mark: var(--palette-iris-700); /* 副色 Iris の記号・枠 */
+  --color-decor-apricot-bg: var(--palette-apricot-100); /* 副色 Apricot の面 */
+  --color-decor-apricot-fg: var(--palette-apricot-800); /* 副色 Apricot の文字 */
+  --color-decor-apricot-mark: var(--palette-apricot-700); /* 副色 Apricot の記号・枠 */
+  --color-decor-sea-glass-bg: var(--palette-sea-glass-100); /* 副色 Sea Glass の面 */
+  --color-decor-sea-glass-fg: var(--palette-sea-glass-800); /* 副色 Sea Glass の文字 */
+  --color-decor-sea-glass-mark: var(--palette-sea-glass-700); /* 副色 Sea Glass の記号・枠 */
+  --color-bg-inverse: var(--palette-brand-ink); /* 反転の面（説明の吹き出し） */
+  --color-fg-inverse: var(--palette-brand-paper); /* 反転の面の文字 */
+  --shadow-1: 0 4px 12px rgb(35 42 46 / 0.12); /* 画面の上に浮く通知（トースト） */
+  --shadow-2: 0 4px 16px rgb(35 42 46 / 0.16); /* メニュー・ポップオーバー・ダイアログ */
+  --color-overlay: rgb(35 42 46 / 0.4); /* ダイアログの背後の暗幕 */
 
   /* 文字 */
   --font-sans: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, sans-serif; /* 外部フォントは使わない（仕様 2.1・16.3） */
@@ -97,6 +208,7 @@
   --line-height-body: 1.6; /* 基本の行間 */
   --line-height-tight: 1.5; /* 一覧のタイトルなど、行を詰める所 */
   --line-height-prose: 1.75; /* 本文の見たまま編集とプレビュー */
+  --line-height-heading: 1.35; /* 見出し */
   --font-weight-regular: 400;
   --font-weight-strong: 600;
 
@@ -121,7 +233,18 @@
   --control-gap: var(--space-6); /* 横に並べた操作の間隔 */
   --panel-pad: var(--space-12) var(--space-16); /* カード・パネルの内側 */
   --panel-pad-sm: var(--space-8) var(--space-12); /* 中に入れ子にした枠・お知らせの内側 */
-  --touch-target: 2.75rem; /* 指で押せる最小の高さ（44px。pointer: coarse のとき） */
+  --touch-target: 2.75rem; /* 指で押す部品（ボタン・入力欄・選択欄・タブ・メニューの項目・開閉の見出し）の高さと幅の下限（44px。Apple HIG の 44pt） */
+  --touch-target-inline: 2rem; /* 指で押す、文の中の小さな部品（「?」の説明・チップの「×」）の見た目の大きさ（32px）。押せる範囲は 44px まで広げる */
+  --target-min: 1.5rem; /* 押せる最小の大きさ（24px。WCAG 2.2 の 2.5.8。マウスでも指でも下回らない） */
+
+  /* 画面の端とキーボード */
+  --safe-top: env(safe-area-inset-top, 0px); /* 上の安全領域（ホーム画面から開いたときのステータスバー） */
+  --safe-right: env(safe-area-inset-right, 0px); /* 右の安全領域（横向き） */
+  --safe-bottom: env(safe-area-inset-bottom, 0px); /* 下の安全領域（ホームインジケーター） */
+  --safe-left: env(safe-area-inset-left, 0px); /* 左の安全領域（横向き） */
+  --page-gutter: var(--space-16); /* 画面の左右の余白（安全領域はこれに足す） */
+  --keyboard-inset: 0px; /* 画面キーボードが覆っている高さ（viewport.ts が上書きする） */
+  --bottom-bar-height: 0px; /* 下部の操作バーの高さ（バーがあるとき app.css が上書きする。本文の下の余白・トースト・書式の帯の位置に使う） */
 
   /* 角丸 */
   --radius-sm: 4px; /* 小さな部品（等幅の囲み・つまみ） */
@@ -129,15 +252,15 @@
   --radius-lg: 8px; /* ダイアログ・まとめのメニュー・トースト */
   --radius-pill: 999px; /* バッジ */
 
-  /* 影（重なり） */
-  --shadow-1: 0 4px 12px rgb(0 0 0 / 0.12); /* 画面の上に浮く通知（トースト） */
-  --shadow-2: 0 4px 16px rgb(0 0 0 / 0.16); /* メニュー・ポップオーバー */
-  --color-overlay: rgb(0 0 0 / 0.4); /* ダイアログの背後の暗幕 */
+  /* 線 */
+  --border-width: 1px; /* 枠・区切り */
+  --border-width-edge: 4px; /* 現在地・お知らせ・差分の太い辺 */
 
   /* フォーカスの輪 */
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
-  --focus-ring: var(--focus-ring-width) solid var(--color-focus);
+  --focus-ring-offset-inset: -2px; /* スクロール・クリップする入れ物の中では内側に描く */
+  --focus-ring: var(--focus-ring-width) solid var(--color-focus-ring);
 
   /* 重なり順 */
   --z-sticky: 3; /* 編集の固定領域 */
@@ -145,22 +268,104 @@
   --z-popover: 10; /* メニュー・ポップオーバー */
   --z-toast: 20; /* 通知（トースト） */
   --z-tooltip: 50; /* 「?」の説明（ダイアログの中でも前に出す） */
+
+  /* 動き */
+  --duration-fast: 120ms; /* hover・押下の色の変化 */
+  --duration-normal: 200ms; /* 開閉 */
+  --easing-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ブレークポイント（参照用） */
+  --breakpoint-sm: 30rem; /* これより狭い：1 列 */
+  --breakpoint-md: 60rem; /* これより狭い：一覧と編集を切り替える */
+  --breakpoint-lg: 75rem; /* これより広い：3 列 */
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     /* 意味の色（ダーク） */
-    --color-bg: var(--neutral-20);
-    --color-surface: var(--neutral-24);
-    --color-text: var(--neutral-92);
-    --color-muted: var(--neutral-72);
-    --color-border: var(--neutral-36);
-    --color-field-border: var(--neutral-56);
-    --color-accent: var(--accent-72);
-    --color-on-accent: var(--accent-16);
-    --color-focus: var(--accent-72);
-    --color-ok: var(--success-72);
-    --color-ng: var(--danger-72);
-    --color-brand: #85cdff;
+    --color-bg-page: var(--palette-neutral-975);
+    --color-bg-surface: var(--palette-neutral-950);
+    --color-bg-raised: var(--palette-neutral-925);
+    --color-bg-sunken: var(--palette-neutral-975);
+    --color-bg-hover: var(--palette-neutral-900);
+    --color-bg-pressed: var(--palette-neutral-850);
+    --color-fg-default: var(--palette-neutral-100);
+    --color-fg-muted: var(--palette-neutral-300);
+    --color-fg-placeholder: var(--palette-neutral-300);
+    --color-border-subtle: var(--palette-neutral-800);
+    --color-border-control: var(--palette-neutral-500);
+    --color-border-strong: var(--palette-neutral-400);
+    --color-brand: var(--palette-petrol-300);
+    --color-accent: var(--palette-petrol-300);
+    --color-accent-hover: var(--palette-petrol-200);
+    --color-accent-pressed: var(--palette-petrol-400);
+    --color-on-accent: var(--palette-brand-ink);
+    --color-accent-text: var(--palette-petrol-200);
+    --color-accent-subtle: var(--palette-petrol-950);
+    --color-link: var(--palette-petrol-300);
+    --color-link-hover: var(--palette-petrol-200);
+    --color-focus-ring: var(--palette-petrol-300);
+    --color-selection-bg: var(--palette-petrol-900);
+    --color-selection-fg: var(--palette-neutral-100);
+    --color-editor-bg: var(--palette-neutral-950);
+    --color-editor-fg: var(--palette-neutral-100);
+    --color-editor-caret: var(--palette-petrol-200);
+    --color-editor-selection-bg: var(--palette-petrol-800);
+    --color-editor-selection-fg: var(--palette-neutral-100);
+    --color-code-bg: var(--palette-neutral-900);
+    --color-code-fg: var(--palette-neutral-100);
+    --color-disabled-bg: var(--palette-neutral-900);
+    --color-disabled-fg: var(--palette-neutral-500);
+    --color-disabled-border: var(--palette-neutral-800);
+    --color-info-bg: var(--palette-petrol-950);
+    --color-info-fg: var(--palette-petrol-300);
+    --color-info-mark: var(--palette-petrol-400);
+    --color-info-border: var(--palette-petrol-400);
+    --color-success-bg: var(--palette-success-950);
+    --color-success-fg: var(--palette-success-300);
+    --color-success-mark: var(--palette-success-400);
+    --color-success-border: var(--palette-success-400);
+    --color-warning-bg: var(--palette-warning-950);
+    --color-warning-fg: var(--palette-warning-300);
+    --color-warning-mark: var(--palette-warning-400);
+    --color-warning-border: var(--palette-warning-400);
+    --color-danger-bg: var(--palette-danger-950);
+    --color-danger-fg: var(--palette-danger-300);
+    --color-danger-mark: var(--palette-danger-400);
+    --color-danger-border: var(--palette-danger-400);
+    --color-danger-solid: var(--palette-danger-300);
+    --color-danger-solid-hover: var(--palette-danger-200);
+    --color-danger-solid-pressed: var(--palette-danger-400);
+    --color-on-danger: var(--palette-brand-ink);
+    --color-decor-iris-bg: var(--palette-iris-950);
+    --color-decor-iris-fg: var(--palette-iris-300);
+    --color-decor-iris-mark: var(--palette-iris-400);
+    --color-decor-apricot-bg: var(--palette-apricot-950);
+    --color-decor-apricot-fg: var(--palette-apricot-300);
+    --color-decor-apricot-mark: var(--palette-apricot-400);
+    --color-decor-sea-glass-bg: var(--palette-sea-glass-950);
+    --color-decor-sea-glass-fg: var(--palette-sea-glass-300);
+    --color-decor-sea-glass-mark: var(--palette-sea-glass-400);
+    --color-bg-inverse: var(--palette-neutral-100);
+    --color-fg-inverse: var(--palette-neutral-950);
+    --shadow-1: 0 4px 12px rgb(0 0 0 / 0.4);
+    --shadow-2: 0 4px 16px rgb(0 0 0 / 0.5);
+    --color-overlay: rgb(0 0 0 / 0.6);
+  }
+}
+
+/* コントラストを上げる設定：装飾の区切りを部品の枠に、補足の文字を本文の色にする */
+@media (prefers-contrast: more) {
+  :root {
+    --color-border-subtle: var(--color-border-control);
+    --color-fg-muted: var(--color-fg-default);
+  }
+}
+
+/* 動きを減らす設定 */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-normal: 0ms;
   }
 }

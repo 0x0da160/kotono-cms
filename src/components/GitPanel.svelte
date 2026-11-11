@@ -90,12 +90,11 @@
     <p data-testid="git-none">
       Git で管理されていません。記事はこのまま編集できます。初期化すると、記事ごとにコミットして履歴を残せます。
     </p>
-    <button type="button" onclick={() => git.init()} disabled={git.busy} data-testid="git-init">Git を初期化する</button
-    >
+    <button type="button" onclick={() => git.init()} disabled={git.busy} data-testid="git-init">Git を初期化…</button>
   {:else if git.info?.kind === "unsupported"}
     <p class="err" data-testid="git-unsupported">{git.info.message}</p>
   {:else if repo}
-    <dl class="summary">
+    <dl class="summary grid-table">
       <dt>ブランチ</dt>
       <dd data-testid="git-branch">{repo.branch ?? "（ブランチではありません）"}</dd>
       <dt>書き込み</dt>
@@ -138,7 +137,7 @@
                   type="button"
                   onclick={() => git.commitArticle(st.id)}
                   disabled={git.busy || ws.busy || repo.blockers.length > 0 || git.staged.length > 0}
-                  data-testid="git-commit-article">この記事をコミット</button
+                  data-testid="git-commit-article">この記事をコミット…</button
                 >
               {/if}
             </div>
@@ -244,8 +243,8 @@
 
 <style>
   .card {
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
+    background: var(--color-bg-surface);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-lg);
     padding: var(--panel-pad);
     margin-block: var(--space-12);
@@ -267,17 +266,10 @@
     font-size: var(--font-size-16);
   }
   .summary {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: var(--space-2) var(--space-12);
     margin: var(--space-8) 0;
   }
-  .summary dd {
-    margin: 0;
-    overflow-wrap: anywhere;
-  }
   .blockers {
-    color: var(--color-ng);
+    color: var(--color-danger-fg);
     margin: var(--space-4) 0;
     padding-inline-start: var(--space-20);
   }
@@ -292,11 +284,11 @@
   .articles {
     list-style: none;
     padding-inline-start: 0;
-    border-top: 1px solid var(--color-border);
+    border-top: 1px solid var(--color-border-subtle);
   }
   .articles > li {
     padding-block: var(--space-4);
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border-subtle);
   }
   .history li {
     display: flex;
@@ -308,40 +300,45 @@
   }
   .history .date,
   .history .who {
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
   }
   .pending,
   .notice {
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-md);
     padding: var(--panel-pad-sm);
     margin-top: var(--space-12);
   }
-  .notice[data-kind="error"],
+  .notice[data-kind="error"] {
+    border-color: var(--color-danger-border);
+    background: var(--color-danger-bg);
+  }
   .pending {
-    border-color: var(--color-ng);
+    border-color: var(--color-warning-border);
+    background: var(--color-warning-bg);
   }
   .notice[data-kind="ok"] {
-    border-color: var(--color-ok);
+    border-color: var(--color-success-border);
+    background: var(--color-success-bg);
   }
   .notice p,
   .pending p {
     margin: 0 0 var(--space-4);
   }
   .err {
-    color: var(--color-ng);
+    color: var(--color-danger-fg);
   }
   .small {
     font-size: var(--font-size-14);
   }
   .muted {
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
   }
   .link {
     background: none;
     border: none;
     padding: var(--space-2) 0;
-    color: var(--color-focus);
+    color: var(--color-focus-ring);
     text-decoration: underline;
     cursor: pointer;
     font-size: var(--font-size-14);

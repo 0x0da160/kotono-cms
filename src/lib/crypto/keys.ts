@@ -99,7 +99,7 @@ export async function hmac(key: CryptoKey, data: Uint8Array): Promise<Uint8Array
 }
 
 // ---------------------------------------------------------------------------
-// 包む鍵（回復コード・パスフレーズ・パスキー）
+// 包む鍵（回復コード・パスキー）
 
 /** PBKDF2 の反復回数（PROVISIONAL：TG14 で iPhone の所要時間を測って確定する） */
 export const PBKDF2_ITERATIONS = 600_000;

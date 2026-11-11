@@ -85,7 +85,7 @@
     読み込み後に、ディスク上の <code>index.md</code> が CMS 以外で変更されました。自動マージ・強制上書きはしません。編集中の原文を退避してから、ディスク版を読み込むか、外部で内容を確認してください。
   </p>
 
-  <table class="versions">
+  <table class="versions grid-table">
     <thead>
       <tr><th scope="col">版</th><th scope="col">取得時点</th><th scope="col">内容識別子（SHA-256）</th></tr>
     </thead>
@@ -122,7 +122,7 @@
 
   <details>
     <summary>標準メタデータの差分</summary>
-    <table class="meta">
+    <table class="meta grid-table">
       <thead
         ><tr
           ><th scope="col">項目</th><th scope="col">基準版</th><th scope="col">ディスク</th><th scope="col">編集中</th
@@ -162,14 +162,14 @@
 
 <style>
   .conflict {
-    border: 2px solid var(--color-ng);
+    border: 2px solid var(--color-danger-border);
     border-radius: var(--radius-lg);
     padding: var(--panel-pad);
-    background: var(--color-surface);
+    background: var(--color-bg-surface);
   }
   h3 {
     margin: 0 0 var(--space-8);
-    color: var(--color-ng);
+    color: var(--color-danger-fg);
     font-size: var(--font-size-16);
   }
   /* エラーの通知と同じ記号を付ける（状態を色だけで伝えない。段階4 5章） */
@@ -184,14 +184,14 @@
   }
   th,
   td {
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-subtle);
     padding: var(--space-4) var(--space-8);
     text-align: start;
     vertical-align: top;
     overflow-wrap: anywhere;
   }
   tr.differs th {
-    color: var(--color-ng);
+    color: var(--color-danger-fg);
   }
   .actions {
     display: flex;
@@ -203,14 +203,14 @@
     max-height: 24rem;
     overflow: auto;
     font-size: var(--font-size-13);
-    background: var(--color-bg);
+    background: var(--color-bg-page);
     padding: var(--space-8);
     border-radius: var(--radius-sm);
   }
   .add {
-    color: var(--color-ok);
+    color: var(--color-success-fg);
   }
   .del {
-    color: var(--color-ng);
+    color: var(--color-danger-fg);
   }
 </style>

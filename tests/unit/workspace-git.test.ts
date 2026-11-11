@@ -29,9 +29,11 @@ describe("暗号化した作業場所での Git（38・39）", () => {
     const v = new Vault(null, 100_000);
     const fs = new MemFs("opfs");
     const store = await WorkspaceStore.open(fs.root);
-    const k = await v.prepareNew();
-    const meta = await store.create({ name: "site", keyring: k.record });
-    v.adopt(meta.id, k.key);
+    const place = await v.newKey();
+    const login = await v.newLogin();
+    v.adopt("login", login.key);
+    const meta = await store.create({ name: "site", keyring: (id) => v.placeKeyring("login", id, place) });
+    v.adopt(meta.id, place);
     const root = await v.wrapOpened(await store.root(meta.id), meta.id);
 
     const repo = new GitRepo(root);

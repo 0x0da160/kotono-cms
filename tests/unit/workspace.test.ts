@@ -239,4 +239,21 @@ describe("未保存確認（13.1）", () => {
     await p2;
     expect(ws.session?.id).toBe("p4c8n6w");
   });
+
+  it("答えを待っている確認は、選ばずに閉じられる（Esc・ロック）。答えは「キャンセル」、なければ最後のボタン", async () => {
+    const ws = new Workspace({});
+    const ask = (values: string[]) =>
+      ws.ask({ title: "t", message: "m", buttons: values.map((value) => ({ label: value, value })), initial: "" });
+    const p = ask(["delete", "cancel", "other"]);
+    expect(ws.dialog).not.toBeNull();
+    ws.dismissDialog();
+    expect(ws.dialog).toBeNull();
+    expect(await p).toBe("cancel");
+    const q = ask(["save", "skip"]);
+    ws.dismissDialog();
+    expect(await q).toBe("skip");
+    // 待っている確認がなければ、何もしない
+    ws.dismissDialog();
+    expect(ws.dialog).toBeNull();
+  });
 });

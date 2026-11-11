@@ -7,7 +7,7 @@ status: stable
 ---
 # Kotono CMS のロゴ
 
-ロゴの資産は `brand/` にある（SVG・見本・生成スクリプト）。デザインシステムの版としては 0.5.0 に収録する。ブランドの色はアプリのトークン（`--color-brand`、`src/lib/design/palette.ts` の `BRAND`）が正本で、値は 0.4.0 の Petrol Blue に一致する。
+ロゴの資産は `brand/` にある（SVG・見本・生成スクリプト）。ブランドの色はアプリのトークン（`--color-brand`。`src/lib/design/palette.ts` の意味の色 `brand`）が正本で、ライトは 0.4.0 の Petrol Blue（`brand-petrol`）、ダークは `petrol-300` を指す。
 
 ## 構成
 
@@ -32,8 +32,8 @@ status: stable
 ## アプリでの使い場所
 
 - 上部バー：`src/components/Logotype.svelte`（`brand/kotono-logotype.svg` と同じ形）。見出し `h1` の中に置き、`aria-label="Kotono CMS"` で名前を与える。
-- 説明文（タグライン）は、ロゴタイプの下に 4px あけて置く。
-- ファビコン・PWA：`public/icon.svg`、`public/icon-192.png`、`public/icon-512.png`、`public/apple-touch-icon.png`。`manifest.webmanifest` の theme_color は #0573aa。
+- 上部バーには説明文を置かない（ADR-0013）。ロゴタイプの高さは、上部バーの文字の 1.25 倍に固定する。
+- ファビコン・PWA：`public/icon.svg`、`public/icon-192.png`、`public/icon-512.png`、`public/apple-touch-icon.png`。ブラウザの枠の色（`theme-color` と `manifest.webmanifest`）は、上部バーの面の色（ライト #fbfaf7）に合わせる。値は `tests/unit/design-tokens.test.ts` が確かめる。
 
 ## 資産と再生成
 

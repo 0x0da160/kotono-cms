@@ -1,14 +1,22 @@
 <script lang="ts">
-  /** 画面に常に出していた長めの説明をまとめたヘルプ。上部バーの「ヘルプ」から開く */
+  /** 画面に常に出していた長めの説明をまとめたヘルプ。上部バーの「ヘルプ」（作業中はメニューの「ヘルプ」）から開く */
   import CircleQuestionMark from "@lucide/svelte/icons/circle-question-mark";
   import X from "@lucide/svelte/icons/x";
+
+  /** button：開くボタンを自分で出す。false なら呼び出し側が show() で開く */
+  let { button = true }: { button?: boolean } = $props();
 
   let el: HTMLDialogElement | undefined = $state();
   let opener: HTMLElement | null = null;
 
-  function show() {
-    opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  export function show(from?: HTMLElement | null) {
+    opener = from ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     el?.showModal();
+  }
+
+  /** 開いていれば閉じる（ロックしたとき） */
+  export function close() {
+    el?.close();
   }
 
   function onClose() {
@@ -17,9 +25,9 @@
   }
 </script>
 
-<button type="button" class="help-open" onclick={show} data-testid="help-open"
-  ><CircleQuestionMark aria-hidden="true" />ヘルプ</button
->
+{#if button}<button type="button" class="help-open" onclick={() => show()} data-testid="help-open"
+    ><CircleQuestionMark aria-hidden="true" />ヘルプ</button
+  >{/if}
 
 <dialog bind:this={el} onclose={onClose} aria-labelledby="help-title" class="help" data-testid="help-dialog">
   <div class="top">
@@ -31,8 +39,12 @@
   <section>
     <h3>画面の構成</h3>
     <p>
-      フォルダ（作業場所）を開くと、上部に「記事」「Git
-      と同期」「設定」が並びます。「記事」では左に記事の一覧、右に編集中の記事を表示します。画面の幅が狭いときは「一覧」と「編集」を切り替えて使います。画面を切り替えても、編集中の内容はそのまま残ります。
+      フォルダ（作業場所）を開くと、上部の右端の「メニュー」から「記事」「Git
+      と同期」「設定」を切り替えられます。「記事」では左に記事の一覧、右に編集中の記事を表示します。画面を切り替えても、編集中の内容はそのまま残ります。
+    </p>
+    <p>
+      iPhone
+      など画面の幅が狭いときは、メニューの「一覧」と「編集」を切り替えて使います。編集中は、タブで「本文」と「記事情報」を切り替え、「保存」「元に戻す」「やり直す」と、そのほかの操作（…）を画面の下に置きます。
     </p>
   </section>
 
@@ -72,7 +84,7 @@
   <section>
     <h3>復旧ドラフト</h3>
     <p>
-      未保存の編集をブラウザの中に自動で退避します。タブを閉じたりブラウザが落ちたりしても、次回の起動で戻せます。ディスクへは自動で書き込みません。設定は上部の「設定」（フォルダを開く前はフッターの「復旧ドラフト」）から変えられます。
+      未保存の編集をブラウザの中に自動で退避します。タブを閉じたりブラウザが落ちたりしても、次回の起動で戻せます。ディスクへは自動で書き込みません。設定はメニューの「設定」（フォルダを開く前は画面の下の「復旧ドラフト」）から変えられます。
     </p>
   </section>
 
@@ -103,10 +115,11 @@
   .help {
     width: min(40rem, calc(100vw - 2rem));
     max-height: calc(100dvh - 2rem);
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-strong);
     border-radius: var(--radius-lg);
-    background: var(--color-surface);
-    color: var(--color-text);
+    background: var(--color-bg-raised);
+    box-shadow: var(--shadow-2);
+    color: var(--color-fg-default);
     padding: var(--space-16) var(--space-20) var(--space-20);
     font-size: var(--font-size-14);
     line-height: 1.7;
@@ -123,8 +136,8 @@
     gap: var(--space-16);
     margin: -1rem -1.25rem var(--space-8);
     padding: var(--space-12) var(--space-20);
-    background: var(--color-surface);
-    border-bottom: 1px solid var(--color-border);
+    background: var(--color-bg-surface);
+    border-bottom: 1px solid var(--color-border-subtle);
   }
   .top button {
     display: inline-flex;
@@ -152,6 +165,6 @@
   }
   .more {
     margin-top: var(--space-12);
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
   }
 </style>

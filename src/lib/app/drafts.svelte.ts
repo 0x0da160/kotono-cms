@@ -1,7 +1,8 @@
 /**
  * 復旧ドラフトの予約・退避・破棄・復旧候補（仕様 33）。
  *
- * - 同意前は本文を永続保存しない（33.1）。
+ * - 既定で有効（ADR-0011：33.1 の事前の同意を、起動時のロック解除と暗号化に置き換えた）。「設定」で無効にできる。
+ * - 本文は SealedDraftStore がロック解除の鍵（または作業場所の鍵）で暗号化して置く。
  * - 入力が 2 秒止まった時点、連続入力中でも最大 10 秒ごとに退避を試みる。IME 変換中は待つ（33.3）。
  * - 保存領域へ書き、読み直してチェックサムが一致したリビジョンだけを「退避済み」と表示する（33.3）。
  * - 破棄・保存成功・無効化との順序は保存領域のトランザクションで守る（store.ts・33.3.1）。
@@ -11,7 +12,7 @@ import { encodeUtf8, sha256Hex } from "../core/bytes";
 import { DRAFT_FORMAT_VERSION, type DraftRecord, type DraftStore } from "../drafts/store";
 import type { EditorSession } from "./session.svelte";
 
-export type DraftMode = "unavailable" | "undecided" | "enabled" | "disabled";
+export type DraftMode = "unavailable" | "enabled" | "disabled";
 
 interface Timers {
   idle: ReturnType<typeof setTimeout> | null;
@@ -29,6 +30,8 @@ export class DraftController {
   busy = $state(false);
 
   private lastSeq = 0;
+  /** 一覧の世代。forget で進め、その前に始めた読み直しの結果を捨てる */
+  private epoch = 0;
   /** 発行済みの最大世代（破棄時に、それ以下の未完了要求を無効にする） */
   // eslint-disable-next-line svelte/prefer-svelte-reactivity -- 画面に表示しない内部状態
   private issued = new Map<string, number>();
@@ -59,7 +62,9 @@ export class DraftController {
     }
     try {
       const e = await this.store.getEnabled();
-      this.mode = e === null ? "undecided" : e ? "enabled" : "disabled";
+      // 未設定（null）は有効にする（既定で有効：ADR-0011）。保存領域は有効の設定を見て書くので、設定も書いておく
+      if (e === null) await this.store.setEnabled(true);
+      this.mode = e === false ? "disabled" : "enabled";
       await this.store.expire(this.now());
       this.reason = null;
     } catch (e) {
@@ -94,11 +99,23 @@ export class DraftController {
 
   async reload(): Promise<void> {
     if (!this.store || this.mode === "unavailable") return;
+    const epoch = this.epoch;
     try {
-      this.records = await this.store.list();
+      const records = await this.store.list();
+      // 読んでいる間にロックしたら、復号した結果を一覧へ戻さない
+      if (epoch === this.epoch) this.records = records;
     } catch (e) {
       this.reason = `復旧ドラフトの一覧を読めません：${e instanceof Error ? e.message : ""}`;
     }
+  }
+
+  /**
+   * ロックしたとき：復号した一覧（本文を含む）を捨てる。保存領域の記録（暗号化したまま）は消さない。
+   * ロックを解除してフォルダ・作業場所を開くと、また読み直す。
+   */
+  forget(): void {
+    this.epoch++;
+    this.records = [];
   }
 
   async enable(): Promise<void> {

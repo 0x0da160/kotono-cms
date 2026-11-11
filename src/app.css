@@ -17,8 +17,20 @@
 
 body {
   margin: 0;
-  background: var(--color-bg);
-  color: var(--color-text);
+  background: var(--color-bg-page);
+  color: var(--color-fg-default);
+  /* 長い英字・URL・ID が画面の幅を押し広げて、横スクロールを作らないようにする */
+  overflow-wrap: break-word;
+}
+
+/* リンクは常に下線（色だけで伝えない）。accent は面の色なので文字には link を使う */
+a {
+  color: var(--color-link);
+  text-underline-offset: 0.2em;
+}
+
+a:hover {
+  color: var(--color-link-hover);
 }
 
 :focus-visible {
@@ -29,16 +41,33 @@ body {
 button {
   font: inherit;
   color: inherit;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-control);
   border-radius: var(--radius-md);
   padding: var(--control-pad-y) var(--control-pad-x);
   line-height: var(--control-line-height);
   cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--easing-standard),
+    border-color var(--duration-fast) var(--easing-standard);
 }
 
+/* hover は、hover できる画面だけ（指の画面では、押した後に色が残る） */
+@media (hover: hover) {
+  button:hover:not(:disabled) {
+    background: var(--color-bg-hover);
+  }
+}
+
+button:active:not(:disabled) {
+  background: var(--color-bg-pressed);
+}
+
+/* 無効：親の opacity で薄くせず、無効の色を使う（押せない理由は通常の文字で隣に書く） */
 button:disabled {
-  opacity: 0.55;
+  background: var(--color-disabled-bg);
+  border-color: var(--color-disabled-border);
+  color: var(--color-disabled-fg);
   cursor: not-allowed;
 }
 
@@ -49,9 +78,34 @@ button.primary {
   font-weight: var(--font-weight-strong);
 }
 
+@media (hover: hover) {
+  button.primary:hover:not(:disabled) {
+    background: var(--color-accent-hover);
+    border-color: var(--color-accent-hover);
+  }
+}
+
+button.primary:active:not(:disabled) {
+  background: var(--color-accent-pressed);
+  border-color: var(--color-accent-pressed);
+}
+
+button.primary:disabled {
+  background: var(--color-disabled-bg);
+  border-color: var(--color-disabled-border);
+  color: var(--color-disabled-fg);
+  font-weight: var(--font-weight-regular);
+}
+
+/* 削除の入口（確認を開く）：枠と文字だけ。確定は確認ダイアログの中の塗りのボタン */
 button.danger {
-  border-color: var(--color-ng);
-  color: var(--color-ng);
+  border-color: var(--color-danger-border);
+  color: var(--color-danger-fg);
+}
+
+button.danger:disabled {
+  border-color: var(--color-disabled-border);
+  color: var(--color-disabled-fg);
 }
 
 input,
@@ -59,15 +113,51 @@ select,
 textarea {
   font: inherit;
   color: inherit;
-  background: var(--color-surface);
-  border: 1px solid var(--color-field-border);
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border-control);
   border-radius: var(--radius-md);
   padding: var(--control-pad-y) var(--space-8);
+}
+
+::placeholder {
+  color: var(--color-fg-placeholder);
+  opacity: 1;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--color-accent);
+}
+
+/* 入力の誤り：枠の色と左の太い辺（aria-invalid と説明の文で伝える） */
+:is(input, select, textarea)[aria-invalid="true"] {
+  border-color: var(--color-danger-border);
+  box-shadow: inset var(--border-width-edge) 0 0 var(--color-danger-border);
+}
+
+/* 読み取り専用：沈んだ面と点線の枠 */
+:is(input, textarea)[readonly] {
+  background: var(--color-bg-sunken);
+  border-style: dashed;
+}
+
+:is(input, select, textarea):disabled {
+  background: var(--color-disabled-bg);
+  border-color: var(--color-disabled-border);
+  color: var(--color-disabled-fg);
+  cursor: not-allowed;
 }
 
 input,
 select {
   line-height: var(--control-line-height);
+}
+
+code {
+  background: var(--color-code-bg);
+  color: var(--color-code-fg);
+  border-radius: var(--radius-sm);
+  padding: 0 0.2em;
 }
 
 code,
@@ -77,14 +167,61 @@ code,
   overflow-wrap: anywhere;
 }
 
+/*
+ * 表の形の並び（項目名と値・行と列）：罫線（グリッド線）で行と列の区切りを示す（ADR-0011）。
+ * dl.grid-table は dt・dd を交互に並べる 2 列の表。table は外枠・セルの罫線と見出しの面を持つ。
+ */
+dl.grid-table {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+dl.grid-table > dt,
+dl.grid-table > dd {
+  margin: 0;
+  padding: var(--space-4) var(--space-8);
+  border-top: 1px solid var(--color-border-subtle);
+  overflow-wrap: anywhere;
+}
+
+dl.grid-table > dt {
+  background: var(--color-bg-sunken);
+  color: var(--color-fg-muted);
+  border-inline-end: 1px solid var(--color-border-subtle);
+}
+
+dl.grid-table > :nth-child(-n + 2) {
+  border-top: none;
+}
+
+table.grid-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+table.grid-table :is(th, td) {
+  border: 1px solid var(--color-border-subtle);
+  padding: var(--space-4) var(--space-8);
+  text-align: start;
+  vertical-align: top;
+}
+
+table.grid-table thead th {
+  background: var(--color-bg-sunken);
+  font-weight: var(--font-weight-strong);
+}
+
 .muted {
-  color: var(--color-muted);
+  color: var(--color-fg-muted);
 }
 
 /* 状態は色だけで伝えない（14.1）：バッジは常に文字を持つ */
 .badge {
   display: inline-block;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-control);
   border-radius: var(--radius-pill);
   padding: 0 var(--space-8);
   font-size: var(--font-size-12);
@@ -92,19 +229,31 @@ code,
   white-space: nowrap;
 }
 
+/* 注意：未保存・保存状態が不明 */
 .badge.unsaved,
-.badge.unknown,
-.badge.err {
-  border-color: var(--color-ng);
-  color: var(--color-ng);
+.badge.unknown {
+  background: var(--color-warning-bg);
+  border-color: var(--color-warning-border);
+  color: var(--color-warning-fg);
   font-weight: var(--font-weight-strong);
 }
 
-.badge.saved,
-.badge.pub {
-  border-color: var(--color-ok);
-  color: var(--color-ok);
+/* 失敗・誤り */
+.badge.err {
+  background: var(--color-danger-bg);
+  border-color: var(--color-danger-border);
+  color: var(--color-danger-fg);
+  font-weight: var(--font-weight-strong);
 }
+
+/* 成功：保存済み */
+.badge.saved {
+  background: var(--color-success-bg);
+  border-color: var(--color-success-border);
+  color: var(--color-success-fg);
+}
+
+/* 公開対象は中立のまま（サイトへの公開の完了と区別する） */
 
 /*
  * アイコン（Lucide）。文字の前に添えて見分けやすくするだけで、意味は常に文字で伝える（14.1）。
@@ -138,14 +287,35 @@ svg.lucide-icon {
 }
 
 /*
- * iPhone・iPad（指で操作する画面：仕様 3.2 第2.1節）。
- * - 入力欄の文字を 16px 以上にして、フォーカス時の自動拡大を防ぐ。
- * - ボタン・入力欄・選択欄・開閉の見出しの押せる高さを 44px（--touch-target）以上にする。
- *   マウスの画面では余白を詰めるが（--control-pad-*）、指の画面では高さが下がらない。
+ * iPhone・iPad（指で操作する画面）。主な対象は iPhone の Safari（ADR-0015）。
+ *
+ * | 部品                                                           | 下限            | 根拠                                        |
+ * | -------------------------------------------------------------- | --------------- | ------------------------------------------- |
+ * | ボタン・入力欄・選択欄・タブ・メニューの項目・開閉の見出し     | 44px            | Apple HIG（44pt）                           |
+ * | 文の中の小さな部品（「?」の説明・チップの「×」）               | 見た目 32px     | 押せる範囲は ::after で 44px まで広げる     |
+ * | チェックボックス・ラジオ                                       | 見た目 22px     | ラベルの行（44px）全体で押せる              |
+ *
+ * - 入力欄の文字は 16px 以上にする。15px 以下だと、iOS の Safari がフォーカスのたびに画面を拡大する。
+ *   部品のスタイル（14px・15px の指定）より優先するため !important を使う。
+ * - マウスの画面では余白を詰めるが（--control-pad-*）、指の画面では高さが下限を下回らない。
+ * - hover は、hover できる画面だけに付ける。指の画面では、押した後に hover の色が残って「選択中」に見えるため。
  */
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+}
+
+/* 押したときの灰色の重ね（iOS）は消し、押下の色（:active）で応える。2 度押しでの拡大を止め、反応の遅れをなくす */
+button,
+a,
+summary,
+select,
+label,
+input,
+textarea,
+[role="tab"] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 @media (pointer: coarse) {
@@ -153,17 +323,106 @@ html {
   select,
   textarea,
   [contenteditable="true"] {
-    font-size: max(1rem, 16px);
+    font-size: max(1rem, 16px) !important;
   }
   button,
   select,
   summary,
+  [role="tab"],
   input:not([type="checkbox"], [type="radio"], [type="file"], [type="hidden"]) {
     min-height: var(--touch-target);
   }
+  /* 開閉の見出し：既定の開閉の印（▸）を残したまま、1 行の文字を 44px の中央に置く */
+  summary {
+    padding-block: max(0px, calc((var(--touch-target) - 1lh) / 2));
+  }
   input[type="checkbox"],
   input[type="radio"] {
-    width: 1.25rem;
-    height: 1.25rem;
+    width: 1.375rem;
+    height: 1.375rem;
+    flex: none;
+  }
+  /* チェックボックス・ラジオを含むラベルは、行全体を 44px の押せる範囲にする */
+  label:has(> input:is([type="checkbox"], [type="radio"])) {
+    min-height: var(--touch-target);
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+  }
+  /*
+   * 文の中の小さな部品（.touch-inline）：見た目は 32px のまま、押せる範囲を 44px まで広げる。
+   * 隣の部品とは 12px 以上あけて、広げた範囲が重ならないようにする。
+   */
+  .touch-inline {
+    position: relative;
+    min-width: var(--touch-target-inline);
+    min-height: var(--touch-target-inline);
+  }
+  .touch-inline::after {
+    content: "";
+    position: absolute;
+    inset: calc((var(--touch-target-inline) - var(--touch-target)) / 2);
+  }
+}
+
+/*
+ * 下部の操作バー（[data-bottom-bar]）：狭い画面で、記事の主な操作を親指の届く画面の下に固定する（ADR-0015）。
+ * バーがあるとき、その高さを --bottom-bar-height に入れる。本文の下の余白・トースト・書式の帯の位置がこれを使う。
+ * 画面キーボードが出ている間（html[data-keyboard="open"]）は、バーをキーボードの上に載せ、余白を詰める。
+ */
+@media (max-width: 60rem) {
+  :root:has([data-bottom-bar]) {
+    --bottom-bar-pad: var(--space-8);
+    --bottom-bar-height: calc(
+      var(--touch-target) + 2 * var(--bottom-bar-pad) + var(--border-width) + var(--safe-bottom)
+    );
+  }
+  :root[data-keyboard="open"]:has([data-bottom-bar]) {
+    --bottom-bar-pad: var(--space-4);
+    --bottom-bar-height: calc(var(--touch-target) + 2 * var(--bottom-bar-pad) + var(--border-width));
+  }
+  [data-bottom-bar] {
+    position: fixed;
+    inset-inline: 0;
+    bottom: var(--keyboard-inset);
+    z-index: var(--z-raised);
+    display: flex;
+    align-items: center;
+    gap: var(--control-gap);
+    padding: var(--bottom-bar-pad) calc(var(--page-gutter) + var(--safe-right))
+      calc(var(--bottom-bar-pad) + var(--safe-bottom)) calc(var(--page-gutter) + var(--safe-left));
+    background: var(--color-bg-surface);
+    border-top: var(--border-width) solid var(--color-border-control);
+  }
+  :root[data-keyboard="open"] [data-bottom-bar] {
+    padding-bottom: var(--bottom-bar-pad);
+  }
+}
+
+/*
+ * ダイアログ（<dialog> を showModal で開いたもの）：狭い画面（30rem 以下。iPhone の縦）では、画面の下から出すシートにする。
+ * 親指の届く下側に操作を寄せ、ボタンは幅いっぱいに縦へ積む。キーボードが出ている間は、その上に載せる。
+ * 部品ごとのスタイル（幅・余白）より優先するため !important を使う。
+ */
+@media (max-width: 30rem) {
+  dialog:modal {
+    inset-block: auto 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: calc(100dvh - var(--safe-top) - var(--space-24) - var(--keyboard-inset)) !important;
+    margin: 0 0 var(--keyboard-inset) !important;
+    border-inline: none !important;
+    border-bottom: none !important;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0 !important;
+    padding-bottom: calc(var(--space-16) + var(--safe-bottom)) !important;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+  :root[data-keyboard="open"] dialog:modal {
+    padding-bottom: var(--space-16) !important;
+  }
+  dialog:modal .buttons {
+    flex-direction: column;
+    align-items: stretch;
   }
 }

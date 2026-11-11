@@ -168,7 +168,7 @@
 <section class="preview" aria-labelledby="preview-heading">
   <div class="head">
     <h3 id="preview-heading">プレビュー</h3>
-    <button type="button" onclick={reloadImages}>画像を読み直す</button>
+    <button type="button" onclick={reloadImages}>画像を再読み込み</button>
   </div>
   <p class="muted small">
     未保存の内容を表示します。公開サイトの見た目・URL は保証しません。スクリプト・生 HTML・外部画像は表示しません。
@@ -231,16 +231,17 @@
     width: 100%;
     min-height: 24rem;
     height: 60vh;
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-md);
-    background: var(--color-surface);
+    background: var(--color-bg-surface);
     resize: vertical;
   }
   .warn {
     margin: 0;
-    border: 1px solid var(--color-ng);
+    border: 1px solid var(--color-warning-border);
     border-radius: var(--radius-md);
     padding: var(--space-6) var(--space-10);
+    background: var(--color-warning-bg);
   }
   .small {
     font-size: var(--font-size-13);

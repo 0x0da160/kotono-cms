@@ -22,6 +22,8 @@ sources:
     author: claude-code/2.1.318
     last_modified: 2026-11-05T00:00:00Z
 ---
+> **2026-11-09 更新**：パレット（決定 2 の段の名前を含む）と意味の色の割り当ては [ADR-0010](0010-design-system-0-4.md) で置き換えた。正本を TypeScript に置いて CSS を生成する方式（決定 1・3・4・5）は引き続き有効。
+
 # 決定
 
 1. **トークンの正本を TypeScript に置き、CSS を生成する。** 色は `src/lib/design/palette.ts`、それ以外は `src/lib/design/tokens.ts`。`pnpm tokens` で `src/styles/tokens.css` を書き出し、`src/app.css` が読み込む。生成物はリポジトリに含め、差分で値の変化を確かめられるようにする。

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { focusReturn } from "../lib/ui/focus-return";
-  import type { DialogRequest } from "../lib/app/workspace.svelte";
+  import { dismissValue, type DialogRequest } from "../lib/app/workspace.svelte";
 
   let { request }: { request: DialogRequest | null } = $props();
   let el: HTMLDialogElement | undefined = $state();
@@ -31,8 +31,7 @@
 
   function onCancel(e: Event) {
     e.preventDefault();
-    const cancel = request?.buttons.find((b) => b.value === "cancel") ?? request?.buttons.at(-1);
-    if (cancel) choose(cancel.value);
+    if (request) choose(dismissValue(request));
   }
 </script>
 
@@ -66,10 +65,11 @@
 <style>
   .dialog {
     max-width: min(32rem, calc(100vw - 2rem));
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-strong);
     border-radius: var(--radius-lg);
-    background: var(--color-surface);
-    color: var(--color-text);
+    background: var(--color-bg-raised);
+    box-shadow: var(--shadow-2);
+    color: var(--color-fg-default);
     padding: var(--space-16);
   }
   .dialog::backdrop {
@@ -82,8 +82,23 @@
   .details {
     margin: 0 0 var(--space-16);
     padding-inline-start: var(--space-20);
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
     font-size: var(--font-size-14);
+  }
+  /* 確認ダイアログの中の削除は「確定」なので塗りの危険色（入口のボタンは枠だけ） */
+  .buttons button.danger {
+    background: var(--color-danger-solid);
+    border-color: var(--color-danger-solid);
+    color: var(--color-on-danger);
+    font-weight: var(--font-weight-strong);
+  }
+  .buttons button.danger:hover:not(:disabled) {
+    background: var(--color-danger-solid-hover);
+    border-color: var(--color-danger-solid-hover);
+  }
+  .buttons button.danger:active:not(:disabled) {
+    background: var(--color-danger-solid-pressed);
+    border-color: var(--color-danger-solid-pressed);
   }
   .buttons {
     display: flex;

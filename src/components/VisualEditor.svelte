@@ -12,6 +12,7 @@
   import { PREVIEW_MAX_IMAGES, PROVISIONAL_PREVIEW_IMAGE_MAX_BYTES } from "../lib/core/budgets";
   import { classifyUrl } from "../lib/core/markdown";
   import { listVariants, loadDisplayImage } from "../lib/fs/media";
+  import { coarsePointer } from "../lib/ui/media.svelte";
   import { renderTree } from "../lib/visual/render";
   import { serializeRoot, type PristineBlock, type VNode } from "../lib/visual/serialize";
 
@@ -23,6 +24,14 @@
   let linkOpen = $state(false);
   let linkUrl = $state("");
   let linkInput: HTMLInputElement | undefined = $state();
+  let box: HTMLDivElement | undefined = $state();
+  let bar: HTMLDivElement | undefined = $state();
+  /** 編集領域か書式の帯にフォーカスがある */
+  let focused = $state(false);
+  /** 書式の帯の「その他」を開いている */
+  let more = $state(false);
+  /** 書式の帯の位置（.visual からの相対）。null は出す場所がない（キャレットが見えない） */
+  let barPos = $state<{ top: number; left: number; below: boolean } | null>(null);
 
   const body = $derived(session.analysis.split.ok ? session.analysis.split.body : null);
   const editable = $derived(session.editable && error === null && !rendering);
@@ -393,70 +402,279 @@
 
   /** ツールバーのボタンで選択範囲を失わない */
   const keep = (e: MouseEvent) => e.preventDefault();
+
+  // ---------------------------------------------------------------------------
+  // 書式の帯。マウスの画面ではカーソルの近くに浮かべる（ADR-0011）。
+  // 指の画面（iPhone・iPad）では画面の下に付け、キーボードが出ている間はその上に載せる（ADR-0015）。
+  // カーソルの近くに浮かべると、iOS の選択のメニュー（コピー・ペースト）や選択のつまみと重なるため。
+
+  const docked = $derived(coarsePointer.matches);
+  const barShown = $derived(editable && focused && (docked || barPos !== null));
+
+  /**
+   * 画面の下に付けた帯・操作バー・キーボードに、キャレットの行が隠れないようにする。
+   * 見えている範囲（visualViewport）の下端から、帯と操作バーの高さを引いた位置より下にあれば、その分だけ送る。
+   */
+  function keepCaretVisible() {
+    if (!docked || !focused || !bar) return;
+    const c = caretRect();
+    if (!c) return;
+    const vv = window.visualViewport;
+    const bottom = vv ? vv.offsetTop + vv.height : innerHeight;
+    const bottomBar = document.querySelector<HTMLElement>("[data-bottom-bar]")?.offsetHeight ?? 0;
+    const limit = bottom - bar.offsetHeight - bottomBar - 8;
+    if (c.bottom > limit) scrollBy({ top: c.bottom - limit });
+  }
+
+  /** キャレット・選択範囲の画面上の矩形。見えなければ null */
+  function caretRect(): DOMRect | null {
+    const r = selectionRange();
+    if (!r) return null;
+    const rects = r.getClientRects();
+    const first = rects[0];
+    if (first && (first.width > 0 || first.height > 0)) {
+      // 選択範囲は先頭の行の上に出す
+      return r.collapsed ? first : r.getBoundingClientRect();
+    }
+    // 空の行などで矩形がないときは、キャレットのある要素の矩形を使う
+    const n = r.startContainer;
+    const el = n.nodeType === Node.ELEMENT_NODE ? (n as Element) : n.parentElement;
+    return el && root?.contains(el) ? el.getBoundingClientRect() : null;
+  }
+
+  /** 画面の上で固定して重なる部分（上部バー・編集の見出し）の下端 */
+  function chromeBottom(): number {
+    let y = 0;
+    for (const el of document.querySelectorAll<HTMLElement>("[data-sticky-chrome]")) {
+      const b = el.getBoundingClientRect();
+      if (b.height > 0 && b.top <= 1) y = Math.max(y, b.bottom);
+      else if (b.height > 0 && getComputedStyle(el).position === "sticky" && b.top < 200) y = Math.max(y, b.bottom);
+    }
+    return y;
+  }
+
+  let raf = 0;
+  function place() {
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => {
+      if (!box || !editable || !focused || docked) {
+        barPos = null;
+        return;
+      }
+      // リンク先の入力中は、入力欄を動かさない
+      if (linkOpen && barPos) return;
+      const c = caretRect();
+      const host = box.getBoundingClientRect();
+      if (!c || c.bottom < 0 || c.top > innerHeight) {
+        barPos = null;
+        return;
+      }
+      const h = bar?.offsetHeight || 40;
+      const w = bar?.offsetWidth || 320;
+      const gap = 8;
+      const below = c.top - h - gap < chromeBottom();
+      const top = below ? c.bottom + gap : c.top - h - gap;
+      const maxLeft = Math.max(0, host.width - w);
+      const left = Math.min(Math.max(0, c.left - host.left - w / 2 + Math.min(c.width, 40) / 2), maxLeft);
+      barPos = { top: top - host.top, left, below };
+    });
+  }
+
+  function onFocusIn() {
+    focused = true;
+    place();
+  }
+
+  function onFocusOut(e: FocusEvent) {
+    const next = e.relatedTarget as Node | null;
+    if (next && box?.contains(next)) return;
+    focused = false;
+    more = false;
+    linkOpen = false;
+    barPos = null;
+  }
+
+  /** Alt+F10 で書式の帯へ、帯の中の Escape で本文へ戻る（WAI-ARIA のツールバーの慣例） */
+  function onBoxKeydown(e: KeyboardEvent) {
+    if (e.key === "F10" && e.altKey && barShown) {
+      e.preventDefault();
+      bar?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+    } else if (e.key === "Escape" && bar?.contains(e.target as Node) && !linkOpen) {
+      e.preventDefault();
+      e.stopPropagation();
+      more = false;
+      root?.focus();
+    }
+  }
+
+  onMount(() => {
+    const onSel = () => {
+      if (focused) place();
+    };
+    const onCaret = () => {
+      if (focused) requestAnimationFrame(keepCaretVisible);
+    };
+    document.addEventListener("selectionchange", onSel);
+    document.addEventListener("selectionchange", onCaret);
+    addEventListener("scroll", onSel, { capture: true, passive: true });
+    addEventListener("resize", onSel, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      document.removeEventListener("selectionchange", onSel);
+      document.removeEventListener("selectionchange", onCaret);
+      removeEventListener("scroll", onSel, { capture: true });
+      removeEventListener("resize", onSel);
+    };
+  });
 </script>
 
-<div class="visual">
-  <div class="fmt" role="toolbar" aria-label="書式">
-    <button type="button" onmousedown={keep} onclick={() => exec("formatBlock", "p")} disabled={!editable}>段落</button>
-    <button type="button" onmousedown={keep} onclick={() => exec("formatBlock", "h2")} disabled={!editable}
-      >見出し2</button
-    >
-    <button type="button" onmousedown={keep} onclick={() => exec("formatBlock", "h3")} disabled={!editable}
-      >見出し3</button
-    >
-    <span class="sep" aria-hidden="true"></span>
-    <button
-      type="button"
-      onmousedown={keep}
-      onclick={() => exec("bold")}
-      disabled={!editable}
-      aria-keyshortcuts="Control+B"
-      data-testid="fmt-bold"><b>太字</b></button
-    >
-    <button
-      type="button"
-      onmousedown={keep}
-      onclick={() => exec("italic")}
-      disabled={!editable}
-      aria-keyshortcuts="Control+I"><i>斜体</i></button
-    >
-    <button type="button" onmousedown={keep} onclick={() => exec("strikeThrough")} disabled={!editable}
-      ><s>取り消し</s></button
-    >
-    <button type="button" onmousedown={keep} onclick={inlineCode} disabled={!editable}><code>コード</code></button>
-    <button type="button" onmousedown={keep} onclick={openLink} disabled={!editable} data-testid="fmt-link"
-      >リンク</button
-    >
-    <span class="sep" aria-hidden="true"></span>
-    <button type="button" onmousedown={keep} onclick={() => exec("insertUnorderedList")} disabled={!editable}
-      >箇条書き</button
-    >
-    <button type="button" onmousedown={keep} onclick={() => exec("insertOrderedList")} disabled={!editable}
-      >番号付き</button
-    >
-    <button type="button" onmousedown={keep} onclick={() => exec("formatBlock", "blockquote")} disabled={!editable}
-      >引用</button
-    >
-    <button type="button" onmousedown={keep} onclick={() => exec("formatBlock", "pre")} disabled={!editable}
-      >コードブロック</button
-    >
-  </div>
-  {#if linkOpen}
-    <div class="link-row">
-      <label
-        >リンク先 <input
-          bind:this={linkInput}
-          bind:value={linkUrl}
-          type="url"
-          onkeydown={onLinkKeydown}
-          data-testid="link-url"
-        /></label
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="visual" bind:this={box} onfocusin={onFocusIn} onfocusout={onFocusOut} onkeydown={onBoxKeydown}>
+  <!--
+    書式の帯：本文にフォーカスがある間、キャレット（選択範囲）の上に出す。上に場所がなければ下に出す。
+    ボタンは押しても本文のフォーカスと選択範囲を失わない（mousedown を止める）。
+  -->
+  <div
+    bind:this={bar}
+    class="fmt"
+    class:docked
+    class:below={barPos?.below}
+    role="toolbar"
+    aria-label="書式（Alt+F10 で移動、Esc で本文へ）"
+    hidden={!barShown}
+    style:top={barPos && !docked ? `${barPos.top}px` : undefined}
+    style:left={barPos && !docked ? `${barPos.left}px` : undefined}
+    data-testid="fmt-bar"
+  >
+    <div class="fmt-row">
+      <button
+        type="button"
+        class="compact"
+        onmousedown={keep}
+        onclick={() => exec("formatBlock", "h2")}
+        disabled={!editable}>見出し2</button
       >
-      <button type="button" class="primary" onclick={applyLink} data-testid="link-apply">適用</button>
-      <button type="button" onclick={removeLink}>リンクを外す</button>
-      <button type="button" onclick={() => (linkOpen = false)}>キャンセル</button>
+      <button
+        type="button"
+        class="compact"
+        onmousedown={keep}
+        onclick={() => exec("formatBlock", "h3")}
+        disabled={!editable}>見出し3</button
+      >
+      <button
+        type="button"
+        class="compact"
+        onmousedown={keep}
+        onclick={() => exec("formatBlock", "p")}
+        disabled={!editable}>段落</button
+      >
+      <span class="sep" aria-hidden="true"></span>
+      <button
+        type="button"
+        class="compact"
+        onmousedown={keep}
+        onclick={() => exec("bold")}
+        disabled={!editable}
+        aria-keyshortcuts="Control+B"
+        data-testid="fmt-bold"><b>太字</b></button
+      >
+      <button
+        type="button"
+        class="compact"
+        onmousedown={keep}
+        onclick={() => exec("italic")}
+        disabled={!editable}
+        aria-keyshortcuts="Control+I"><i>斜体</i></button
+      >
+      <button
+        type="button"
+        class="compact"
+        onmousedown={keep}
+        onclick={openLink}
+        disabled={!editable}
+        data-testid="fmt-link">リンク</button
+      >
+      <button
+        type="button"
+        class="compact"
+        onmousedown={keep}
+        onclick={() => {
+          more = !more;
+          place();
+        }}
+        aria-expanded={more}
+        data-testid="fmt-more">その他</button
+      >
     </div>
-  {/if}
+    {#if more}
+      <div class="fmt-row" data-testid="fmt-more-row">
+        <button
+          type="button"
+          class="compact"
+          onmousedown={keep}
+          onclick={() => exec("strikeThrough")}
+          disabled={!editable}><s>取り消し線</s></button
+        >
+        <button type="button" class="compact" onmousedown={keep} onclick={inlineCode} disabled={!editable}
+          ><code>コード</code></button
+        >
+        <button
+          type="button"
+          class="compact"
+          onmousedown={keep}
+          onclick={() => exec("insertUnorderedList")}
+          disabled={!editable}>箇条書き</button
+        >
+        <button
+          type="button"
+          class="compact"
+          onmousedown={keep}
+          onclick={() => exec("insertOrderedList")}
+          disabled={!editable}>番号付き</button
+        >
+        <button
+          type="button"
+          class="compact"
+          onmousedown={keep}
+          onclick={() => exec("formatBlock", "blockquote")}
+          disabled={!editable}>引用</button
+        >
+        <button
+          type="button"
+          class="compact"
+          onmousedown={keep}
+          onclick={() => exec("formatBlock", "pre")}
+          disabled={!editable}>コードブロック</button
+        >
+      </div>
+    {/if}
+    {#if linkOpen}
+      <div class="fmt-row link-row">
+        <label
+          >リンク先 <input
+            bind:this={linkInput}
+            bind:value={linkUrl}
+            type="url"
+            autocapitalize="off"
+            autocorrect="off"
+            enterkeyhint="done"
+            onkeydown={onLinkKeydown}
+            data-testid="link-url"
+          /></label
+        >
+        <button type="button" class="compact primary" onclick={applyLink} data-testid="link-apply">適用</button>
+        <button type="button" class="compact" onclick={removeLink}>リンクを外す</button>
+        <button
+          type="button"
+          class="compact"
+          onclick={() => {
+            linkOpen = false;
+            root?.focus();
+          }}>キャンセル</button
+        >
+      </div>
+    {/if}
+  </div>
   {#if error}<p class="err" role="status" data-testid="visual-error">{error}</p>{/if}
   <div
     bind:this={root}
@@ -482,43 +700,136 @@
 
 <style>
   .visual {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: var(--space-6);
     min-width: 0;
   }
+  /* カーソルの近くに浮かべる書式の帯。浮いた面（raised）と影で本文と分ける */
   .fmt {
+    position: absolute;
+    z-index: var(--z-popover);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    max-width: min(100%, 34rem);
+    padding: var(--space-4);
+    background: var(--color-bg-raised);
+    border: 1px solid var(--color-border-control);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-2);
+  }
+  /*
+   * 指の画面：画面の下に付ける（下部の操作バーがあればその上、キーボードが出ていればその上）。
+   * 1 行に並べて横へ送る。ボタンは 44px（app.css の下限）。
+   */
+  .fmt.docked {
+    position: fixed;
+    inset-inline: 0;
+    bottom: calc(var(--keyboard-inset) + var(--bottom-bar-height));
+    z-index: var(--z-raised);
+    max-width: none;
+    gap: 0;
+    padding: var(--space-2) calc(var(--space-8) + var(--safe-right)) var(--space-2)
+      calc(var(--space-8) + var(--safe-left));
+    border: none;
+    border-top: var(--border-width) solid var(--color-border-control);
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .fmt.docked .fmt-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+  .fmt.docked .fmt-row::-webkit-scrollbar {
+    display: none;
+  }
+  .fmt.docked button {
+    flex: none;
+    min-width: var(--touch-target);
+    padding-inline: var(--space-6);
+    font-size: var(--font-size-14);
+    white-space: nowrap;
+  }
+  .fmt.docked .sep {
+    align-self: center;
+    height: 1.5rem;
+  }
+  .fmt.docked .fmt-row + .fmt-row {
+    border-top: var(--border-width) solid var(--color-border-subtle);
+  }
+  /* リンク先の入力は折り返して、入力欄を 1 行に取る */
+  .fmt.docked .link-row {
+    flex-wrap: wrap;
+    padding: var(--space-4) 0;
+  }
+  .fmt.docked .link-row label {
+    flex: 1 1 100%;
+  }
+  /* 操作バーもキーボードもないとき（iPad の外付けキーボードなど）は、ホームインジケーターの分をあける */
+  :global(:root:not([data-keyboard]):not(:has([data-bottom-bar]))) .fmt.docked {
+    padding-bottom: calc(var(--space-2) + var(--safe-bottom));
+  }
+  .fmt[hidden] {
+    display: none;
+  }
+  .fmt-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.1875rem;
+    gap: var(--space-2);
     align-items: center;
   }
   .fmt button {
     padding: var(--space-2) var(--space-6);
     font-size: var(--font-size-13);
     font-weight: var(--font-weight-regular);
+    border-color: transparent;
+    background: transparent;
+  }
+  @media (hover: hover) {
+    .fmt button:hover:not(:disabled) {
+      background: var(--color-bg-hover);
+    }
+  }
+  .fmt button[aria-expanded="true"] {
+    background: var(--color-accent-subtle);
+    color: var(--color-accent-text);
+  }
+  .fmt button.primary {
+    background: var(--color-accent);
+    color: var(--color-on-accent);
   }
   .sep {
     width: 1px;
     align-self: stretch;
-    background: var(--color-border);
+    background: var(--color-border-subtle);
     margin-inline: var(--space-2);
   }
   .link-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-6);
-    align-items: center;
+    border-top: 1px solid var(--color-border-subtle);
+    padding-top: var(--space-4);
     font-size: var(--font-size-14);
     font-weight: var(--font-weight-regular);
   }
+  .link-row label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    flex: 1 1 14rem;
+  }
   .link-row input {
-    min-width: 18rem;
+    flex: 1 1 auto;
+    min-width: 0;
   }
   .surface {
-    border: 1px solid var(--color-field-border);
+    border: 1px solid var(--color-border-control);
     border-radius: var(--radius-md);
-    background: var(--color-surface);
+    background: var(--color-editor-bg);
+    color: var(--color-editor-fg);
+    caret-color: var(--color-editor-caret);
     padding: var(--space-12) var(--space-16);
     min-height: max(20rem, calc(100dvh - 18rem));
     font-weight: var(--font-weight-regular);
@@ -528,12 +839,19 @@
     cursor: text;
   }
   .surface:focus-visible {
-    outline: 2px solid var(--color-focus);
+    outline: 2px solid var(--color-focus-ring);
     outline-offset: 1px;
   }
+  .surface :global(::selection) {
+    background: var(--color-editor-selection-bg);
+    color: var(--color-editor-selection-fg);
+  }
+  /* 読み取り専用：薄くせず（opacity は文字のコントラストを下げる）、沈んだ面と点線の枠で示す */
   .surface[aria-readonly="true"] {
     cursor: default;
-    opacity: 0.8;
+    background: var(--color-bg-sunken);
+    color: var(--color-fg-default);
+    border-style: dashed;
   }
   .surface :global(p),
   .surface :global(li),
@@ -561,11 +879,12 @@
   .surface :global(blockquote) {
     margin: 0 0 0.75em;
     padding-left: var(--space-16);
-    border-left: 4px solid var(--color-border);
-    color: var(--color-muted);
+    border-left: 4px solid var(--color-border-subtle);
+    color: var(--color-fg-muted);
   }
   .surface :global(pre) {
-    background: var(--color-bg);
+    background: var(--color-code-bg);
+    color: var(--color-code-fg);
     padding: var(--space-8) var(--space-12);
     border-radius: var(--radius-md);
     white-space: pre-wrap;
@@ -575,12 +894,13 @@
   .surface :global(code) {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "BIZ UDGothic", monospace;
     font-size: 0.9em;
-    background: var(--color-bg);
+    background: var(--color-code-bg);
+    color: var(--color-code-fg);
     border-radius: var(--radius-sm);
     padding: 0 0.2em;
   }
   .surface :global(a) {
-    color: var(--color-focus);
+    color: var(--color-focus-ring);
     text-decoration: underline;
     cursor: text;
   }
@@ -605,10 +925,10 @@
   .surface :global(.v-img-ph),
   .surface :global(.v-raw),
   .surface :global(.v-raw-inline) {
-    border: 1px dashed var(--color-border);
+    border: 1px dashed var(--color-border-subtle);
     border-radius: var(--radius-sm);
-    color: var(--color-muted);
-    background: var(--color-bg);
+    color: var(--color-fg-muted);
+    background: var(--color-bg-page);
     font-size: 0.875em;
   }
   .surface :global(.v-img-ph) {
@@ -622,12 +942,34 @@
     margin: 0 0 0.75em;
     user-select: text;
   }
+  /* 表：罫線（グリッド線）つきで見せる。編集は「原文」タブ */
+  .surface :global(.v-table) {
+    font-family: inherit;
+    white-space: normal;
+    padding: var(--space-6);
+    overflow-x: auto;
+    color: var(--color-editor-fg);
+  }
+  .surface :global(.v-table table) {
+    border-collapse: collapse;
+    font-size: var(--font-size-14);
+  }
+  .surface :global(.v-table :is(th, td)) {
+    border: 1px solid var(--color-border-control);
+    padding: var(--space-2) var(--space-8);
+    text-align: start;
+    vertical-align: top;
+  }
+  .surface :global(.v-table th) {
+    background: var(--color-bg-sunken);
+    font-weight: var(--font-weight-strong);
+  }
   .surface :global(.v-raw-inline) {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "BIZ UDGothic", monospace;
     padding: 0 0.2em;
   }
   .err {
     margin: 0;
-    color: var(--color-ng);
+    color: var(--color-danger-fg);
   }
 </style>

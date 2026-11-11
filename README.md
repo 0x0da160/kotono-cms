@@ -2,14 +2,14 @@
 
 手元のMarkdownで記事をつくる、ローカルCMS。
 
-Kotono CMS（コトノ シーエムエス）は、Webメディアの記事を作成・編集するためのローカルCMSです。単一のHTMLファイル `kotono-cms.html` をデスクトップ版の Chrome・Edge で `file://` から開き、ユーザーが選んだローカルフォルダに Markdown＋YAML frontmatter の記事を保存します。サーバーも外部CDNも使いません。
+Kotono CMS（コトノ シーエムエス）は、Webメディアの記事を作成・編集するためのローカルCMSです。単一のHTMLファイル `kotono-cms.html` を https の配信元（または localhost）からデスクトップ版の Chrome・Edge で開き、ユーザーが選んだローカルフォルダに Markdown＋YAML frontmatter の記事を保存します。サーバーも外部CDNも使いません。
 
 > **現在の状態：P1 MVP（実装完了・実機検証前）**
-> フォルダ選択、記事一覧（検索・絞り込み・ソート）、新規作成、frontmatter フォームと Markdown 原文の編集、外部変更を検出する手動保存、記事IDと slug の検証、ID・createdAt の専用修正、YAML の往復保持、Markdown プレビュー（対象8言語のコードハイライト）、画像の取り込み（縮小・メタデータ削除による最適化と、表示用の派生画像の生成）・挿入・カバー選択・削除、本文の見たまま編集（WYSIWYG）、前回開いたフォルダの記憶、記事の複製・削除（リポジトリ外への検証済み退避が必須）、ブラウザ内復旧ドラフト、ローカル Git（記事単位のコミット・初期化・状態と履歴の表示）を実装しています。仕様の数値と方式は技術成立性ゲート（仕様 第2.2節）で確認する前の受け入れ要件であり、実機（Windows・macOS の Chrome・Edge）での検証はまだ行っていません。実装方式と未検証の項目は [ADR-0002](docs/knowledge/decisions/0002-p1-editing-and-save.md)・[ADR-0003](docs/knowledge/decisions/0003-p1-preview-media-drafts.md)・[ADR-0004](docs/knowledge/decisions/0004-p1-git-and-remaining.md)・[ADR-0005](docs/knowledge/decisions/0005-wysiwyg-images-recent-folder.md) を参照してください。
+> フォルダ選択、記事一覧（検索・絞り込み・ソート）、新規作成、frontmatter フォームと Markdown 原文の編集、外部変更を検出する手動保存、記事IDと slug の検証、ID・createdAt の専用修正、YAML の往復保持、Markdown プレビュー（対象8言語のコードハイライト）、画像の取り込み（縮小・メタデータ削除による最適化と、表示用の派生画像の生成）・挿入・カバー選択・削除、本文の見たまま編集（WYSIWYG）、前回開いたフォルダの記憶、記事の複製・削除（リポジトリ外への検証済み退避が必須）、起動時のパスキーでのロック解除（パスキーだけ。`file://` では使えない）、ロック解除の鍵で暗号化したブラウザ内復旧ドラフト（既定で有効）とブラウザ内の作業場所、ローカル Git（記事単位のコミット・初期化・状態と履歴の表示）を実装しています。仕様の数値と方式は技術成立性ゲート（仕様 第2.2節）で確認する前の受け入れ要件であり、実機（Windows・macOS の Chrome・Edge）での検証はまだ行っていません。実装方式と未検証の項目は [ADR-0002](docs/knowledge/decisions/0002-p1-editing-and-save.md)・[ADR-0003](docs/knowledge/decisions/0003-p1-preview-media-drafts.md)・[ADR-0004](docs/knowledge/decisions/0004-p1-git-and-remaining.md)・[ADR-0005](docs/knowledge/decisions/0005-wysiwyg-images-recent-folder.md)・[ADR-0011](docs/knowledge/decisions/0011-passkey-first-and-compact-ui.md)・[ADR-0012](docs/knowledge/decisions/0012-passkey-only-login-whole-app-encryption.md)・[ADR-0014](docs/knowledge/decisions/0014-lock-unlock-wording-and-no-backward-compat.md) を参照してください。
 
 ## 特徴（仕様より）
 
-- 単一HTMLを `file://` で起動し、JS・CSS・依存ライブラリをすべて同梱する。
+- 単一HTMLに JS・CSS・依存ライブラリをすべて同梱する（パスキーを使うため、`file://` ではなく https の配信元か localhost から開く）。
 - 記事は `content/articles/<記事ID>/index.md`（Markdown＋YAML frontmatter）。画像は同じフォルダの `media/` に置く。
 - 本文は見たまま（WYSIWYG）でも Markdown でも編集できる。正本は Markdown で、変更していない部分の記述はそのまま保つ（[ADR-0005](docs/knowledge/decisions/0005-wysiwyg-images-recent-folder.md)）。
 - 画像は取り込み時に縦横 4096px・1,600万画素・4 MiB 以内に収め、メタデータを削除したものを原本にする。表示には幅 480・960・1920px の WebP・JPEG（または PNG）の派生画像（`media/variants/`）を使う（ADR-0005。仕様 3.1 からの変更）。
@@ -22,13 +22,14 @@ Kotono CMS（コトノ シーエムエス）は、Webメディアの記事を作
 
 ## 対応環境
 
-| 項目     | 内容                                                                                                                       |
-| -------- | -------------------------------------------------------------------------------------------------------------------------- |
-| ブラウザ | デスクトップ版 Chrome・Edge の安定版、iOS・iPadOS 26 以降の Safari（仕様 3.2。実機検証は未了）                             |
-| OS       | Windows・macOS・iOS・iPadOS                                                                                                |
-| 起動     | デスクトップは `kotono-cms.html` を `file://` で開く。iPhone・iPad は https の配信元から開き、ホーム画面に追加して使う     |
-| 保存先   | デスクトップは選んだフォルダ。iPhone・iPad はブラウザ内の作業場所（暗号化。`?storage=workspace` でデスクトップでも選べる） |
-| 対象外   | Firefox・Android                                                                                                           |
+| 項目     | 内容                                                                                                                                                                              |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ブラウザ | デスクトップ版 Chrome・Edge の安定版、iOS・iPadOS 26 以降の Safari（仕様 3.2。実機検証は未了）                                                                                    |
+| OS       | Windows・macOS・iOS・iPadOS                                                                                                                                                       |
+| 起動     | https の配信元（または localhost）から開き、パスキーでロックを解除する。`file://` で直接開くとパスキーを使えないため使えない（ADR-0012）。iPhone・iPad はホーム画面に追加して使う |
+| 保存先   | デスクトップは選んだフォルダ。iPhone・iPad はブラウザ内の作業場所（ロック解除の鍵で暗号化。`?storage=workspace` でデスクトップでも選べる）                                        |
+| 画面     | iPhone 17 の Safari（縦向き 402×874）を主な対象にして整えている（ADR-0015）。広い画面では一覧と編集を横に並べる                                                                   |
+| 対象外   | Firefox・Android                                                                                                                                                                  |
 
 ## 開発
 
@@ -56,14 +57,14 @@ pnpm build        # dist/kotono-cms.html を生成
 
 ### 検査とテスト
 
-| コマンド         | 内容                                                                                                                    |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `pnpm lint`      | ESLint と Prettier の検査                                                                                               |
-| `pnpm format`    | Prettier で整形                                                                                                         |
-| `pnpm typecheck` | svelte-check（TypeScript の型検査）                                                                                     |
-| `pnpm test`      | Vitest の単体テスト（OKF ナレッジの適合検査を含む）                                                                     |
-| `pnpm test:e2e`  | Playwright で `dist/kotono-cms.html` を `file://` で開いて検証（先に `pnpm build`）。フォルダはページ内の疑似実装で代替 |
-| `pnpm check`     | 上記すべてとビルドを順に実行                                                                                            |
+| コマンド         | 内容                                                                                                                                      |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm lint`      | ESLint と Prettier の検査                                                                                                                 |
+| `pnpm format`    | Prettier で整形                                                                                                                           |
+| `pnpm typecheck` | svelte-check（TypeScript の型検査）                                                                                                       |
+| `pnpm test`      | Vitest の単体テスト（OKF ナレッジの適合検査を含む）                                                                                       |
+| `pnpm test:e2e`  | Playwright で `dist` を localhost から配信して検証（仮想の認証器でパスキーを通す。先に `pnpm build`）。フォルダはページ内の疑似実装で代替 |
+| `pnpm check`     | 上記すべてとビルドを順に実行                                                                                                              |
 
 E2E の初回は `pnpm exec playwright install chromium` でブラウザを入れてください。インストール済みの Chromium を使う場合は `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` にパスを指定します。
 
@@ -74,7 +75,7 @@ E2E の初回は `pnpm exec playwright install chromium` でブラウザを入�
 | 言語           | TypeScript 6（strict）                                     |
 | UI             | Svelte 5                                                   |
 | ビルド         | Vite 8 ＋ vite-plugin-singlefile（単一HTMLへインライン化） |
-| テスト         | Vitest（単体）、Playwright（`file://` での E2E）           |
+| テスト         | Vitest（単体）、Playwright（localhost から配信した E2E）   |
 | 静的検査       | ESLint 10、Prettier、svelte-check                          |
 | パッケージ管理 | pnpm（lockfile で依存を固定）                              |
 
@@ -96,7 +97,7 @@ YAML は `yaml`（Document API）、記事IDは `nanoid` を固定版で採用�
 ├── build/                   # ビルド用プラグイン（CSP 生成）
 ├── tests/
 │   ├── unit/                # Vitest
-│   └── e2e/                 # Playwright（file:// 起動）
+│   └── e2e/                 # Playwright（localhost から配信）
 └── docs/
     ├── spec/                # 仕様書の原本（改変しない）
     └── knowledge/           # 仕様の OKF v0.2 ナレッジバンドル

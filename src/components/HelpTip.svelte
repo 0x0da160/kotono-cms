@@ -86,7 +86,7 @@
 <span class="helptip" onkeydown={onKey}>
   <button
     type="button"
-    class="tip-btn"
+    class="tip-btn touch-inline"
     bind:this={btn}
     onclick={toggle}
     aria-expanded={open}
@@ -116,44 +116,36 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    /* 操作対象は 24px 以上（WCAG 2.5.8） */
-    width: 1.5rem;
-    height: 1.5rem;
-    min-height: 1.5rem;
+    /* 操作対象は 24px 以上（WCAG 2.5.8）。指の画面では .touch-inline が 32px に広げ、押せる範囲を 44px にする */
+    width: var(--target-min);
+    height: var(--target-min);
     padding: 0;
     margin: 0 var(--space-2);
     border: none;
     border-radius: var(--radius-pill);
     background: transparent;
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
     cursor: pointer;
   }
   .tip-btn:hover,
   .tip-btn[aria-expanded="true"] {
-    color: var(--color-text);
-    background: var(--color-border);
+    color: var(--color-fg-default);
+    background: var(--color-bg-hover);
   }
   .tip-btn :global(svg) {
     width: 1rem;
     height: 1rem;
-  }
-  @media (pointer: coarse) {
-    .tip-btn {
-      width: 2rem;
-      height: 2rem;
-      min-height: 2rem;
-    }
   }
   .tip-pop {
     position: fixed;
     z-index: var(--z-tooltip);
     display: block;
     width: max-content;
-    max-width: min(22rem, calc(100vw - 1rem));
+    max-width: min(22rem, calc(100vw - 1rem - var(--safe-left) - var(--safe-right)));
     padding: var(--panel-pad-sm);
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-strong);
     border-radius: var(--radius-md);
-    background: var(--color-surface);
+    background: var(--color-bg-raised);
     color: inherit;
     box-shadow: var(--shadow-2);
     font-size: var(--font-size-13);

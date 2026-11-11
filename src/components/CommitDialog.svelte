@@ -81,7 +81,15 @@
       <label class="field"><span>名前</span><input type="text" bind:value={req.name} data-testid="commit-name" /></label
       >
       <label class="field"
-        ><span>メールアドレス</span><input type="text" bind:value={req.email} data-testid="commit-email" /></label
+        ><span>メールアドレス</span><input
+          type="text"
+          inputmode="email"
+          autocapitalize="off"
+          autocorrect="off"
+          spellcheck="false"
+          bind:value={req.email}
+          data-testid="commit-email"
+        /></label
       >
       {#if !req.identityFromConfig}
         <label class="check"
@@ -106,10 +114,11 @@
 <style>
   .dialog {
     max-width: min(40rem, calc(100vw - 2rem));
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-strong);
     border-radius: var(--radius-lg);
-    background: var(--color-surface);
-    color: var(--color-text);
+    background: var(--color-bg-raised);
+    box-shadow: var(--shadow-2);
+    color: var(--color-fg-default);
     padding: var(--space-16);
   }
   .dialog::backdrop {
@@ -134,7 +143,7 @@
     font-weight: var(--font-weight-strong);
   }
   .kind[data-kind="deleted"] {
-    color: var(--color-ng);
+    color: var(--color-danger-fg);
   }
   .field {
     display: grid;
@@ -147,7 +156,7 @@
     box-sizing: border-box;
   }
   fieldset {
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-md);
     margin: var(--space-12) 0;
   }
@@ -158,14 +167,14 @@
     font-size: var(--font-size-14);
   }
   .err {
-    color: var(--color-ng);
+    color: var(--color-danger-fg);
     margin: var(--space-4) 0;
   }
   .small {
     font-size: var(--font-size-14);
   }
   .muted {
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
   }
   .buttons {
     display: flex;

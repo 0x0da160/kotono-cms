@@ -100,6 +100,11 @@ export interface DialogRequest {
   readonly resolve: (value: string) => void;
 }
 
+/** 選ばずに閉じたとき（Esc・ロック）の答え：「キャンセル」、なければ最後のボタン */
+export function dismissValue(req: DialogRequest): string {
+  return (req.buttons.find((b) => b.value === "cancel") ?? req.buttons.at(-1))?.value ?? "cancel";
+}
+
 type BuildCandidate = () => { ok: true; bytes: Uint8Array } | { ok: false; problems: Problem[] };
 
 type PickerHost = {
@@ -251,6 +256,12 @@ export class Workspace {
     });
   }
 
+  /** 答えを待っている確認を、選ばずに閉じる（Esc と同じ）。ロックするときに、確認の文を画面に残さない */
+  dismissDialog(): void {
+    const req = this.dialog;
+    if (req) req.resolve(dismissValue(req));
+  }
+
   announce(text: string): void {
     this.announcement = "";
     queueMicrotask(() => (this.announcement = text));
@@ -310,7 +321,7 @@ export class Workspace {
     if (!(await this.confirmLeave("別のフォルダを開く前に、未保存の編集をどうしますか。"))) return;
     const h = this.recentHandle;
     if (!looksLikeDirHandle(h)) {
-      this.folderError = `前回のフォルダ「${this.recent.name}」を開けません。「フォルダを選択」から選び直してください。`;
+      this.folderError = `前回のフォルダ「${this.recent.name}」を開けません。「フォルダを開く」から選び直してください。`;
       return;
     }
     const dir = h as DirHandleLike;

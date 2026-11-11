@@ -10,7 +10,7 @@
  * └── backups/<ID>/      ← 削除前退避（19.1）の退避先。作業場所の走査に混入しない
  * ```
  *
- * - 作業場所のフォルダ名は乱数の ID。表示名は meta に置く（暗号化時は暗号文：第39章）。
+ * - 作業場所のフォルダ名は乱数の ID。表示名は meta に平文で置く。
  * - meta がない・壊れている作業場所は「不完全」として表示し、自動削除しない（38.2）。
  * - 削除は明示操作で、エントリーを深い順に 1 件ずつ消す（再帰一括削除に依存しない：19）。
  */
@@ -27,21 +27,17 @@ export const WORKSPACE_ID_LENGTH = 16;
 export const META_MAX_BYTES = 64 * 1024;
 export const NAME_MAX_LENGTH = 100;
 
-/** 鍵の情報（第39章）。暗号化しない作業場所では null */
+/**
+ * 鍵の情報（第39章）。ロック解除の記録（回復コードとパスキーの枠）と、作業場所の meta（ロック解除の鍵で包んだ枠）に使う。
+ */
 export interface KeyringRecord {
   readonly v: 1;
-  /** 包んだデータ鍵（解錠方法ごと） */
+  /** 包んだ鍵（枠ごと） */
   readonly slots: readonly KeySlot[];
-  /**
-   * 以前の版で暗号化していた表示名の暗号文（base64url）。新しい記録には置かない。
-   * 解錠したときに復号して WorkspaceMeta.name（平文）へ移し、ここからは外す
-   */
-  readonly name?: string;
 }
 
 export type KeySlot =
   | { readonly kind: "recovery"; readonly salt: string; readonly iterations: number; readonly wrapped: string }
-  | { readonly kind: "passphrase"; readonly salt: string; readonly iterations: number; readonly wrapped: string }
   | {
       readonly kind: "passkey";
       readonly credentialId: string;
@@ -49,15 +45,20 @@ export type KeySlot =
       readonly wrapped: string;
       /** 登録した配信元のホスト名（RP ID）。古い枠にはない */
       readonly rpId?: string;
+    }
+  | {
+      /**
+       * ロック解除の鍵で包んだデータ鍵（ADR-0012。枠の種類の名前は login のまま）。追加認証データに作業場所 ID を含むので、
+       * 別の作業場所の枠に差し替えても開けない。ロック解除の鍵を作り直すと開けなくなる
+       */
+      readonly kind: "login";
+      readonly wrapped: string;
     };
 
 export interface WorkspaceMeta {
   readonly v: 1;
   readonly id: string;
-  /**
-   * 平文の表示名。暗号化する作業場所でも平文で置く（中身・トークンは暗号化する）。
-   * 以前の版で作った暗号化する作業場所では空文字で、解錠するまで keyring.name の暗号文しかない
-   */
+  /** 表示名（平文）。中身と GitHub のトークンは暗号化する（第39章） */
   readonly name: string;
   readonly createdAt: string;
   /** 最後に書き出しを開始した日時（38.3：検証済みバックアップとは称さない） */
@@ -66,7 +67,8 @@ export interface WorkspaceMeta {
   readonly lastSyncAt: string | null;
   /** 最後に保存・コミットした日時。書き出し・同期より新しければ「端末の外にない変更あり」（38.4） */
   readonly lastChangeAt: string | null;
-  readonly keyring: KeyringRecord | null;
+  /** 鍵の情報（ロック解除の鍵で包んだ枠。ADR-0012：すべての作業場所は暗号化する） */
+  readonly keyring: KeyringRecord;
   /** 同期の設定（第40章）。トークンは含めない */
   readonly remote: RemoteRecord | null;
 }
@@ -75,7 +77,7 @@ export interface RemoteRecord {
   readonly owner: string;
   readonly repo: string;
   readonly branch: string;
-  /** トークンの暗号文（暗号化する作業場所のみ。base64url）。暗号化しない作業場所には保存しない */
+  /** GitHub のトークンの暗号文（base64url）。保存していなければ null */
   readonly token: string | null;
 }
 
@@ -136,8 +138,9 @@ export function parseMeta(bytes: Uint8Array, expectedId: string): WorkspaceMeta 
   for (const k of ["lastExportAt", "lastSyncAt", "lastChangeAt"]) {
     if (r[k] !== null && typeof r[k] !== "string") return `作業場所の ${k} が不正です。`;
   }
-  const keyring = r["keyring"] ?? null;
-  if (keyring !== null && !validKeyring(keyring)) return "作業場所の鍵の情報が不正です。";
+  const keyring = r["keyring"];
+  if (!validKeyring(keyring) || !hasLoginSlot(keyring as KeyringRecord))
+    return "作業場所の鍵の情報が不正です（ロック解除の鍵で包んだ枠がありません）。";
   const remote = r["remote"] ?? null;
   if (remote !== null && !validRemote(remote)) return "作業場所の同期の設定が不正です。";
   return {
@@ -148,25 +151,25 @@ export function parseMeta(bytes: Uint8Array, expectedId: string): WorkspaceMeta 
     lastExportAt: (r["lastExportAt"] as string | null) ?? null,
     lastSyncAt: (r["lastSyncAt"] as string | null) ?? null,
     lastChangeAt: (r["lastChangeAt"] as string | null) ?? null,
-    keyring: keyring as KeyringRecord | null,
+    keyring: keyring as KeyringRecord,
     remote: remote as RemoteRecord | null,
   };
 }
 
 const B64URL = /^[A-Za-z0-9_-]{0,8192}$/;
 
+/** 鍵の情報として正しい形か（未信頼入力を検査する） */
 export function validKeyring(v: unknown): boolean {
   if (typeof v !== "object" || v === null) return false;
   const k = v as Record<string, unknown>;
   if (k["v"] !== 1) return false;
-  if (k["name"] !== undefined && (typeof k["name"] !== "string" || !B64URL.test(k["name"]))) return false;
   const slots = k["slots"];
   if (!Array.isArray(slots) || slots.length === 0 || slots.length > 16) return false;
   return slots.every((s: unknown) => {
     if (typeof s !== "object" || s === null) return false;
     const o = s as Record<string, unknown>;
     if (typeof o["wrapped"] !== "string" || !B64URL.test(o["wrapped"])) return false;
-    if (o["kind"] === "recovery" || o["kind"] === "passphrase")
+    if (o["kind"] === "recovery")
       return (
         typeof o["salt"] === "string" &&
         B64URL.test(o["salt"]) &&
@@ -183,8 +186,14 @@ export function validKeyring(v: unknown): boolean {
         B64URL.test(o["prfSalt"]) &&
         (o["rpId"] === undefined || (typeof o["rpId"] === "string" && o["rpId"].length <= 253))
       );
+    if (o["kind"] === "login") return true;
     return false;
   });
+}
+
+/** 鍵の情報に、ロック解除の鍵で包んだ枠があるか */
+export function hasLoginSlot(k: KeyringRecord): boolean {
+  return k.slots.some((s) => s.kind === "login");
 }
 
 const GH_NAME = /^[A-Za-z0-9_.-]{1,100}$/;
@@ -258,7 +267,8 @@ export async function removeTreeContents(dir: DirHandleLike, prefix = ""): Promi
 
 export interface CreateOptions {
   readonly name: string;
-  readonly keyring?: KeyringRecord | null;
+  /** 鍵の情報（ロック解除の鍵で包んだ枠）。作業場所 ID で決まるので、ID を受け取る関数で渡す */
+  readonly keyring: (id: string) => Promise<KeyringRecord>;
   /** 中身を用意してから meta を書く（取り込み：38.2）。失敗すれば meta を書かない */
   readonly fill?: (dir: DirHandleLike, id: string) => Promise<void>;
 }
@@ -356,7 +366,7 @@ export class WorkspaceStore {
     // 作ったばかりのフォルダが空であることを確かめる（既存の再利用をしない：5.3）
     if (!(await isEmptyDir(dir))) throw new WorkspaceStoreError("作業場所のフォルダが空ではありません。");
     await opts.fill?.(dir, id);
-    const keyring = opts.keyring ?? null;
+    const keyring = await opts.keyring(id);
     const meta: WorkspaceMeta = {
       v: 1,
       id,
@@ -443,15 +453,46 @@ export class WorkspaceStore {
   }
 }
 
-/** OPFS のルートを得る。使えなければ null */
-export async function opfsRoot(host: { navigator?: { storage?: { getDirectory?: () => Promise<unknown> } } }) {
-  const get = host.navigator?.storage?.getDirectory;
-  if (typeof get !== "function") return null;
-  try {
-    return (await get.call(host.navigator?.storage)) as DirHandleLike;
-  } catch {
-    return null;
+type OpfsHost = { navigator?: { storage?: { getDirectory?: () => Promise<unknown> } } };
+
+export type OpfsResult =
+  { readonly ok: true; readonly root: DirHandleLike } | { readonly ok: false; readonly reason: string };
+
+/**
+ * OPFS のルートを得る。iOS Safari では起動直後などに一時的に失敗することがあるので、間を置いて数回試す。
+ * 使えなければ、画面に出す理由（例外の名前と内容）を返す。
+ */
+export async function openOpfs(
+  host: OpfsHost,
+  opts: { attempts?: number; delay?: (ms: number) => Promise<void> } = {},
+): Promise<OpfsResult> {
+  const storage = host.navigator?.storage;
+  const get = storage?.getDirectory;
+  if (typeof get !== "function") return { ok: false, reason: "このブラウザは OPFS に対応していません。" };
+  const attempts = Math.max(1, opts.attempts ?? 3);
+  const delay = opts.delay ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  let last: unknown = null;
+  for (let i = 0; i < attempts; i++) {
+    if (i > 0) await delay(300 * 2 ** (i - 1));
+    try {
+      const root = (await get.call(storage)) as DirHandleLike | null | undefined;
+      if (root && typeof root.getDirectoryHandle === "function") return { ok: true, root };
+      last = new Error("保存領域のフォルダを受け取れませんでした。");
+    } catch (e) {
+      last = e;
+    }
   }
+  return { ok: false, reason: describeError(last) };
+}
+
+function describeError(e: unknown): string {
+  if (e instanceof Error || (typeof e === "object" && e !== null && "name" in e)) {
+    const { name, message } = e as { name?: unknown; message?: unknown };
+    const n = typeof name === "string" && name !== "Error" ? `${name}` : "";
+    const m = typeof message === "string" ? message : "";
+    return [n, m].filter((x) => x !== "").join("：") || "不明なエラー";
+  }
+  return String(e);
 }
 
 /** 「端末の外にない変更あり」の判定（38.4） */

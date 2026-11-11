@@ -1,5 +1,5 @@
 /**
- * file:// で起動した成果物の、プレビュー・画像・複製・削除・復旧ドラフト（14・16・17・18・19・33）。
+ * localhost から配信した成果物の、プレビュー・画像・複製・削除・復旧ドラフト（14・16・17・18・19・33）。
  *
  * フォルダはページ内の疑似実装（fake-fs.ts）。実フォルダ・権限・実ディスク・シンボリックリンクは
  * 検証していない（TG01・TG05・TG06）。IndexedDB はヘッドレス Chromium の実装を使う。
@@ -7,11 +7,12 @@
 import { expect, test, type Page } from "@playwright/test";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import { installFakeFs, type FakeFsApi } from "./fake-fs";
+import { external, loginAgain, menu, registerLogin } from "./login";
 
 const distHtml = resolve(import.meta.dirname, "../../dist/kotono-cms.html");
-const url = pathToFileURL(distHtml).href;
+/** localhost から配信する（パスキーは file:// では使えない：ADR-0012） */
+const url = "/kotono-cms.html";
 
 const A = "k7m2x9q";
 /** 1×1 の PNG（デコード可能） */
@@ -72,6 +73,7 @@ async function launch(page: Page) {
     [BIN],
   );
   await page.goto(url);
+  await registerLogin(page);
   await page.getByTestId("choose-folder").click();
   return { requests, errors };
 }
@@ -110,9 +112,7 @@ test("プレビューはスクリプトを動かさず、生 HTML を文字で�
   expect(await page.evaluate(() => (window as unknown as { __pwned?: number }).__pwned)).toBeUndefined();
   // サンドボックス：スクリプト・同一オリジンを許可しない
   await expect(page.getByTestId("preview-frame")).toHaveAttribute("sandbox", "");
-  expect(requests.filter((r) => !r.startsWith("file:") && !r.startsWith("data:") && !r.startsWith("blob:"))).toEqual(
-    [],
-  );
+  expect(external(requests, new URL(page.url()).origin)).toEqual([]);
   expect(errors.filter((e) => !/Blocked script execution in 'about:srcdoc'/.test(e))).toEqual([]);
 });
 
@@ -262,7 +262,7 @@ test("画像の削除は、未参照の画像だけを退避の後に削除す�
   await page.getByTestId("body-editor").fill("画像なし\n");
   await page.getByTestId("save-button").click();
   await expect(page.getByTestId("save-status")).toHaveText("保存済み");
-  await page.getByRole("button", { name: "一覧を更新" }).click();
+  await page.getByRole("button", { name: "画像の一覧を再読み込み" }).click();
   await expect(page.getByText("未参照（保存済み本文・cover）")).toBeVisible();
   await page.getByTestId("media-delete").click();
   await page.evaluate(() => (window as unknown as { __fakeFs: FakeFsApi }).__fakeFs.pickNext("backup"));
@@ -272,95 +272,150 @@ test("画像の削除は、未参照の画像だけを退避の後に削除す�
   expect(await list(page, `content/articles/${A}/media`)).toEqual([]);
 });
 
-test("復旧ドラフトは同意後にだけ退避し、退避済みを表示する。再読み込み後に候補として出す（33）", async ({ page }) => {
+test("復旧ドラフトは既定で有効で、暗号化して退避する。ロックを解除し直すと候補として出す（33・ADR-0011）", async ({
+  page,
+}) => {
   await launch(page);
-  await expect(page.getByTestId("draft-consent")).toBeVisible();
   await openA(page);
-  await page.getByTestId("body-editor").fill("同意前の編集\n");
-  await expect(page.getByTestId("draft-status")).toContainText("復旧退避なし（ブラウザ内復旧ドラフトは未設定）");
-  await page.getByTestId("draft-enable").click();
-  // 有効化前の内容は保存していない。次の入力から退避する
   await page.getByTestId("body-editor").fill("退避される編集\n");
-  await expect(page.getByTestId("draft-status")).toContainText("復旧退避済み", { timeout: 10_000 });
-  // 再読み込み：疑似フォルダは作り直されるため、同じフォルダとは確認できない（関連先未確認）
+  await expect(page.getByTestId("draft-status")).toContainText("復旧ドラフト：退避済み", { timeout: 10_000 });
+  // ブラウザ内（IndexedDB）には本文を平文で置かない
+  const raw = await page.evaluate(
+    () =>
+      new Promise<string>((resolve, reject) => {
+        const r = indexedDB.open("kotono-cms-drafts");
+        r.onerror = () => reject(r.error);
+        r.onsuccess = () => {
+          const q = r.result.transaction("drafts").objectStore("drafts").getAll();
+          q.onsuccess = () => resolve(JSON.stringify(q.result));
+          q.onerror = () => reject(q.error);
+        };
+      }),
+  );
+  expect(raw).not.toContain("退避される編集");
+  expect(raw).not.toBe("[]");
+  // 再読み込み：ロックを解除し直す。疑似フォルダは作り直されるため、同じフォルダとは確認できない（関連先未確認）
   await page.reload();
+  await loginAgain(page);
   await page.getByTestId("choose-folder").click();
-  await expect(page.getByTestId("draft-consent")).toHaveCount(0);
-  const panel = page.getByTestId("recovery-panel");
+  // 復旧ドラフトはメニューの中の窓にある。候補があるとトグルに印が付く
+  await expect(page.getByTestId("menu-toggle")).toHaveAttribute("data-attention", "info");
+  await menu(page, "recovery-open");
+  const panel = page.getByTestId("recovery-dialog").getByTestId("recovery-panel");
   await expect(panel).toBeVisible();
   await panel.getByText(/関連先未確認のドラフト/).click();
   await expect(panel.getByTestId("draft-candidate").first()).toContainText("チェックサム一致");
   await expect(panel.getByRole("button", { name: "編集として開く" })).toHaveCount(0);
-  await expect(panel.getByRole("button", { name: "原文を退避" }).first()).toBeVisible();
+  await expect(panel.getByRole("button", { name: "原文をダウンロード" }).first()).toBeVisible();
 });
 
-test("初回の復旧ドラフトの設定は編集側の列に出し、決めたら上部バーの「設定」へフォーカスを移す（UI刷新 P-04）", async ({
+test("復旧ドラフトは「設定」で無効にでき、無効の間は退避しない（ADR-0011）", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await launch(page);
+  await menu(page, "nav-settings");
+  const card = page.getByTestId("draft-settings");
+  await expect(card).toContainText("状態：有効");
+  await expect(card.getByTestId("draft-encryption")).toContainText("パスキー");
+  await card.getByRole("button", { name: "無効にする…" }).click();
+  await page.getByRole("button", { name: "無効にして既存を保持" }).click();
+  await expect(card).toContainText("状態：無効");
+  await menu(page, "nav-articles");
+  await openA(page);
+  await page.getByTestId("body-editor").fill("退避しない編集\n");
+  await expect(page.getByTestId("draft-status")).toContainText("復旧ドラフト：無効");
+});
+
+test("上部バーは固定して大きさを変えず、画面の切り替えはメニューにまとめる。切り替えても編集中の内容は残る（アプリの外枠）", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await launch(page);
-  const consent = page.getByTestId("draft-consent");
-  await expect(consent).toBeVisible();
-  // 一覧を押し下げない：一覧と同意の欄は横に並ぶ
-  const listBox = await page.locator(".list-pane").boundingBox();
-  const consentBox = await consent.boundingBox();
-  if (!listBox || !consentBox) throw new Error("領域の位置を取得できません");
-  expect(consentBox.x).toBeGreaterThanOrEqual(listBox.x + listBox.width);
-  expect(consentBox.y).toBeLessThan(listBox.y + 40);
-  // 共有の端末についての注意は表示したまま、ほかの説明は「?」で開く（説明の文字を減らす）
-  await expect(consent).toContainText("共有の端末では有効にしないでください");
-  await expect(consent.locator(".tip-p")).toHaveCount(6);
-  await expect(consent.locator(".tip-p").first()).toBeHidden();
-  await consent.getByRole("button", { name: "復旧ドラフトの保存内容と期間の説明" }).click();
-  await expect(consent.locator(".tip-p").first()).toBeVisible();
-  await consent.getByRole("button", { name: "今は有効にしない" }).focus();
-  await page.keyboard.press("Enter");
-  await expect(consent).toHaveCount(0);
-  // 作業中の設定は「設定」の画面にある（アプリの外枠）。移り先を示すため、上部バーの「設定」へフォーカスを移す
-  const nav = page.getByTestId("nav-settings");
-  await expect(nav).toBeFocused();
-  await page.keyboard.press("Enter");
-  await expect(nav).toHaveAttribute("aria-current", "page");
-  await expect(page.getByTestId("draft-settings")).toContainText("状態：無効（復旧退避なし）");
-});
-
-test("上部バーで画面を切り替えても編集中の内容は残り、狭い画面では一覧と編集を分けて示す（アプリの外枠）", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await launch(page);
-  await page.getByRole("button", { name: "今は有効にしない" }).click();
-  const nav = page.getByRole("navigation", { name: "画面の切り替え" });
+  const bar = page.getByTestId("app-bar");
+  await expect(bar).toHaveCSS("position", "sticky");
+  const toggle = page.getByTestId("menu-toggle");
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByTestId("app-menu")).toBeHidden();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  const nav = page.getByTestId("app-nav");
   // 広い画面：記事・Git と同期・設定の3つ
-  await expect(nav.getByRole("button")).toHaveText(["記事", "Git と同期", "設定"]);
+  await expect(nav.getByRole("button").filter({ visible: true })).toHaveText(["記事", "Git と同期", "設定"]);
   await expect(page.getByTestId("nav-articles")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId("nav-articles")).toBeFocused();
+  // Esc で閉じて、開閉のボタンへ戻る
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("app-menu")).toBeHidden();
+  await expect(toggle).toBeFocused();
   await openA(page);
   await page.getByLabel("タイトル", { exact: true }).fill("編集中のタイトル");
   await expect(page.getByTestId("save-status")).toHaveText("未保存");
-  await page.getByTestId("nav-changes").click();
+  await menu(page, "nav-changes");
+  await expect(page.getByTestId("current-section")).toHaveText("Git と同期");
   await expect(page.getByTestId("git-panel")).toBeVisible();
   await expect(page.getByTestId("save-status")).toBeHidden();
-  await page.getByTestId("nav-settings").click();
+  await menu(page, "nav-settings");
   await expect(page.getByTestId("app-version")).toBeVisible();
-  await page.getByTestId("nav-articles").click();
+  await menu(page, "nav-articles");
   await expect(page.getByLabel("タイトル", { exact: true })).toHaveValue("編集中のタイトル");
   await expect(page.getByTestId("save-status")).toHaveText("未保存");
-  // ヘルプは上部バーにある
-  await expect(page.locator("header").getByTestId("help-open")).toBeVisible();
+  // ヘルプもメニューにある
+  await menu(page, "help-open");
+  await expect(page.getByTestId("help-dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
 
   // 狭い画面：一覧・編集・Git と同期・設定の4つ。記事を開くと「編集」に移る
   await page.setViewportSize({ width: 900, height: 800 });
-  await expect(nav.getByRole("button")).toHaveText(["一覧", "編集", "Git と同期", "設定"]);
+  await toggle.click();
+  await expect(nav.getByRole("button").filter({ visible: true })).toHaveText(["一覧", "編集", "Git と同期", "設定"]);
   await expect(page.getByTestId("nav-editor")).toHaveAttribute("aria-current", "page");
   await page.getByTestId("nav-list").click();
-  await expect(page.getByTestId("nav-list")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId("app-menu")).toBeHidden();
+  await expect(page.getByTestId("current-section")).toHaveText("記事");
   await expect(page.getByTestId("save-status")).toBeHidden();
   await page
     .getByRole("button", { name: /編集中のタイトル|最初の記事/ })
     .first()
     .click();
+  await toggle.click();
   await expect(page.getByTestId("nav-editor")).toHaveAttribute("aria-current", "page");
+  await page.keyboard.press("Escape");
   await expect(page.getByTestId("save-status")).toHaveText("未保存");
+  // 上部バーは最初からコンパクトで、スクロールしても大きさは変えず、画面の上に残す
+  await page.setViewportSize({ width: 900, height: 360 });
+  const before = await bar.evaluate((el) => (el as HTMLElement).offsetHeight);
+  await page.mouse.move(400, 300);
+  await page.mouse.wheel(0, 600);
+  await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(24);
+  expect(await bar.evaluate((el) => el.getBoundingClientRect().top)).toBe(0);
+  expect(await bar.evaluate((el) => (el as HTMLElement).offsetHeight)).toBe(before);
+});
+
+test("上部バーは最初からコンパクトで、スクロールしても大きさが変わらない（ちらつかない）。メニューの開閉はアイコンだけ", async ({
+  page,
+}) => {
+  await page.goto(url);
+  await registerLogin(page);
+  const toggle = page.getByTestId("menu-toggle");
+  await expect(toggle).toHaveAccessibleName("メニュー");
+  await expect(toggle).toHaveText("");
+  const bar = page.getByTestId("app-bar");
+  // 最初の画面（以前は説明文を詰めると高さが大きく変わった）。画面より長いページになる高さで、スクロールしても高さと位置が変わらないことを確かめる
+  await page.setViewportSize({ width: 390, height: 900 });
+  const contentH = await page.evaluate(() => document.querySelector("footer")?.getBoundingClientRect().bottom ?? 0);
+  for (const height of [Math.floor(contentH * 0.75), Math.floor(contentH * 0.55)]) {
+    await page.setViewportSize({ width: 390, height });
+    await page.evaluate(() => scrollTo(0, 0));
+    const before = await bar.evaluate((el) => (el as HTMLElement).offsetHeight);
+    const docH = await page.evaluate(() => document.documentElement.scrollHeight);
+    await page.mouse.move(200, height - 60);
+    for (let i = 0; i < 25; i++) await page.mouse.wheel(0, 2);
+    await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(24);
+    expect(await bar.evaluate((el) => (el as HTMLElement).offsetHeight)).toBe(before);
+    expect(await bar.evaluate((el) => el.getBoundingClientRect().top)).toBe(0);
+    // ページの高さも変わらない（位置が戻らない）
+    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(docH);
+    await page.evaluate(() => scrollTo(0, 0));
+  }
 });
 
 test("キーボードだけで記事を開き、保存できる（14.1）", async ({ page }) => {
@@ -389,9 +444,12 @@ test("キーボードだけで記事を開き、保存できる（14.1）", asyn
   await expect(page.getByTestId("notice")).toHaveCount(0);
   await expect(page.getByTestId("body-editor")).toBeFocused();
   // スキップリンク：読み込み直後の最初の Tab で到達する
+  // （ロック解除の画面でも同じ）
   await page.goto(url);
+  await expect(page.getByTestId("login")).toBeVisible();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "本文へ移動" })).toBeFocused();
+  await loginAgain(page);
 });
 
 test("広い画面の作業台レイアウトの上書きが効いている（UI刷新 段階3〜4）", async ({ page }) => {
@@ -402,8 +460,8 @@ test("広い画面の作業台レイアウトの上書きが効いている（UI
   await expect(body).toHaveCSS("resize", "none");
   // 一覧の絞り込み欄の入力値は 14px（段階4）
   await expect(page.getByPlaceholder("キーワードで検索")).toHaveCSS("font-size", "14px");
-  // 入力欄の枠は 3:1 以上の色を使う（WCAG 1.4.11、段階4）。--color-field-border（ライト：neutral-60 = #80807d）
-  await expect(body).toHaveCSS("border-top-color", "rgb(128, 128, 125)");
+  // 入力欄の枠は 3:1 以上の色を使う（WCAG 1.4.11）。--color-border-control（ライト：neutral-600 = #81807d）
+  await expect(body).toHaveCSS("border-top-color", "rgb(129, 128, 125)");
   await expect(page.locator("#editor-heading")).toHaveCSS("font-size", "18px");
   await expect(page.getByRole("toolbar", { name: "記事の操作" })).toHaveCSS("column-gap", "6px");
   // 961〜1200px では操作列をさらに詰める（反復4）
@@ -418,20 +476,19 @@ test("一覧の絞り込み・並び順は折り畳んでも今の条件を見�
   await launch(page);
   const cond = page.getByTestId("list-conditions");
   await expect(cond).not.toHaveAttribute("open", "");
-  await expect(page.getByTestId("list-conditions-summary")).toHaveText("状態：すべて・更新日時の降順");
+  await expect(page.getByTestId("list-conditions-summary")).toHaveText("原稿状態：すべて・更新日時の降順");
   // キーボードで開いて条件を変える
   await cond.locator("summary").focus();
   await page.keyboard.press("Enter");
-  await page.getByLabel("状態").selectOption("draft");
+  await page.getByLabel("原稿状態").selectOption("draft");
   await page.getByLabel("方向").selectOption("asc");
   await cond.locator("summary").click();
-  await expect(page.getByTestId("list-conditions-summary")).toHaveText("状態：下書き・更新日時の昇順");
+  await expect(page.getByTestId("list-conditions-summary")).toHaveText("原稿状態：下書き・更新日時の昇順");
 });
 
 test("説明は「?」で開いて Esc で閉じ、長い説明は上部バーの「ヘルプ」にまとめる", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await launch(page);
-  await page.getByRole("button", { name: "今は有効にしない" }).click();
   // 一覧のキーワード：説明は閉じているが、入力欄の説明としては読める
   const kw = page.getByPlaceholder("キーワードで検索");
   await expect(kw).toHaveAccessibleDescription(/部分一致/);
@@ -448,7 +505,8 @@ test("説明は「?」で開いて Esc で閉じ、長い説明は上部バー�
   await page.locator("main").click({ position: { x: 5, y: 5 } });
   await expect(page.locator("#kw-hint")).toBeHidden();
 
-  // ヘルプ：キーボードの説明はここにある
+  // ヘルプ：キーボードの説明はここにある（メニューの中）
+  await page.getByTestId("menu-toggle").click();
   const open = page.getByTestId("help-open");
   await open.click();
   const dialog = page.getByTestId("help-dialog");
@@ -456,5 +514,5 @@ test("説明は「?」で開いて Esc で閉じ、長い説明は上部バー�
   await expect(dialog).toContainText("Ctrl/⌘+S");
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
-  await expect(open).toBeFocused();
+  await expect(page.getByTestId("menu-toggle")).toBeFocused();
 });

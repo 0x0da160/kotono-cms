@@ -5,7 +5,7 @@
  * 寸法の名前は px の値（`--space-12` は 12px）。rem で書き出すので、文字の拡大に追従する。
  * 段の選び方は docs/knowledge/product/design-system.md。
  */
-import { BRAND, HUES, SCALES, SEMANTIC } from "./palette";
+import { EFFECTS, effectValue, FAMILIES, PALETTE, SEMANTIC } from "./palette";
 
 type TokenGroup = { title: string; tokens: readonly (readonly [name: string, value: string, note?: string])[] };
 
@@ -39,6 +39,7 @@ export const STATIC_GROUPS: readonly TokenGroup[] = [
       ["line-height-body", "1.6", "基本の行間"],
       ["line-height-tight", "1.5", "一覧のタイトルなど、行を詰める所"],
       ["line-height-prose", "1.75", "本文の見たまま編集とプレビュー"],
+      ["line-height-heading", "1.35", "見出し"],
       ["font-weight-regular", "400"],
       ["font-weight-strong", "600"],
     ],
@@ -51,7 +52,8 @@ export const STATIC_GROUPS: readonly TokenGroup[] = [
     /*
      * 操作部品（ボタン・入力欄・選択欄）の内側の余白と、並べたときの間隔・面の余白。
      * 高さ＝文字 × 行間 ＋ 上下の余白 ＋ 枠：標準 16px で 34px、詰め 14px で 27px。
-     * 指で操作する画面では、見た目の余白は同じまま、押せる高さを --touch-target 以上にする（app.css）。
+     * 指で操作する画面では、見た目の余白は同じまま、押せる高さを 44px（Apple HIG の 44pt）まで広げる（app.css・ADR-0015）。
+     * 主な対象は iPhone の Safari。マウスの画面の下限は 24px（WCAG 2.2 の 2.5.8）のまま。
      */
     title: "操作部品の寸法",
     tokens: [
@@ -63,7 +65,38 @@ export const STATIC_GROUPS: readonly TokenGroup[] = [
       ["control-gap", "var(--space-6)", "横に並べた操作の間隔"],
       ["panel-pad", "var(--space-12) var(--space-16)", "カード・パネルの内側"],
       ["panel-pad-sm", "var(--space-8) var(--space-12)", "中に入れ子にした枠・お知らせの内側"],
-      ["touch-target", "2.75rem", "指で押せる最小の高さ（44px。pointer: coarse のとき）"],
+      [
+        "touch-target",
+        "2.75rem",
+        "指で押す部品（ボタン・入力欄・選択欄・タブ・メニューの項目・開閉の見出し）の高さと幅の下限（44px。Apple HIG の 44pt）",
+      ],
+      [
+        "touch-target-inline",
+        "2rem",
+        "指で押す、文の中の小さな部品（「?」の説明・チップの「×」）の見た目の大きさ（32px）。押せる範囲は 44px まで広げる",
+      ],
+      ["target-min", "1.5rem", "押せる最小の大きさ（24px。WCAG 2.2 の 2.5.8。マウスでも指でも下回らない）"],
+    ],
+  },
+  {
+    /*
+     * 画面の端（ノッチ・Dynamic Island・ホームインジケーター・角の丸み）を避ける余白。index.html の viewport-fit=cover と対で使う。
+     * 画面の端に付く部品（上部バー・下部の操作バー・下から出すダイアログ・トースト）は、内側の余白にこれを足す。
+     * --keyboard-inset は、画面キーボードが下から覆っている高さ。src/lib/ui/viewport.ts が html に書く（既定は 0px）。
+     */
+    title: "画面の端とキーボード",
+    tokens: [
+      ["safe-top", "env(safe-area-inset-top, 0px)", "上の安全領域（ホーム画面から開いたときのステータスバー）"],
+      ["safe-right", "env(safe-area-inset-right, 0px)", "右の安全領域（横向き）"],
+      ["safe-bottom", "env(safe-area-inset-bottom, 0px)", "下の安全領域（ホームインジケーター）"],
+      ["safe-left", "env(safe-area-inset-left, 0px)", "左の安全領域（横向き）"],
+      ["page-gutter", "var(--space-16)", "画面の左右の余白（安全領域はこれに足す）"],
+      ["keyboard-inset", "0px", "画面キーボードが覆っている高さ（viewport.ts が上書きする）"],
+      [
+        "bottom-bar-height",
+        "0px",
+        "下部の操作バーの高さ（バーがあるとき app.css が上書きする。本文の下の余白・トースト・書式の帯の位置に使う）",
+      ],
     ],
   },
   {
@@ -76,11 +109,10 @@ export const STATIC_GROUPS: readonly TokenGroup[] = [
     ],
   },
   {
-    title: "影（重なり）",
+    title: "線",
     tokens: [
-      ["shadow-1", "0 4px 12px rgb(0 0 0 / 0.12)", "画面の上に浮く通知（トースト）"],
-      ["shadow-2", "0 4px 16px rgb(0 0 0 / 0.16)", "メニュー・ポップオーバー"],
-      ["color-overlay", "rgb(0 0 0 / 0.4)", "ダイアログの背後の暗幕"],
+      ["border-width", "1px", "枠・区切り"],
+      ["border-width-edge", "4px", "現在地・お知らせ・差分の太い辺"],
     ],
   },
   {
@@ -88,7 +120,8 @@ export const STATIC_GROUPS: readonly TokenGroup[] = [
     tokens: [
       ["focus-ring-width", "2px"],
       ["focus-ring-offset", "2px"],
-      ["focus-ring", "var(--focus-ring-width) solid var(--color-focus)"],
+      ["focus-ring-offset-inset", "-2px", "スクロール・クリップする入れ物の中では内側に描く"],
+      ["focus-ring", "var(--focus-ring-width) solid var(--color-focus-ring)"],
     ],
   },
   {
@@ -101,6 +134,23 @@ export const STATIC_GROUPS: readonly TokenGroup[] = [
       ["z-tooltip", "50", "「?」の説明（ダイアログの中でも前に出す）"],
     ],
   },
+  {
+    title: "動き",
+    tokens: [
+      ["duration-fast", "120ms", "hover・押下の色の変化"],
+      ["duration-normal", "200ms", "開閉"],
+      ["easing-standard", "cubic-bezier(0.2, 0, 0, 1)"],
+    ],
+  },
+  {
+    /* @media の中では変数を使えないので参照用。値は各部品の @media と同じ */
+    title: "ブレークポイント（参照用）",
+    tokens: [
+      ["breakpoint-sm", "30rem", "これより狭い：1 列"],
+      ["breakpoint-md", "60rem", "これより狭い：一覧と編集を切り替える"],
+      ["breakpoint-lg", "75rem", "これより広い：3 列"],
+    ],
+  },
 ];
 
 function line(name: string, value: string, note?: string): string {
@@ -111,7 +161,7 @@ export function renderTokensCss(): string {
   const out: string[] = [];
   out.push(
     "/*",
-    " * デザイントークン（生成物。手で直さない）。",
+    " * デザイントークン（生成物。手で直さない）。デザインシステム 0.5.0（色は 0.4.0 のまま）。",
     " * 正本：src/lib/design/tokens.ts・palette.ts。書き直し：pnpm tokens",
     " * 規則：docs/knowledge/product/design-system.md",
     " */",
@@ -119,23 +169,47 @@ export function renderTokensCss(): string {
     "  color-scheme: light dark;",
     "",
   );
-  for (const hue of HUES) {
-    out.push(`  /* パレット：${hue.name}（Oklab。色相 ${hue.h}°、目標の彩度 ${hue.C}、明度 ${hue.step} ごと） */`);
-    for (const s of SCALES.get(hue.name) ?? []) {
-      out.push(line(s.token, s.hex, `L ${s.L.toFixed(2)} C ${s.C.toFixed(3)}`));
+  for (const f of FAMILIES) {
+    out.push(`  /* パレット：${f.name}（OKLCH。色相 ${f.h}°、目標の彩度 ${f.C}）：${f.role} */`);
+    for (const s of PALETTE.filter((p) => p.name.startsWith(`${f.name}-`))) {
+      out.push(line(`palette-${s.name}`, s.hex, `L ${s.L} C ${s.C.toFixed(3)}`));
     }
     out.push("");
   }
-  out.push("  /* 意味の色（ライト） */");
-  for (const s of SEMANTIC) out.push(line(`color-${s.name}`, `var(--${s.light})`, s.role));
-  out.push(line("color-brand", BRAND.light, BRAND.role));
+  out.push("  /* パレット：ブランドと白・黒 */");
+  for (const s of PALETTE.filter((p) => p.name.startsWith("brand-") || p.name === "white" || p.name === "black")) {
+    out.push(line(`palette-${s.name}`, s.hex));
+  }
+  out.push("", "  /* 意味の色（ライト） */");
+  for (const s of SEMANTIC) out.push(line(`color-${s.name}`, `var(--palette-${s.light})`, s.role));
+  for (const e of EFFECTS) out.push(line(e.name, effectValue(e, "light"), e.role));
   for (const g of STATIC_GROUPS) {
     out.push("", `  /* ${g.title} */`);
     for (const [n, v, note] of g.tokens) out.push(line(n, v, note));
   }
   out.push("}", "", "@media (prefers-color-scheme: dark) {", "  :root {", "    /* 意味の色（ダーク） */");
-  for (const s of SEMANTIC) out.push(`  ${line(`color-${s.name}`, `var(--${s.dark})`)}`);
-  out.push(`  ${line("color-brand", BRAND.dark)}`);
-  out.push("  }", "}", "");
+  for (const s of SEMANTIC) out.push(`  ${line(`color-${s.name}`, `var(--palette-${s.dark})`)}`);
+  for (const e of EFFECTS) out.push(`  ${line(e.name, effectValue(e, "dark"))}`);
+  out.push(
+    "  }",
+    "}",
+    "",
+    "/* コントラストを上げる設定：装飾の区切りを部品の枠に、補足の文字を本文の色にする */",
+    "@media (prefers-contrast: more) {",
+    "  :root {",
+    "    --color-border-subtle: var(--color-border-control);",
+    "    --color-fg-muted: var(--color-fg-default);",
+    "  }",
+    "}",
+    "",
+    "/* 動きを減らす設定 */",
+    "@media (prefers-reduced-motion: reduce) {",
+    "  :root {",
+    "    --duration-fast: 0ms;",
+    "    --duration-normal: 0ms;",
+    "  }",
+    "}",
+    "",
+  );
   return out.join("\n");
 }

@@ -1,7 +1,7 @@
 /**
  * パスキー（WebAuthn）の PRF 拡張で、端末内の鍵を開くための 32 バイトを得る（仕様 3.2 第39.2節）。
  *
- * - サーバーへのログインではない。チャレンジは端末内で作り、署名は検証しない（使うのは PRF の出力だけ）。
+ * - サーバーへ認証を送るものではない。チャレンジは端末内で作り、署名は検証しない（使うのは PRF の出力だけ）。
  * - RP ID は配信元のホスト名。配信元を移すと使えなくなるので、登録し直す（39.2）。
  * - PRF の対応は iOS 18.4 以降で安定とされる。端末間で同じ出力になるかは TG14 で確かめる。
  */
@@ -56,8 +56,7 @@ export function browserPasskey(host: CredentialsHost): PasskeyApi | null {
     )) as PublicKeyCredential | null;
     if (!cred) throw new Error("パスキーでの認証が取り消されました。");
     const prf = (cred.getClientExtensionResults() as PrfResults).prf?.results?.first;
-    if (!prf)
-      throw new Error("このパスキーは鍵の導出（PRF）に対応していません。回復コードかパスフレーズで開いてください。");
+    if (!prf) throw new Error("このパスキーは鍵の導出（PRF）に対応していません。回復コードを使ってください。");
     return { credentialId: new Uint8Array(cred.rawId), prf: new Uint8Array(prf) };
   };
 

@@ -7,11 +7,12 @@
 import { expect, test, type Page } from "@playwright/test";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import { installFakeFs, type FakeFsApi } from "./fake-fs";
+import { loginAgain, registerLogin } from "./login";
 
 const distHtml = resolve(import.meta.dirname, "../../dist/kotono-cms.html");
-const url = pathToFileURL(distHtml).href;
+/** localhost から配信する（パスキーは file:// では使えない：ADR-0012） */
+const url = "/kotono-cms.html";
 
 const A = "k7m2x9q";
 const IMG = "abcdefghjk.png";
@@ -56,6 +57,7 @@ async function launch(page: Page) {
     [`content/articles/${A}/media/${IMG}`, PNG_1x1],
   );
   await page.goto(url);
+  await registerLogin(page);
   await page.getByTestId("choose-folder").click();
   await page.getByRole("button", { name: /最初の記事/ }).click();
   await expect(page.getByTestId("save-status")).toHaveText("保存済み");
@@ -78,7 +80,11 @@ test("本文は既定で見たまま表示し、対応しない記法は元の�
   await expect(ed.locator("h1")).toHaveText("見出し");
   await expect(ed.locator("strong")).toHaveText("太字");
   await expect(ed.locator("ul > li")).toHaveCount(2);
-  await expect(ed.locator(".v-raw")).toContainText("| a | b |");
+  // 表は編集できない塊のまま、罫線（グリッド線）つきの表として見せる
+  await expect(ed.locator(".v-table th")).toHaveText(["a", "b"]);
+  await expect(ed.locator(".v-table td")).toHaveText(["1", "2"]);
+  await expect(ed.locator(".v-table td").first()).toHaveCSS("border-top-style", "solid");
+  await expect(ed.locator(".v-table")).toHaveAttribute("contenteditable", "false");
   // 既存の画像は検証してから blob: で表示する
   const img = ed.locator(".v-img img");
   await expect(img).toHaveCount(1);
@@ -102,6 +108,14 @@ test("見たままで入力すると、編集したブロックだけが Markdow
   await page.keyboard.down("Shift");
   for (let i = 0; i < 2; i++) await page.keyboard.press("ArrowRight");
   await page.keyboard.up("Shift");
+  // 書式の帯は、選択範囲の近く（上）に出る
+  const bar = page.getByTestId("fmt-bar");
+  await expect(bar).toBeVisible();
+  const selTop = await page.evaluate(() => document.getSelection()?.getRangeAt(0).getBoundingClientRect().top ?? 0);
+  const barBox = await bar.boundingBox();
+  if (!barBox) throw new Error("書式の帯の位置を取得できません");
+  expect(barBox.y + barBox.height).toBeLessThanOrEqual(selTop);
+  expect(selTop - (barBox.y + barBox.height)).toBeLessThan(24);
   await page.getByTestId("fmt-bold").click();
   const md = await bodyMarkdown(page);
   expect(md).toContain("**最初**の段落と **太字**。");
@@ -125,6 +139,7 @@ test("見たままで箇条書き・リンクを付ける", async ({ page }) => 
   await page.keyboard.press("End");
   await page.keyboard.press("Enter");
   await page.keyboard.type("新しい項目");
+  await page.getByTestId("fmt-more").click();
   await page.getByRole("button", { name: "箇条書き" }).click();
   // 項目の文字を選択する
   await ed.locator("li", { hasText: "新しい項目" }).evaluate((li) => {
@@ -140,6 +155,9 @@ test("見たままで箇条書き・リンクを付ける", async ({ page }) => 
   expect(md).toMatch(/最後の段落\n\n- \[新しい項目\]\(https:\/\/example\.com\/\)\n$/);
   // 編集領域のリンクは遷移しない（href を持たない）
   await expect(ed.locator("a[href]")).toHaveCount(0);
+  // 本文からフォーカスが外れると、書式の帯を隠す
+  await page.getByLabel("タイトル", { exact: true }).click();
+  await expect(page.getByTestId("fmt-bar")).toBeHidden();
 });
 
 test("画像は取り込み時に縮小・メタデータ削除して原本にし、派生画像を作って見たまま表示に使う", async ({ page }) => {
@@ -207,6 +225,7 @@ test("前回のフォルダを記憶し、次回の起動で開き直す操作�
   await launch(page);
   await expect(page.getByTestId("folder-name")).toContainText("作業フォルダ");
   await page.reload();
+  await loginAgain(page);
   // 疑似フォルダのハンドルは IndexedDB へ保存すると操作を失うため、開き直しの失敗表示までを確かめる
   // （実際のフォルダハンドルの永続化・権限の再要求は実機で未検証）
   const recent = page.getByTestId("reopen-recent");
@@ -217,6 +236,7 @@ test("前回のフォルダを記憶し、次回の起動で開き直す操作�
   await page.getByTestId("forget-recent").click();
   await expect(page.getByTestId("reopen-recent")).toHaveCount(0);
   await page.reload();
+  await loginAgain(page);
   await expect(page.getByTestId("choose-folder")).toBeVisible();
   await expect(page.getByTestId("reopen-recent")).toHaveCount(0);
 });

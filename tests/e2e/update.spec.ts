@@ -9,8 +9,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { extname, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import { installFakeFs } from "./fake-fs";
+import { loginAgain, menu, registerLogin } from "./login";
 
 const dist = resolve(import.meta.dirname, "../../dist");
 const distHtml = resolve(dist, "kotono-cms.html");
@@ -69,9 +69,11 @@ test.beforeEach(() => {
 async function launchServed(page: Page) {
   await page.addInitScript(installFakeFs, SEED);
   await page.goto(`${origin}/`);
+  await registerLogin(page);
   await page.evaluate(() => navigator.serviceWorker.ready);
   // 初回は制御下にないので読み込み直す（2回目以降の起動と同じ状態にする）
   await page.reload();
+  await loginAgain(page);
   await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
 }
 
@@ -86,9 +88,8 @@ test("作業中は「設定」の先頭で新しい版を確かめられ、取�
   await page.setViewportSize({ width: 1280, height: 800 });
   await launchServed(page);
   await page.getByTestId("choose-folder").click();
-  await page.getByRole("button", { name: "今は有効にしない" }).click();
 
-  await page.getByTestId("nav-settings").click();
+  await menu(page, "nav-settings");
   const card = page.getByTestId("settings-app");
   // 設定の画面の最初の項目として見える
   await expect(page.locator('[data-section="settings"] .page-inner > *').first()).toHaveAttribute(
@@ -106,7 +107,7 @@ test("作業中は「設定」の先頭で新しい版を確かめられ、取�
   const apply = card.getByRole("button", { name: "新しい版に切り替える" });
   await expect(apply).toBeVisible();
   // どの画面にいても、お知らせの帯に出る
-  await page.getByTestId("nav-articles").click();
+  await menu(page, "nav-articles");
   const band = page.getByTestId("app-notices").getByTestId("update-ready");
   await expect(band).toContainText("新しい版を取得しました。");
 
@@ -115,21 +116,11 @@ test("作業中は「設定」の先頭で新しい版を確かめられ、取�
   await band.getByRole("button", { name: "新しい版に切り替える" }).click();
   await reloaded;
   await expect(page.getByRole("heading", { level: 1, name: "Kotono CMS" })).toBeVisible();
+  await expect(page.getByTestId("login")).toHaveAttribute("data-phase", "login");
   const sw = await page.evaluate(async () => {
     const r = await navigator.serviceWorker.getRegistration();
     return { waiting: !!r?.waiting, active: r?.active?.scriptURL ?? "" };
   });
   expect(sw.waiting).toBe(false);
   expect(sw.active).toContain("/sw.js");
-});
-
-test("file:// で開いたときは、新しい版にする方法を「設定」で示す", async ({ page }) => {
-  await page.addInitScript(installFakeFs, SEED);
-  await page.goto(pathToFileURL(distHtml).href);
-  await page.getByTestId("choose-folder").click();
-  await page.getByRole("button", { name: "今は有効にしない" }).click();
-  await page.getByTestId("nav-settings").click();
-  await expect(page.getByTestId("settings-app").getByTestId("update-unavailable")).toContainText(
-    "kotono-cms.html に差し替えてから開き直してください",
-  );
 });

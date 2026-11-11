@@ -2,7 +2,7 @@
   import type { GitController } from "../lib/app/git.svelte";
   import type { EditorSession } from "../lib/app/session.svelte";
   import { EXTERNAL_CHANGE_NOTICE, type Workspace } from "../lib/app/workspace.svelte";
-  import { onMount, tick } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import { encodeUtf8 } from "../lib/core/bytes";
   import { publishTiming } from "../lib/core/datetime";
   import ConflictPanel from "./ConflictPanel.svelte";
@@ -14,9 +14,11 @@
   import CircleDot from "@lucide/svelte/icons/circle-dot";
   import ClipboardList from "@lucide/svelte/icons/clipboard-list";
   import Code from "@lucide/svelte/icons/code";
+  import PenLine from "@lucide/svelte/icons/pen-line";
   import Copy from "@lucide/svelte/icons/copy";
   import CopyPlus from "@lucide/svelte/icons/copy-plus";
   import Download from "@lucide/svelte/icons/download";
+  import Ellipsis from "@lucide/svelte/icons/ellipsis";
   import Eye from "@lucide/svelte/icons/eye";
   import GitCommitHorizontal from "@lucide/svelte/icons/git-commit-horizontal";
   import LoaderCircle from "@lucide/svelte/icons/loader-circle";
@@ -29,6 +31,7 @@
   import Undo2 from "@lucide/svelte/icons/undo-2";
   import X from "@lucide/svelte/icons/x";
   import HelpTip from "./HelpTip.svelte";
+  import { narrowScreen } from "../lib/ui/media.svelte";
 
   let { ws, session, git = null }: { ws: Workspace; session: EditorSession; git?: GitController | null } = $props();
 
@@ -138,6 +141,18 @@
   }
 
   let mode = $state<"form" | "source" | "preview">("form");
+  /**
+   * 狭い画面（iPhone）では「フォーム」を「本文」と「記事情報」のタブに分け、1度に1つだけ出す（ADR-0015）。
+   * 新しい記事はタイトルと slug から入れるので「記事情報」、既存の記事は「本文」から始める。
+   */
+  let formPart = $state<"body" | "meta">(untrack(() => (session.isNew ? "meta" : "body")));
+  const narrow = $derived(narrowScreen.matches);
+  /** いま選んでいるタブの id（タブパネルの名前に使う） */
+  const currentTab = $derived(mode === "form" && narrow ? `tab-${formPart}` : `tab-${mode}`);
+  function switchPart(part: "body" | "meta") {
+    switchMode("form");
+    if (mode === "form") formPart = part;
+  }
   /** 本文の編集方法（ADR-0005）：見たまま（既定）か Markdown。ブラウザ内に記憶する */
   const BODY_VIEW_KEY = "kotono-cms:body-view";
   let bodyView = $state<"visual" | "markdown">(readBodyView());
@@ -253,21 +268,23 @@
 
   const draftLabel = $derived.by(() => {
     const m = ws.drafts?.mode ?? "unavailable";
-    if (m === "unavailable") return "復旧退避なし（この環境ではブラウザ内に退避できません）";
-    if (m === "undecided") return "復旧退避なし（ブラウザ内復旧ドラフトは未設定）";
-    if (m !== "enabled") return "復旧退避なし（ブラウザ内復旧ドラフトは無効）";
-    if (readOnly) return "復旧退避：対象外（読み取り専用）";
-    if (!session.dirty) return "復旧退避：未保存の編集なし";
+    if (m === "unavailable") return "復旧ドラフト：使えません（この環境ではブラウザ内に退避できません）";
+    if (m !== "enabled") return "復旧ドラフト：無効";
+    if (readOnly) return "復旧ドラフト：対象外（読み取り専用）";
+    if (!session.dirty) return "復旧ドラフト：未保存の編集なし";
     const d = session.draft;
     const t = (at: number) => new Date(at).toLocaleTimeString("ja-JP");
     if (d.kind === "saved")
-      return d.revision === session.revision ? `復旧退避済み（${t(d.at)}）` : `復旧退避待ち（前回 ${t(d.at)}）`;
-    if (d.kind === "failed") return `復旧退避に失敗：${d.message}${d.lastAt ? `（前回の退避 ${t(d.lastAt)}）` : ""}`;
-    return "復旧退避待ち";
+      return d.revision === session.revision
+        ? `復旧ドラフト：退避済み（${t(d.at)}）`
+        : `復旧ドラフト：退避待ち（前回 ${t(d.at)}）`;
+    if (d.kind === "failed")
+      return `復旧ドラフト：退避に失敗（${d.message}）${d.lastAt ? `（前回の退避 ${t(d.lastAt)}）` : ""}`;
+    return "復旧ドラフト：退避待ち";
   });
 
   function savedAgo(t: number | null): string {
-    if (t === null) return "このセッションでは未保存";
+    if (t === null) return "開いてからは未保存";
     const min = Math.floor((clock - t) / 60_000);
     return `${new Date(t).toLocaleTimeString("ja-JP")}（${min < 1 ? "1分以内" : `${min}分前`}）`;
   }
@@ -283,7 +300,7 @@
   oncompositionstart={() => (composing = session.composing = true)}
   oncompositionend={() => (composing = session.composing = false)}
 >
-  <div class="ed-sticky" bind:this={stickyEl}>
+  <div class="ed-sticky" bind:this={stickyEl} data-sticky-chrome>
     <header class="ed-head">
       <div class="ed-title">
         <h2 id="editor-heading">
@@ -323,11 +340,12 @@
           >
         </li>
         <li><span class="axis">Git</span> <span class="badge" data-testid="git-status">{gitLabel}</span></li>
-        <li><span class="axis">配信</span> <span class="badge muted">本CMSでは未確認</span></li>
+        <li><span class="axis">配信</span> <span class="badge muted">CMS では未確認</span></li>
       </ul>
     </header>
 
-    <div class="toolbar" role="toolbar" aria-label="記事の操作">
+    <!-- 狭い画面では、画面の下に固定する操作バーになる（app.css の [data-bottom-bar]） -->
+    <div class="toolbar" role="toolbar" aria-label="記事の操作" data-bottom-bar>
       <button
         type="button"
         class="primary"
@@ -343,18 +361,29 @@
         class="group-start"
         onclick={() => session.undo()}
         disabled={!session.canUndo || readOnly || locked}
-        aria-keyshortcuts="Control+Z"><Undo2 />元に戻す</button
+        aria-keyshortcuts="Control+Z"><Undo2 /><span class="t">元に戻す</span></button
       >
       <button
         type="button"
         onclick={() => session.redo()}
         disabled={!session.canRedo || readOnly || locked}
-        aria-keyshortcuts="Control+Shift+Z Control+Y"><Redo2 />やり直す</button
+        aria-keyshortcuts="Control+Shift+Z Control+Y"><Redo2 /><span class="t">やり直す</span></button
       >
       <!-- 使う頻度の低い操作はまとめる（UI刷新 反復3：操作列の折り返しを減らす）。ホバーでは開かない -->
       <details class="more group-start" bind:open={moreOpen} onkeydown={onMoreKeydown}>
-        <summary bind:this={moreSummary} data-testid="more-actions">原文の退避・その他</summary>
+        <summary bind:this={moreSummary} data-testid="more-actions"
+          ><span class="more-icon"><Ellipsis /></span><span class="t">原文の退避・その他</span></summary
+        >
         <div class="more-menu" role="group" aria-label="原文の退避・その他">
+          {#if narrow && !session.isNew && git?.repo}
+            <button
+              type="button"
+              onclick={() => fromMore(() => git.commitArticle(session.id))}
+              disabled={ws.busy || git.busy || locked || session.dirty || !git.writable}
+              data-testid="commit-button"><GitCommitHorizontal />コミット…</button
+            >
+            {#if session.dirty}<p class="more-note">コミットは、保存してからできます。</p>{/if}
+          {/if}
           <button type="button" onclick={() => fromMore(() => copy(session.text))} disabled={session.text === ""}
             ><Copy />原文をコピー</button
           >
@@ -372,9 +401,23 @@
               data-testid="duplicate-button"><CopyPlus />複製…</button
             >
           {/if}
+          {#if narrow}
+            {#if !session.isNew}
+              <button
+                type="button"
+                class="danger"
+                onclick={() => fromMore(() => ws.deleteCurrent())}
+                disabled={ws.busy || locked}
+                data-testid="delete-button"><Trash />削除…</button
+              >
+            {/if}
+            <button type="button" class="close" onclick={() => fromMore(() => ws.closeArticle())} disabled={ws.busy}
+              ><X />記事を閉じる</button
+            >
+          {/if}
         </div>
       </details>
-      {#if !session.isNew}
+      {#if !narrow && !session.isNew}
         {#if git?.repo}
           <button
             type="button"
@@ -392,7 +435,9 @@
           data-testid="delete-button"><Trash />削除…</button
         >
       {/if}
-      <button type="button" class="close" onclick={() => ws.closeArticle()} disabled={ws.busy}><X />閉じる</button>
+      {#if !narrow}
+        <button type="button" class="close" onclick={() => ws.closeArticle()} disabled={ws.busy}><X />閉じる</button>
+      {/if}
     </div>
   </div>
 
@@ -419,7 +464,7 @@
           {#each toast.details as d, i (i)}<li>{d}</li>{/each}
         </ul>
       {/if}
-      <button type="button" class="toast-close" aria-label="通知を閉じる" onclick={closeToast}>×</button>
+      <button type="button" class="toast-close touch-inline" aria-label="通知を閉じる" onclick={closeToast}>×</button>
     </div>
   {/if}
   {#if session.notice && session.notice.kind === "error" && !conflictAlert}
@@ -500,15 +545,36 @@
       </label>
     {/if}
   {:else}
-    <div class="tabs" role="tablist" aria-label="編集モード">
-      <button
-        type="button"
-        role="tab"
-        id="tab-form"
-        aria-selected={mode === "form"}
-        aria-controls="panel-edit"
-        onclick={() => switchMode("form")}><ClipboardList />フォーム</button
-      >
+    <div class="tabs" role="tablist" aria-label="編集モード" data-sticky-chrome>
+      {#if narrow}
+        <button
+          type="button"
+          role="tab"
+          id="tab-body"
+          aria-selected={mode === "form" && formPart === "body"}
+          aria-controls="panel-edit"
+          onclick={() => switchPart("body")}
+          data-testid="tab-body"><PenLine />本文</button
+        >
+        <button
+          type="button"
+          role="tab"
+          id="tab-meta"
+          aria-selected={mode === "form" && formPart === "meta"}
+          aria-controls="panel-edit"
+          onclick={() => switchPart("meta")}
+          data-testid="tab-meta"><ClipboardList />記事情報</button
+        >
+      {:else}
+        <button
+          type="button"
+          role="tab"
+          id="tab-form"
+          aria-selected={mode === "form"}
+          aria-controls="panel-edit"
+          onclick={() => switchMode("form")}><ClipboardList />フォーム</button
+        >
+      {/if}
       <button
         type="button"
         role="tab"
@@ -529,11 +595,11 @@
     </div>
     {#if modeError}<p class="err" role="alert">{modeError}</p>{/if}
 
-    <div id="panel-edit" role="tabpanel" aria-labelledby={`tab-${mode}`} class="panel">
+    <div id="panel-edit" role="tabpanel" aria-labelledby={currentTab} class="panel">
       {#if mode === "preview"}
         <Preview {ws} {session} />
       {:else if mode === "form" && formAvailable}
-        <div class="form-layout">
+        <div class="form-layout" data-part={formPart}>
           <div class="src body">
             <div class="body-head">
               <span class="body-name"
@@ -592,6 +658,7 @@
             readonly={locked}
             rows="24"
             spellcheck="false"
+            autocapitalize="off"
             data-testid="source-editor"></textarea>
         </label>
       {/if}
@@ -604,7 +671,7 @@
   {/if}
 
   <footer class="ed-foot">
-    <span>最後のリポジトリ保存：{savedAgo(session.lastSavedAt)}</span>
+    <span>最後の保存：{savedAgo(session.lastSavedAt)}</span>
     <span data-testid="draft-status">{draftLabel}</span>
   </footer>
 </section>
@@ -627,11 +694,11 @@
   .more > summary {
     list-style: none;
     cursor: pointer;
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-md);
     padding: var(--control-pad-y) var(--control-pad-x);
     line-height: var(--control-line-height);
-    background: var(--color-surface);
+    background: var(--color-bg-surface);
     white-space: nowrap;
   }
   .more > summary::-webkit-details-marker {
@@ -654,13 +721,23 @@
     gap: var(--space-2);
     min-width: 14rem;
     padding: var(--space-4);
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
+    background: var(--color-bg-surface);
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-1);
   }
   .more-menu button {
     text-align: start;
+  }
+  /* 「その他」の印（…）は、狭い画面の操作バーでだけ出す */
+  .more-icon {
+    display: none;
+  }
+  .more-note {
+    margin: 0;
+    padding: 0 var(--space-8) var(--space-4);
+    font-size: var(--font-size-13);
+    color: var(--color-fg-muted);
   }
   /* 本文を主、記事情報を右の補助列に置く（UI刷新 方向B：P-02）。幅が足りないときは従来どおり縦に積む */
   .panel {
@@ -673,13 +750,8 @@
   }
   /*
    * DOM は本文→記事情報（Tab 順を見た目に合わせる）。広い画面では縦積みのときも本文を先に表示する（P-02）。
-   * 狭い画面（60rem 以下、今回の対象外）は従来どおり記事情報を上に表示する。
+   * 狭い画面（60rem 以下）は「本文」「記事情報」のタブで1つずつ出す（下の「狭い画面」）。
    */
-  @media (max-width: 60rem) {
-    .form-layout > :global(.form) {
-      order: -1;
-    }
-  }
   @container (min-width: 46rem) {
     .form-layout {
       display: grid;
@@ -696,7 +768,7 @@
       grid-row: 1;
       margin: 0;
       border: none;
-      border-inline-start: 1px solid var(--color-border);
+      border-inline-start: 1px solid var(--color-border-subtle);
       border-radius: 0;
       padding: 0 0 0 var(--space-12);
     }
@@ -735,8 +807,10 @@
     margin-inline-start: -1px;
   }
   .seg button[aria-pressed="true"] {
+    background: var(--color-accent-subtle);
+    color: var(--color-accent-text);
     font-weight: var(--font-weight-strong);
-    box-shadow: inset 0 -3px 0 var(--color-focus);
+    box-shadow: inset 0 -3px 0 var(--color-accent);
   }
   .repairs {
     display: flex;
@@ -762,11 +836,11 @@
     overflow-wrap: anywhere;
   }
   .untitled {
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
   }
   .ids {
     margin: 0;
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
     font-size: var(--font-size-14);
     display: flex;
     gap: var(--space-8);
@@ -781,7 +855,7 @@
     font-size: var(--font-size-13);
   }
   .axis {
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
   }
   .toolbar {
     display: flex;
@@ -791,8 +865,8 @@
   .notice {
     border-radius: var(--radius-md);
     padding: var(--panel-pad-sm);
-    border: 1px solid var(--color-border);
-    background: var(--color-surface);
+    border: 1px solid var(--color-border-subtle);
+    background: var(--color-bg-surface);
   }
   .notice p {
     margin: 0;
@@ -803,27 +877,31 @@
     font-size: var(--font-size-14);
   }
   .notice.error {
-    border-color: var(--color-ng);
+    border-color: var(--color-danger-border);
+    background: var(--color-danger-bg);
   }
   .notice.error p::before {
     content: "⚠ ";
   }
   .notice.ok {
-    border-color: var(--color-ok);
+    border-color: var(--color-success-border);
+    background: var(--color-success-bg);
   }
   .notice.ok p::before {
     content: "✓ ";
   }
   .notice.warn {
-    border-color: var(--color-ng);
+    border-color: var(--color-warning-border);
+    background: var(--color-warning-bg);
   }
   .notice.warn p::before {
     content: "! ";
   }
+  /* 上部バーの下に出す（メニューの開閉・下部の操作バー・書式の帯・キーボードのどれとも重ならない） */
   .toast {
     position: fixed;
-    top: var(--space-16);
-    inset-inline-end: var(--space-16);
+    top: calc(var(--app-bar-h, 0px) + var(--space-8));
+    inset-inline-end: calc(var(--page-gutter) + var(--safe-right));
     z-index: var(--z-toast);
     max-width: min(26rem, calc(100vw - 2rem));
     display: grid;
@@ -841,16 +919,17 @@
     grid-row: 1;
     border: none;
     background: transparent;
-    padding: 0 var(--space-6);
-    min-width: 1.5rem;
-    min-height: 1.5rem;
+    padding: 0;
+    width: var(--target-min);
+    height: var(--target-min);
     line-height: 1;
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
   }
   .problems {
-    border: 1px solid var(--color-ng);
+    border: 1px solid var(--color-danger-border);
     border-radius: var(--radius-md);
     padding: var(--panel-pad-sm);
+    background: var(--color-danger-bg);
   }
   .problems ul {
     margin: var(--space-4) 0 0;
@@ -860,23 +939,29 @@
   .tabs {
     display: flex;
     gap: var(--space-4);
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border-subtle);
   }
   .tabs button {
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-border-subtle);
     border-bottom: none;
     border-radius: var(--radius-md) var(--radius-md) 0 0;
-    background: var(--color-bg);
+    background: var(--color-bg-page);
     padding: var(--control-pad-y) var(--space-12);
     color: inherit;
     font: inherit;
     line-height: var(--control-line-height);
     cursor: pointer;
   }
+  @media (hover: hover) {
+    .tabs button:not([aria-selected="true"]):hover {
+      background: var(--color-bg-hover);
+    }
+  }
   .tabs button[aria-selected="true"] {
-    background: var(--color-surface);
+    background: var(--color-accent-subtle);
+    color: var(--color-accent-text);
     font-weight: var(--font-weight-strong);
-    box-shadow: inset 0 -3px 0 var(--color-focus);
+    box-shadow: inset 0 calc(-1 * var(--border-width-edge)) 0 var(--color-accent);
   }
   .panel {
     display: flex;
@@ -898,32 +983,196 @@
     font-weight: var(--font-weight-regular);
     resize: vertical;
     tab-size: 4;
+    background: var(--color-editor-bg);
+    color: var(--color-editor-fg);
+    caret-color: var(--color-editor-caret);
+  }
+  textarea::selection {
+    background: var(--color-editor-selection-bg);
+    color: var(--color-editor-selection-fg);
   }
   .readonly {
-    border: 1px solid var(--color-ng);
+    border: 1px solid var(--color-warning-border);
     border-radius: var(--radius-md);
     padding: var(--panel-pad-sm);
     margin: 0;
+    background: var(--color-warning-bg);
   }
   .err {
     margin: 0;
-    color: var(--color-ng);
+    color: var(--color-danger-fg);
   }
   .op {
     margin: 0;
     font-size: var(--font-size-14);
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
   }
   .ed-foot {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-4) var(--space-16);
-    color: var(--color-muted);
+    color: var(--color-fg-muted);
     font-size: var(--font-size-13);
   }
   .small {
     font-size: var(--font-size-13);
     margin: 0;
+  }
+  /*
+   * ---- 狭い画面（60rem 以下：iPhone・iPad の縦。ADR-0015）----
+   * - 記事の操作は、画面の下に固定した操作バーに置く（位置と面は app.css の [data-bottom-bar]）。
+   *   「保存」を広く取り、「元に戻す」「やり直す」「その他」はアイコンだけにする（名前は読み上げに残す）。
+   *   コミット・複製・削除・閉じるは「その他」にまとめる。
+   * - タブは上部バーの下に固定し、「本文」「記事情報」を1つずつ出す。
+   * - 状態のバッジは 1 行にして横へ送る。
+   */
+  @media (max-width: 60rem) {
+    .editor :global(*) {
+      scroll-margin-top: var(--space-32);
+    }
+    h2 {
+      font-size: var(--font-size-18);
+      line-height: var(--line-height-heading);
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      overflow: hidden;
+    }
+    .axes {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+      scrollbar-width: none;
+      margin-inline: calc(-1 * var(--page-gutter));
+      padding-inline: var(--page-gutter);
+      font-size: var(--font-size-12);
+    }
+    .axes::-webkit-scrollbar {
+      display: none;
+    }
+    .axes li {
+      flex: none;
+      white-space: nowrap;
+    }
+    .toolbar {
+      flex-wrap: nowrap;
+      gap: var(--space-8);
+    }
+    .toolbar .group-start {
+      margin-inline-start: 0;
+    }
+    .toolbar > button.primary {
+      flex: 1 1 auto;
+    }
+    .toolbar > button:not(.primary),
+    .more > summary {
+      flex: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: var(--touch-target);
+      min-height: var(--touch-target);
+      padding: 0;
+    }
+    .toolbar > button:not(.primary) :global(svg.lucide-icon),
+    .more > summary :global(svg.lucide-icon) {
+      margin: 0;
+      width: 1.375rem;
+      height: 1.375rem;
+    }
+    /* 名前は読み上げに残し、見た目はアイコンだけにする */
+    .toolbar > button:not(.primary) .t,
+    .more > summary .t {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+    .more > summary {
+      border-color: var(--color-border-control);
+    }
+    .more > summary::after,
+    .more[open] > summary::after {
+      content: none;
+    }
+    .more[open] > summary {
+      background: var(--color-bg-pressed);
+    }
+    .more-icon {
+      display: inline-flex;
+    }
+    /* 「その他」は操作バーの上へ開く */
+    .more-menu {
+      top: auto;
+      bottom: calc(100% + var(--space-12));
+      inset-inline: auto 0;
+      min-width: 16rem;
+      max-height: calc(
+        100dvh - var(--bottom-bar-height) - var(--keyboard-inset) - var(--app-bar-h, 3rem) - var(--space-24)
+      );
+      overflow: auto;
+      overscroll-behavior: contain;
+      padding: var(--space-8);
+      background: var(--color-bg-raised);
+      border-color: var(--color-border-control);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-2);
+    }
+    .more-menu button {
+      display: flex;
+      align-items: center;
+      min-height: var(--touch-target);
+      border-color: transparent;
+      background: transparent;
+    }
+    .more-menu button:active:not(:disabled) {
+      background: var(--color-bg-pressed);
+    }
+    .more-menu .close {
+      margin: 0;
+    }
+    .tabs {
+      position: sticky;
+      top: var(--app-bar-h, 0px);
+      z-index: var(--z-sticky);
+      gap: 0;
+      margin-inline: calc(-1 * var(--page-gutter));
+      padding: var(--space-4) var(--page-gutter) 0;
+      background: var(--color-bg-page);
+    }
+    .tabs button {
+      flex: 1 1 0;
+      min-width: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding-inline: var(--space-4);
+      white-space: nowrap;
+      font-size: var(--font-size-15);
+    }
+    .tabs button + button {
+      margin-inline-start: calc(-1 * var(--border-width));
+    }
+    .form-layout[data-part="body"] > :global(.form),
+    .form-layout[data-part="meta"] > .body {
+      display: none;
+    }
+    textarea {
+      min-height: 50dvh;
+    }
+    .toast {
+      inset-inline: calc(var(--page-gutter) + var(--safe-left)) calc(var(--page-gutter) + var(--safe-right));
+      max-width: none;
+    }
+  }
+  /* iPhone の縦：タブが 4 つ並ぶので、アイコンを外して名前だけにする */
+  @media (max-width: 30rem) {
+    .tabs button :global(svg.lucide-icon) {
+      display: none;
+    }
   }
   /*
    * 以下の広い画面用の上書きは、同じ詳細度の基本ルールより後に置く（前に置くと基本ルールに打ち消される）。
@@ -937,9 +1186,9 @@
       position: sticky;
       top: 0;
       z-index: var(--z-sticky);
-      background: var(--color-bg);
+      background: var(--color-bg-page);
       padding-block: var(--space-4) var(--space-6);
-      border-bottom: 1px solid var(--color-border);
+      border-bottom: 1px solid var(--color-border-subtle);
     }
     .editor :global(*) {
       scroll-margin-top: calc(var(--sticky-h, 0px) + var(--space-8));

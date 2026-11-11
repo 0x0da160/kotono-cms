@@ -3,12 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <!--kotono:csp-->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      viewport-fit=cover：画面の端まで使い、ノッチ・ホームインジケーターは env(safe-area-inset-*) で避ける（ADR-0015）。
+      拡大は止めない（user-scalable・maximum-scale は指定しない）。
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="referrer" content="no-referrer" />
+    <!-- 上部バーの面の色（--color-bg-surface）。ブラウザの枠・ステータスバーとなじませる。値は design-tokens.test.ts が確かめる -->
+    <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#22211f" media="(prefers-color-scheme: dark)" />
+    <!-- 記事ID・日時などの数字の並びを、Safari が電話番号のリンクに変えないようにする -->
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="apple-mobile-web-app-title" content="Kotono" />
     <title>Kotono CMS</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
-    <meta name="theme-color" content="#0573aa" />
   </head>
   <body>
     <div id="app"></div>
