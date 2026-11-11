@@ -1,6 +1,6 @@
 <script lang="ts">
   import { focusReturn } from "../lib/ui/focus-return";
-  import type { DialogRequest } from "../lib/app/workspace.svelte";
+  import { dismissValue, type DialogRequest } from "../lib/app/workspace.svelte";
 
   let { request }: { request: DialogRequest | null } = $props();
   let el: HTMLDialogElement | undefined = $state();
@@ -31,8 +31,7 @@
 
   function onCancel(e: Event) {
     e.preventDefault();
-    const cancel = request?.buttons.find((b) => b.value === "cancel") ?? request?.buttons.at(-1);
-    if (cancel) choose(cancel.value);
+    if (request) choose(dismissValue(request));
   }
 </script>
 

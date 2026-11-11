@@ -99,6 +99,10 @@ export class GitController {
     this.notice = null;
     this.#historyAbort?.abort();
     this.#repo = this.ws.root ? new GitRepo(this.ws.root) : null;
+    // 開いたままのコミット画面は前のフォルダのもの。取り消して閉じる（自動ロックで作業場所を閉じたときに、題名とパスを画面に残さない）
+    const open = this.commitDialog;
+    this.commitDialog = null;
+    open?.resolve(false);
   }
 
   async refresh(): Promise<void> {
@@ -370,6 +374,8 @@ export class GitController {
       const identity = { name: req.name.trim(), email: req.email.trim() };
       if (req.saveIdentity) await this.#saveIdentity(repo, identity);
       else if (!info.identity) this.sessionIdentity = identity;
+      // 作者の保存の確認を待つ間にフォルダ（作業場所）を閉じた（自動ロック）なら、コミットしない
+      if (this.#repo !== repo || this.ws.root === null) return;
       const out = await repo.commit(r.plan, req.message, identity, info.textConversion);
       this.#handle(out, r.plan, req.message, identity);
     } catch (e) {

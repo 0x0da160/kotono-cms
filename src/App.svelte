@@ -49,8 +49,8 @@
   import { ARTICLES_PATH } from "./lib/fs/repo";
   import { probeWorker } from "./lib/worker-probe";
 
-  /** 上部バーのメニューから開く窓（ダイアログ）。開く操作だけを使う */
-  type AppDialogApi = { show: (from?: HTMLElement | null) => void };
+  /** 上部バーのメニューから開く窓（ダイアログ）。開く操作と、ロックしたときに閉じる操作を使う */
+  type AppDialogApi = { show: (from?: HTMLElement | null) => void; close: () => void };
   const appVersion = __APP_VERSION__;
   const specVersion = __SPEC_VERSION__;
   const results = detectCapabilities(globalThis as unknown as Record<string, unknown>);
@@ -188,6 +188,7 @@
   /**
    * ロックする（ロック解除の画面に戻る）。未保存の編集は、復旧ドラフトへ退避してから閉じる。
    * 退避できないとき（ドラフトが無効など）は、手動のロックなら閉じる前に確かめる。
+   * 開いたままの窓と、復号した復旧ドラフトの一覧は、ロック解除の画面に切り替わるときに片付ける（上部バーの節の $effect）。
    */
   async function lockApp(auto = false) {
     menuOpen = false;
@@ -252,6 +253,23 @@
   );
   /** 復旧ドラフトの項目は、ロックを解除した後だけ出す（解除の前は暗号化していて読めない） */
   const draftsAvailable = $derived(!gated && supported && drafts.mode !== "unavailable");
+
+  /**
+   * ロック解除の画面を出している間は、復号した内容を画面にもメモリにも残さない。
+   * 自動ロックは、窓（ダイアログ）を開いたままでもかかる。メニューから開いた窓を閉じ、答えを待っている確認は取り消し、
+   * 復号した復旧ドラフトの一覧と、読み上げ用の文（記事の ID・ファイル名を含む）を捨てる。
+   * コミットの窓は、作業場所を閉じたときに GitController.reset が取り消す。
+   */
+  $effect(() => {
+    if (!gated) return;
+    untrack(() => {
+      for (const d of [help, envDialog, recoveryDialog]) d?.close();
+      ws.dismissDialog();
+      drafts.forget();
+      draftCount = 0;
+      ws.announcement = "";
+    });
+  });
 
   const sectionLabel = $derived(
     section === "changes" ? "Git と同期" : section === "settings" ? "設定" : pane === "editor" ? "記事・編集" : "記事",
@@ -439,7 +457,8 @@
     <p class="dialog-note">
       ブラウザ内に退避した未保存の編集です。ディスクへは自動で書き込みません。戻せるのは、実際に退避に成功した内容までです。
     </p>
-    <RecoveryPanel {ws} bind:count={draftCount} />
+    <!-- 候補は、ロックを解除している間だけ置く（ロック中は、復号した内容を画面に残さない） -->
+    {#if draftsAvailable}<RecoveryPanel {ws} bind:count={draftCount} />{/if}
   </AppDialog>
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <nav

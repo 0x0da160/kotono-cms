@@ -207,6 +207,22 @@ describe("編集との連携（33.3・33.4）", () => {
     expect(dc.mode).toBe("disabled");
   });
 
+  it("ロックで復号した一覧を捨て、ロックの前に始めた読み直しの結果も戻さない。保存領域の記録は残す", async () => {
+    const { s, dc } = await setup();
+    s.setBody("a\n");
+    await dc.flush(s);
+    expect(dc.records.map((r) => r.text.includes("a\n"))).toEqual([true]);
+    // 読み直しの途中でロックする
+    const reading = dc.reload();
+    dc.forget();
+    expect(dc.records).toEqual([]);
+    await reading;
+    expect(dc.records).toEqual([]);
+    // ロックを解除して読み直すと、また候補に出る
+    await dc.reload();
+    expect(dc.records.map((r) => r.text.includes("a\n"))).toEqual([true]);
+  });
+
   it("復旧候補を編集として開く。基準版と一致すればそのまま、違えば外部変更として扱う", async () => {
     const { s, dc, ws, fs } = await setup();
     s.setBody("復旧したい\n");

@@ -5,6 +5,8 @@
 * **Update**: [Kotono CMS のデザインシステム](/product/design-system.md) を 0.5.0 に更新（指の画面はすべて 44px、`.touch-inline`、安全領域・画面キーボード・下の操作バーのトークン、シート、hover の規則）。色とパレットは 0.4.0 のまま。
 * **Update**: [Kotono CMS のアプリの外枠（シェル）](/product/app-shell.md) に、狭い画面の編集画面（「本文」「記事情報」のタブ・下の操作バー・書式の帯）、安全領域、シートを追加。`viewport-fit=cover` を使うよう改めた。
 * **Update**: [ADR-0011](/decisions/0011-passkey-first-and-compact-ui.md) に、置き換えた項目の注記を追加。
+* **Update**: [Kotono CMS のアプリの外枠（シェル）](/product/app-shell.md) に、ロックしたとき（自動ロックを含む）の片付けを追加。開いているダイアログを閉じ、待っている確認とコミットの画面を取り消し、復号した復旧ドラフトの一覧と読み上げ用の文を捨てる。
+* **Update**: [ADR-0013](/decisions/0013-header-menu-consolidation.md) の、メニューから開くダイアログの項目に、ロックしたときの扱いの注記を追加。
 
 ## 2026-11-10
 * **Addition**: [ADR-0014 以前の版との互換をなくし、表現を「ロック」と「ロック解除」の対にする](/decisions/0014-lock-unlock-wording-and-no-backward-compat.md) を追加。ADR-0012 の互換の項目（パスフレーズの枠・以前の版の作業場所・以前の形式の書き出し）と、ADR-0013 で未決だった「ロック」の名前を置き換えた。
