@@ -38,9 +38,9 @@ write('kotono-icon-16.svg',icon(16,9.6,PAPER,PETROL))
 write('kotono-mark.svg',head(SYM_W*100,100,'Kotono symbol')+f'<path fill="{PETROL}" d="{sym_d(100,0,0)}"/></svg>')
 # ---- logotype: symbol 32 tall at x 0; cap height 22 (top 4, baseline 26); symbol-to-text 12 ----
 FN='InterD-740.ttf'
-A=word(FN,'Kotono',{},-6,{'o|t':-24,'t|o':-8}); B=word(FN,'CMS',{'cpsp':True},0,{'C|M':-12})
-f=A['f']; MH=32; CAP=22; base=26; fs=CAP*2048/f.cap; S=lambda u:u*fs/2048
-tx=MH*SYM_W+12-S(A['ink_l'])
+A=word(FN,'Kotono',{},-6,{'o|t':-42,'t|o':-44,'o|n':-14,'n|o':-22}); B=word(FN,'CMS',{'cpsp':True},0,{'C|M':-12})
+f=A['f']; MH=32; CAP=24; base=28; fs=CAP*2048/f.cap; S=lambda u:u*fs/2048
+tx=MH*SYM_W+10-S(A['ink_l'])
 dK=''.join(svgpath(f,g,tx+S(x),base,fs/2048) for g,x in A['gl'])
 cx=tx+S(A['ink_r'])+0.25*fs-S(B['ink_l'])
 dC=''.join(svgpath(B['f'],g,cx+S(x),base,fs/2048) for g,x in B['gl'])
